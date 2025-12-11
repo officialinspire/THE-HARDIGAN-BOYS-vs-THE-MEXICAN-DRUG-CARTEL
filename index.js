@@ -113,7 +113,7 @@ const audioManager = {
     
     playMusic(filename, fadeIn = true) {
         if (!filename || this.currentTrack === filename) return;
-        
+
         const fadeOut = () => {
             return new Promise(resolve => {
                 if (!this.musicPlayer.paused) {
@@ -123,6 +123,7 @@ const audioManager = {
                         if (vol <= 0) {
                             clearInterval(fadeInterval);
                             this.musicPlayer.pause();
+                            this.musicPlayer.volume = 0;
                             resolve();
                         } else {
                             this.musicPlayer.volume = vol;
@@ -133,15 +134,16 @@ const audioManager = {
                 }
             });
         };
-        
+
         fadeOut().then(() => {
             this.musicPlayer.src = `./audio/${filename}`;
             const targetVol = gameState.settings.musicVolume / 100;
-            
+
+            // Always fade in music for smooth transitions
+            this.musicPlayer.volume = 0;
+            this.musicPlayer.play().catch(err => console.warn('Audio play failed:', err));
+
             if (fadeIn) {
-                this.musicPlayer.volume = 0;
-                this.musicPlayer.play().catch(err => console.warn('Audio play failed:', err));
-                
                 let vol = 0;
                 const fadeInInterval = setInterval(() => {
                     vol += 0.03;
@@ -153,10 +155,12 @@ const audioManager = {
                     }
                 }, 50);
             } else {
-                this.musicPlayer.volume = targetVol;
-                this.musicPlayer.play().catch(err => console.warn('Audio play failed:', err));
+                // Even if fadeIn is false, do a quick fade for smoothness
+                setTimeout(() => {
+                    this.musicPlayer.volume = targetVol;
+                }, 100);
             }
-            
+
             this.currentTrack = filename;
         });
     },
@@ -314,42 +318,45 @@ const sceneRenderer = {
             console.error(`Scene not found: ${sceneId}`);
             return;
         }
-        
+
         this.currentScene = scene;
         gameState.currentSceneId = sceneId;
         gameState.currentDialogueIndex = 0;
         gameState.objectsClicked.clear();
-        
+
+        // Fade to black (fade in overlay)
         await this.fadeTransition(true);
         this.clearScene();
-        
+
         const bg = document.getElementById('scene-background');
         bg.src = scene.background;
-        
+
         document.getElementById('scene-title').textContent = scene.title || '';
-        
+
         if (scene.characters) {
             this.loadCharacters(scene.characters);
         }
-        
+
         if (scene.hotspots) {
             this.loadHotspots(scene.hotspots);
         }
-        
+
+        // Always play music with fade in for smooth transitions
         if (scene.music) {
-            audioManager.playMusic(scene.music);
+            audioManager.playMusic(scene.music, true);
         }
-        
+
         if (scene.dialogue && scene.dialogue.length > 0) {
             setTimeout(() => {
                 this.showDialogue(scene.dialogue[0]);
             }, 800);
         }
-        
+
         if (scene.onEnter) {
             scene.onEnter();
         }
-        
+
+        // Fade from black (fade out overlay)
         await this.fadeTransition(false);
         saveSystem.save();
     },
@@ -434,17 +441,17 @@ const sceneRenderer = {
         continueBtn.classList.add('hidden');
         
         const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
-        
+
         if (isNarration) {
-            dialogueBubble.src = './assets/ui/dialogue-bubble-large-left.png';
+            dialogueBubble.src = './assets/menu_dialogue/dialogue-bubble-large-left.png';
             speaker.className = 'narration';
             text.className = 'narration';
             speaker.textContent = '';
         } else {
             const isLeft = dialogueEntry.position === 'left' || Math.random() < 0.5;
-            dialogueBubble.src = isLeft ? 
-                './assets/ui/dialogue-bubble-large-left.png' : 
-                './assets/ui/dialogue-bubble-large-right.png';
+            dialogueBubble.src = isLeft ?
+                './assets/menu_dialogue/dialogue-bubble-large-left.png' :
+                './assets/menu_dialogue/dialogue-bubble-large-right.png';
             speaker.className = '';
             text.className = '';
             speaker.textContent = dialogueEntry.speaker;
@@ -529,9 +536,12 @@ const SCENES = {
         dialogue: [],
         
         onEnter() {
+            // Clear main menu specific class and setup
+            document.body.classList.add('main-menu');
+
             // Start music automatically with fade in
             audioManager.playMusic('main-menu-theme.mp3', true);
-            
+
             const container = document.getElementById('hotspot-layer');
             container.innerHTML = `
                 <div id="main-menu-content">
@@ -541,9 +551,8 @@ const SCENES = {
                     <button class="menu-btn" id="btn-options">OPTIONS</button>
                 </div>
             `;
-            
-            document.body.classList.add('main-menu');
-            
+
+
             document.getElementById('btn-new-game').addEventListener('click', () => {
                 SFXGenerator.playButtonClick();
                 gameState.inventory = [];
@@ -593,7 +602,7 @@ const SCENES = {
             {
                 id: 'television',
                 label: 'Television',
-                x: 16, y: 29, width: 12, height: 14,
+                x: 3, y: 52, width: 10, height: 12,
                 onClick() {
                     if (!gameState.objectsClicked.has('television')) {
                         gameState.objectsClicked.add('television');
@@ -609,7 +618,7 @@ const SCENES = {
             {
                 id: 'window',
                 label: 'Window',
-                x: 23, y: 13, width: 21, height: 18,
+                x: 28, y: 8, width: 28, height: 35,
                 onClick() {
                     if (!gameState.objectsClicked.has('window')) {
                         gameState.objectsClicked.add('window');
@@ -640,7 +649,7 @@ const SCENES = {
             {
                 id: 'notebook',
                 label: "Hank's Conspiracy Notebook",
-                x: 49, y: 42, width: 10, height: 8,
+                x: 35, y: 62, width: 12, height: 8,
                 onClick() {
                     if (!inventory.has('conspiracy_notebook')) {
                         inventory.add('conspiracy_notebook');
@@ -656,7 +665,7 @@ const SCENES = {
             {
                 id: 'lamp',
                 label: 'Lamp',
-                x: 71, y: 34, width: 9, height: 16,
+                x: 78, y: 52, width: 10, height: 18,
                 onClick() {
                     if (!gameState.objectsClicked.has('lamp')) {
                         gameState.objectsClicked.add('lamp');
