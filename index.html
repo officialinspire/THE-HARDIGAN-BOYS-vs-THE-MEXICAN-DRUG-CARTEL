@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Bangers&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Main game container -->
+    <div id="game-root">
+        <!-- Scene display area -->
+        <div id="scene-container">
+            <!-- Background image -->
+            <img id="scene-background" src="" alt="Scene background">
+            
+            <!-- Character layer for animated sprites -->
+            <div id="character-layer"></div>
+            
+            <!-- Hotspot layer for clickable regions -->
+            <div id="hotspot-layer"></div>
+            
+            <!-- In-game HUD -->
+            <div id="hud">
+                <!-- Top HUD buttons -->
+                <div id="hud-buttons">
+                    <button id="btn-inventory" class="hud-btn" title="Inventory">
+                        <span>📦</span>
+                    </button>
+                    <button id="btn-notebook" class="hud-btn" title="Notebook">
+                        <span>📓</span>
+                    </button>
+                    <button id="btn-pause" class="hud-btn" title="Menu">
+                        <span>📱</span>
+                    </button>
+                </div>
+                
+                <!-- Scene title -->
+                <div id="scene-title"></div>
+                
+                <!-- Dialogue box with bubble -->
+                <div id="dialogue-box" class="hidden">
+                    <div id="dialogue-container">
+                        <img id="dialogue-bubble" src="" alt="Speech bubble">
+                        <div id="dialogue-content">
+                            <div id="dialogue-speaker"></div>
+                            <div id="dialogue-text"></div>
+                            <div id="dialogue-choices"></div>
+                            <button id="dialogue-continue" class="hidden">▶ Continue</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Inventory overlay -->
+        <div id="inventory-overlay" class="overlay hidden">
+            <div class="overlay-content">
+                <h2>INVENTORY</h2>
+                <div id="inventory-grid"></div>
+                <button class="overlay-close">Close</button>
+            </div>
+        </div>
+        
+        <!-- Notebook overlay with custom UI -->
+        <div id="notebook-overlay" class="overlay hidden">
+            <div class="notebook-ui">
+                <img id="notebook-bg" src="./assets/ui/notebook-menu-open.png" alt="Notebook">
+                <div id="notebook-text-overlay">
+                    <div id="notebook-entries"></div>
+                </div>
+                <button id="notebook-close" class="notebook-close-btn">×</button>
+            </div>
+        </div>
+        
+        <!-- Pause menu -->
+        <div id="pause-menu" class="overlay hidden">
+            <div class="pause-menu-content">
+                <div class="phone-ui">
+                    <img src="./assets/ui/smart-phone-game-main-menu.png" alt="Phone Menu" class="phone-bg">
+                    <div class="phone-buttons">
+                        <button id="btn-resume">RESUME GAME</button>
+                        <button id="btn-save">SAVE GAME</button>
+                        <button id="btn-settings">SETTINGS</button>
+                        <button id="btn-main-menu">MAIN MENU</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Settings overlay -->
+        <div id="settings-overlay" class="overlay hidden">
+            <div class="overlay-content">
+                <h2>SETTINGS</h2>
+                <div class="settings-item">
+                    <label for="music-volume">Music Volume</label>
+                    <input type="range" id="music-volume" min="0" max="100" value="70">
+                    <span id="music-volume-display">70%</span>
+                </div>
+                <div class="settings-item">
+                    <label for="sfx-volume">SFX Volume</label>
+                    <input type="range" id="sfx-volume" min="0" max="100" value="80">
+                    <span id="sfx-volume-display">80%</span>
+                </div>
+                <div class="settings-item">
+                    <label>
+                        <input type="checkbox" id="show-hotspots" checked>
+                        Show Hotspot Outlines (Debug)
+                    </label>
+                </div>
+                <button class="overlay-close">Close</button>
+            </div>
+        </div>
+        
+        <!-- Fade transition overlay -->
+        <div id="fade-overlay"></div>
+    </div>
+    
+    <!-- Audio elements -->
+    <audio id="music-player" loop></audio>
+    <audio id="sfx-player"></audio>
+    
+    <script src="index.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,540 @@
+===== gamescript.txt =====
+TITLE: THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL
+VERSION: 0.1 – NARRATIVE & SCENE SCRIPT
+
+NOTE:
+- This is a SCENE-BY-SCENE outline with representative dialogue.
+- Each scene includes:
+  - SCENE ID
+  - BACKGROUND
+  - VISIBLE CHARACTERS
+  - CLICKABLE OBJECTS / HOTSPOTS
+  - DALL-E ASSET NOTES
+  - DIALOGUE & CHOICES
+  - STATE/FLAG updates
+- Some dialogue is abbreviated with [variation] notes; final implementation can expand.
+
+========================================================
+S0_MAIN_MENU – TITLE SCREEN
+========================================================
+BACKGROUND:
+- ui_main_menu_bg.png "...\HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL\assets\ui\ui_main_menu_bg.png"
+
+VISIBLE UI:
+- Game title: “THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL”
+- Buttons:
+  - NEW GAME
+  - CONTINUE
+  - OPTIONS
+
+CLICKABLES:
+- [BTN_NEW_GAME]
+- [BTN_CONTINUE]
+- [BTN_OPTIONS]
+
+LOGIC:
+- NEW GAME → S1_LIVING_ROOM_INTRO (reset state).
+- CONTINUE → Load saved JSON, jump to stored scene.
+- OPTIONS → Basic sound toggles.
+
+MENU MUSIC: main-menu-theme.mp3 
+
+GAME MENU (PAUSE/RESUME): game-menu-theme.mp3
+
+========================================================
+S1_LIVING_ROOM_INTRO – “Another Normal Night”
+========================================================
+BACKGROUND:
+- bg_hardigan_livingroom_night.png
+
+CHARACTERS:
+- HANK (char_hank_neutral.png)
+- JONAH (char_jonah_neutral.png)
+- MOM (offscreen voice initially)
+
+CLICKABLE OBJECTS:
+- [TV] – toggles on/off and cycles channels.
+- [LAMP] – toggles moody lighting (demonstrates click effects).
+- [WINDOW] – shows early hint of blue/red flicker.
+- [COFFEE_TABLE_NOTEBOOK] – pick up conspiracy_notebook.
+
+DALL-E PROMPT FOR BACKGROUND:
+- “Cartoon-style suburban living room at night, slightly messy, TV, couch, coffee table with notebooks and chips, window showing faint reflected police lights in distance, dark comedy tone, 16:9.”
+
+INITIAL NARRATION (system bubble):
+- “Northern Virginia. Quiet suburbia. Two brothers, one algorithm-rotted nation, and a foreign policy degree from TikTok University.”
+
+DIALOGUE:
+- HANK: “I’m telling you, Jonah, everything connects. Private prisons, avocado prices, and your For You Page.”
+- JONAH: “You say this every time we run out of chips, dude.”
+- MOM (offscreen): “If either of you used this much energy on school, we’d be rich by now!”
+
+OBJECT INTERACTIONS:
+1) CLICK [TV]:
+   - TV cycles channels:
+     - News anchor: “Breaking: Another ‘totally under control’ border situation…”
+     - True crime doc voiceover.
+     - Cartoon.
+   - JONAH: “Wow, we’ve speedrun from ‘late capitalism’ to ‘late episode of Cops’.”
+
+2) CLICK [LAMP]:
+   - Light toggles; use fx_light_on/fx_light_off overlay.
+   - HANK: “Mood lighting for the collapse of the republic.”
+
+3) CLICK [COFFEE_TABLE_NOTEBOOK]:
+   - Player picks up item: conspiracy_notebook.
+   - System: “Item acquired: HANK’S CONSPIRACY NOTEBOOK.”
+   - HANK: “My masterpiece. I color-coded the coups.”
+
+4) CLICK [WINDOW]:
+   - Camera pans slightly; fx_police_lights flicker.
+   - JONAH: “Uh. Hank?”
+   - HANK: “Relax, it’s probably just your DoorDash finally escaping ICE detention.”
+
+PROGRESSION:
+- After player has:
+  - Clicked at least 2 objects AND
+  - Clicked window → Trigger transition to S2. 
+
+BACKGROUND MUSIC: Hardigan Noir Tension.mp3
+
+========================================================
+S2_ICE_RAID_WINDOW – “The Raid”
+========================================================
+BACKGROUND:
+- bg_street_suburb_raid_night.png
+
+CHARACTERS:
+- HANK & JONAH silhouettes in foreground by the window (smaller).
+- ICE vans, generic ICE agents outside Rivera house.
+
+CLICKABLES:
+- [RIVERA_HOUSE_DOOR] – zoom focus.
+- [ICE_VAN] – dialogue comment.
+- [PHONE_ON_TABLE] – inside living room (to call someone later).
+- [MOM] – appears after a beat.
+
+DIALOGUE:
+- JONAH: “Okay. That’s… definitely ICE.”
+- HANK: “No way. They’d never raid a quiet suburban cul-de-sac with a Whole Foods loyalty card.”
+- JONAH: “Bro, that’s the Riveras’ house.”
+
+- MOM enters (char_mom_worried.png sliding in from left).
+  - MOM: “Away from the window. Now. Both of you.”
+  - HANK: “Mom, they’re taking Carlos. He literally coached the neighborhood soccer team.”
+  - MOM: “We don’t know what’s really going on. We are not getting involved. Do you hear me?”
+
+CHOICE TRIGGER:
+- Highlight two main hotspots:
+  - [FOLLOW_MOM_BACK] – listen to her → leaning toward HELP_ICE.
+  - [SNEAK_BACK_DOOR] – ignore her and sneak out → HELP_NEIGHBORS.
+
+PLAYER CHOICE:
+1) CHOICE A – “Listen to Mom (Stay Out of It… For Now)”
+   - Click [FOLLOW_MOM_BACK] or dialogue option:
+     - HANK: “Okay, okay. It’s probably nothing.”
+     - FLAG: HELPED_ICE = true (softly set, they didn’t oppose it).
+     - Go to S3A_FRONT_YARD_FROM_DISTANCE.
+
+2) CHOICE B – “Sneak Out and Help the Riveras”
+   - Click [SNEAK_BACK_DOOR] or choose rebellious dialogue.
+   - FLAG: HELPED_NEIGHBORS = true.
+   - Acquire off-screen: house_key auto (if not already).
+   - Go to S3B_RIVERA_BACKYARD.
+
+BACKGROUND MUSIC: Dark Police Intensity.mp3
+
+========================================================
+S3A_FRONT_YARD_FROM_DISTANCE – “Good Citizens”
+========================================================
+PATH: HELP_ICE leaning route
+
+BACKGROUND:
+- bg_hardigan_livingroom_night.png (pulled back).
+CHARACTERS:
+- MOM, HANK, JONAH inside, watching from further back.
+
+CLICKABLES:
+- [TV] – now shows live raid coverage.
+- [PHONE] – call tip-line / call dad / do nothing.
+
+DIALOGUE:
+- TV Anchor: “Sources say the operation targets a dangerous trafficking network hidden in quiet communities like yours.”
+- HANK (uneasy): “They made Carlos look like a Bond villain for being late on rent.”
+
+CHOICE:
+1) Call ICE “to cooperate / give info”  
+   - FLAG: HELPED_ICE = true, WORKING_WITH_CIA = soft possible later.
+   - Leads to S4A1_ICE_FOLLOWUP.
+
+2) Refuse to call; silently watch.
+   - Set internal flag: DISILLUSIONED = true.
+   - Leads to S4A2_GUILT_AND_GOSSIP. 
+
+BACKGROUND MUSIC: Dark Police Intensity.mp3
+
+========================================================
+S3B_RIVERA_BACKYARD – “Illegal Backyard Heroism”
+========================================================
+PATH: HELP_NEIGHBORS route
+
+BACKGROUND:
+- bg_rivera_backyard_night.png (needs asset)
+
+CHARACTERS:
+- HANK (determined), JONAH (panicked), SOFIA (if discovered).
+
+CLICKABLES:
+- [BACK_DOOR] – knock or pick lock.
+- [TRASH_BIN] – hide.
+- [WINDOW] – peek; see family chaos inside.
+- [SOFIA_SHADOW] – will appear after window interaction.
+
+OBJECTIVES:
+- Click [WINDOW] → see Carlos being cuffed.
+- Click [BACK_DOOR]:
+  - If player chooses “knock”: Sofia opens.
+
+DIALOGUE:
+- SOFIA (char_sofia_worried.png): “You shouldn’t be here.”
+- HANK: “We saw ICE. We thought we could… help?”
+- SOFIA: “Unless you have a helicopter and a non-extradition treaty, you’re late.”
+
+INTERACTION:
+- She hands them a USB:
+  - System: “Item acquired: NEIGHBORS_USB.”
+  - SOFIA: “My dad… he collected files. Contacts. Numbers. If they think he’s cartel, it’s because of what’s on that drive. Or because they can’t spell ‘context’.”
+
+CHOICE:
+- PROMISE:
+  - Option: “We’ll use this to clear his name.”
+  - FLAG: HELPED_NEIGHBORS = true, LOYAL_TO_RIVERAS = true.
+- HESITATE:
+  - Option: “We’ll… see what’s on it.”
+  - FLAG: HELPED_NEIGHBORS = true, OPPORTUNIST = true.
+
+NEXT:
+- Escape backyard → S4B_SCHOOL_AFTERSHOCK. 
+
+BACKGROUND MUSIC: The Raid Escape.mp3
+
+========================================================
+S4A1_ICE_FOLLOWUP – “Friendly Federal Harassment”
+========================================================
+PATH: HELP_ICE, cooperated
+
+BACKGROUND:
+- bg_hardigan_livingroom_day.png (next morning)
+
+CHARACTERS:
+- HANK, JONAH, AGENT SMITH (ICE)
+
+CLICKABLES:
+- [FRONT_DOOR] – open, ICE at doorstep.
+- [AGENT_BADGE] – inspect.
+- [MOM] – reaction.
+
+DIALOGUE:
+- AGENT SMITH: “Morning. Just following up on your very patriotic phone call.”
+- JONAH (whisper): “We snitched so hard we got customer service.”
+- HANK (uneasy): “We just… reported what we saw on TV.”
+
+CHOICE:
+1) Cooperate fully:
+   - Give them “general info about neighbors.”
+   - FLAG: WORKING_WITH_CIA = true (later they get passed up the food chain).
+   - ICE gives them a burner phone:
+     - item_burner_phone acquired.
+     - AGENT SMITH: “If you see anything else… cartel, suspicious cash, socialism… you text this number.”
+   - → S5_SCHOOL_GOSSIP.
+
+2) Backpedal:
+   - HANK: “I think… we overreacted.”
+   - AGENT SMITH: “Overreacting is literally our job.”
+   - Less trust from ICE; FLAG: SUSPICIOUS_TO_FEDS = true.
+   - → S5_SCHOOL_GOSSIP. 
+
+BACKGROUND MUSIC: Empty Hallways (Ambient Mix).mp3
+
+========================================================
+S4A2_GUILT_AND_GOSSIP – “We Just Watched”
+========================================================
+PATH: HELP_ICE (passive)
+
+BACKGROUND:
+- bg_school_hallway_day.png
+
+SCENE PURPOSE:
+- Establish school gossip and rumors about the Riveras.
+- Show media narrative diverging from reality.
+- Set up CIA interest or cartel targeting. 
+
+BACKGROUND MUSIC: Empty Hallways (Ambient Mix).mp3
+
+========================================================
+S4B_SCHOOL_AFTERSHOCK – “Hashtag Deportation Drama”
+========================================================
+PATH: HELP_NEIGHBORS
+
+BACKGROUND:
+- bg_school_hallway_day.png
+
+CHARACTERS:
+- HANK, JONAH, various students, SOFIA (maybe absent or appears later depending on branch).
+
+CLICKABLES:
+- [POSTER_BOARD] – see news clippings.
+- [STUDENT_GROUP_1] – gossip.
+- [LOCKER] – get flash of neighbors’ absence.
+- [PHONE] – trending hashtag.
+
+DIALOGUE:
+- RANDOM STUDENT: “I heard the dad was totally cartel.”
+- ANOTHER: “My cousin’s friend said ICE only hits houses if you’re like, super guilty.”
+- HANK (muttering): “Yeah, or super convenient for a press conference.”
+
+If HELPED_NEIGHBORS:
+- SOFIA appears later in the scene:
+  - char_sofia_determined.png
+  - SOFIA: “You still have the drive?”
+  - HANK: “Yeah. Feels like holding a grenade filled with subpoenas.”
+  - SOFIA: “Good. Because you’re not the only ones who want it.”
+
+BRANCH SETUP:
+- CIA Ms. Gray contacts them (if WORKING_WITH_CIA true).
+- Cartel scouts start following them (if OPPORTUNIST or NEIGHBORS_USB obtained).
+
+BACKGROUND MUSIC: Empty Hallways (Ambient Mix).mp3
+
+========================================================
+S6_INTEL_ENTANGLEMENT – “Ms. Gray Enters the Chat”
+========================================================
+BACKGROUND:
+- bg_cia_office.png 
+
+CHARACTERS:
+- MS. GRAY, HANK, JONAH.
+
+CLICKABLES:
+- [MS_GRAY_FILE] – see redacted documents overlay (fx_document_overlay).
+- [MAP] – shows cartel routes, Venezuela, Colombia arrows.
+
+DIALOGUE (sample):
+- MS. GRAY: “Relax, I’m not ICE. I have better fonts on my PowerPoints.”
+- JONAH: “Are you like, CIA-cia or TikTok-cia?”
+- MS. GRAY: “The one that doesn’t dance on camera.”
+
+She reveals:
+- ICE may have overreached, but:
+- Riveras *are* connected to a larger supply network… or scapegoated as such.
+- The USB could prove:
+  - (A) they’re innocent OR
+  - (B) they’re small cogs in a big machine.
+
+CHOICES:
+1) Hand over NEIGHBORS_USB to CIA:
+   - FLAG: WORKING_WITH_CIA = true.
+   - Lose direct leverage with cartels but gain official route.
+   - → S7B_CARTEL_TARGETING (cartel angry; think bros snitched).
+
+2) Keep NEIGHBORS_USB:
+   - FLAG: INDEPENDENT_OPERATORS = true.
+   - Ms. Gray warns them: “If the cartel finds out you’re freelancing, they won’t send a LinkedIn invite.”
+   - → S7A_CARTEL_CONTACT or S7C_BLACKMARKET depending on prior flags.
+
+BACKGROUND MUSIC: Classified Silence.mp3
+
+========================================================
+S7A_CARTEL_CONTACT – “Business Opportunity”
+========================================================
+Triggered if:
+- HELPED_NEIGHBORS = true
+- Kept NEIGHBORS_USB
+- OPPORTUNIST or similar flag
+
+BACKGROUND:
+- bg_cartel_safehouse_night.png
+
+CHARACTERS:
+- CARTEL BOSS, LUPITA, HANK, JONAH (nervous).
+
+DIALOGUE:
+- CARTEL BOSS: “So. Two suburban boys with the one USB everyone wants.”
+- JONAH: “Fun fact: this is not what we meant by ‘side hustle.’”
+
+CHOICE:
+1) Take cartel deal:
+   - CARTEL offers:
+     - Protection for Riveras in exchange for using USB to re-route shipments.
+   - FLAG: TOOK_CARTEL_DEAL = true.
+   - → Later leads to CHAOTIC / MORAL MESS endings.
+
+2) Pretend to cooperate but secretly plan to betray:
+   - FLAGS: TOOK_CARTEL_DEAL = true, SECRETLY_AGAINST_CARTEL = true.
+   - → Complex branching in final showdown.
+
+3) Refuse:
+   - CARTEL sees them as a threat.
+   - FLAG: CARTEL_TARGET = true.
+   - → S9_FINAL_WAREHOUSE_SHOWDOWN more violent/tense.
+
+BACKGROUND MUSIC: Safehouse Ambience.mp3
+
+========================================================
+S7B_CARTEL_TARGETING – “Snitches with Sneakers”
+========================================================
+
+If USB given to CIA:
+- CARTEL intercepts communications, learns Hardigans handled the drive.
+- HANK & JONAH are now in crosshairs.
+
+BACKGROUND MUSIC: 
+
+========================================================
+S8_PRE_FINAL – “Everyone Wants a Piece”
+========================================================
+Staging scenes: travel, short montages (can be implemented as quick slideshow cards with minimal interactions).
+
+Possible variants:
+- Airport-type setting (cartel smuggling route).
+- River dock (Tren de Agua)
+- Venezuelan consulate backroom (Ortega ranting about imperialism, cartels, and crypto).
+
+Each variant should:
+- Give 1–2 key choices influencing who shows up in final scene.
+- Update flags like:
+  - ALLIED_WITH_ORTEGA
+  - ALLIED_WITH_LUPITA
+  - DOUBLE_CROSSED_SOMEONE
+
+BACKGROUND MUSIC: 
+
+========================================================
+S9_FINAL_WAREHOUSE_SHOWDOWN – “Diplomacy, but Make It Stupid”
+========================================================
+BACKGROUND:
+- bg_warehouse_night.png
+
+CHARACTERS present vary depending on flags:
+- Always: HANK, JONAH.
+- Possible combinations of:
+  - CARTEL BOSS + henchmen.
+  - MS. GRAY + Special Ops.
+  - RIVERA FAMILY (if not deported).
+  - LUPITA / EL GATO.
+  - ORTEGA (if Venezuelan route pursued).
+
+CLICKABLES:
+- [CRATE] – can hide, find weapons, or trigger explosion.
+- [CONTROL_PANEL] – turn off lights, cause chaos.
+- [MEGAPHONE] – talk to everyone at once.
+- [USB_ON_TABLE] – central MacGuffin.
+
+CORE DESIGN:
+- Multiple dialogue rounds where the player:
+  - Chooses who to side with publicly.
+  - Chooses whether to leak data to press.
+  - Chooses whether to destroy USB, copy it, or auction it.
+
+KEY CHOICES IN FINALE:
+1) Destroy USB:
+   - “No one gets to weaponize this.”
+   - CARTEL/ CIA/ everyone angry.
+   - Depending on allies, they might escape or get killed.
+
+2) Upload data to public:
+   - Use fx_mobile_notification, tv overlays, etc.
+   - Social media + press chaos.
+   - Could trigger CHAOTIC or IRONIC MEDIA ending.
+
+3) Secretly copy, then fake destroy:
+   - Keep leverage.
+   - Potential HAPPIER but morally gray ending.
+
+BACKGROUND MUSIC: Warehouse Night Suspense.mp3
+
+========================================================
+ENDINGS
+========================================================
+
+ENDING: E_HAPPY – “We Saved Who We Could”
+CONDITIONS (example):
+- HELPED_NEIGHBORS = true
+- CARTEL_DEFEATED = true (USB used to dismantle network, at least partly)
+- SAVED_NEIGHBORS = true
+- Didn’t sell out everyone totally.
+
+SCENE:
+- Back in suburban street, quieter.
+- Riveras’ house has lights on again (maybe on probation / witness protection – ambiguous).
+- TV: “Officials claim victory in narrowing a major trafficking pipeline. Critics note ‘collateral damage remains under investigation.’”
+- HANK: “So we kind of fixed something?”
+- JONAH: “We also got banned from like three federal buildings.”
+- RIVERA FAMILY BBQ cameo.
+- Tone: hopeful but still ironic.
+
+DALL-E PROMPT:
+- “Cartoon suburban street at sunset, neighbors barbecuing, kids playing, slightly hopeful mood, subtle satire.”
+
+ENDING: E_SAD – “People Become Statistics”
+CONDITIONS (example):
+- HELPED_ICE = true
+- HELPED_NEIGHBORS = false OR sold them out.
+- CARTEL survives mostly intact.
+- USB used only as PR tool.
+
+SCENE:
+- TV montage:
+  - Anchor: “A major anti-cartel operation yields ‘meaningful progress,’ officials say, as deportations quietly rise.”
+- Riveras’ house: dark, “FOR RENT” sign.
+- HANK: “We did everything ‘by the book’ and somehow it still sucks.”
+- JONAH: “So the book is the problem.”
+- Fade out with system text: “You stayed safe. Everyone else paid the cost.”
+
+ENDING: E_CHAOTIC – “Multilateral Dumbassery”
+CONDITIONS:
+- TOOK_CARTEL_DEAL = true
+- DOUBLE_CROSSED at least one faction
+- Public leak or explosion at warehouse
+
+SCENE:
+- News montage:
+  - Viral videos of the warehouse going up.
+  - CIA blaming Venezuelan extremists.
+  - Venezuelan state TV blaming “North American degenerates.”
+  - Cartel TikTok influencers clout-chasing the incident.
+- Hardigan Bros on a small boat with LUPITA / EL GATO heading… somewhere.
+  - JONAH: “Are we like… criminals now?”
+  - HANK: “We’re consultants. It just pays in bullets instead of benefits.”
+- Freeze-frame, 80s synth outro vibe.
+
+ENDING: E_IRONIC_MEDIA – “Everyone Has a Narrative”
+CONDITIONS:
+- Player heavily used media/social sharing options.
+- Final choice: upload everything to the cloud and become leakers.
+
+SCENE:
+- Split-screen montage:
+  - Right-wing pundit: “Proof of an immigrant crime wave!”
+  - Left-wing pundit: “Proof of ICE fascist overreach!”
+  - Conspiracy influencer: “Proof the lizard bankers staged all of it!”
+- Hardigans watching:
+  - HANK: “We leaked the truth and somehow it just turned into more content.”
+  - JONAH: “At least the comments are roasting everybody equally.”
+- System text: “You exposed everything. No one listened. But you did break the algorithm for a week.”
+
+========================================================
+SCENE-BY-SCENE ASSET CHECKPOINTS
+========================================================
+For each scene, ensure:
+- Background generated as per prompt.
+- Character sprites available in required emotion.
+- Dialogue bubbles: left/right/system variants available.
+- FX overlays: lights, tv static, police lights, explosions as needed.
+- Items: drawn and saved with proper filenames.
+
+Use this script as:
+- The backbone for implementing the JSON scene structure.
+- The reference for generating DALL-E images BEFORE coding logic.
+
+END gamescript.txt
