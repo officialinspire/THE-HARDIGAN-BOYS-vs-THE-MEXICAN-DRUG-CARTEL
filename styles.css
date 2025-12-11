@@ -306,10 +306,10 @@ body.show-hotspots .hotspot {
 /* ===== DIALOGUE BOX - FULLY RESPONSIVE ===== */
 #dialogue-box {
     position: absolute;
-    bottom: max(20px, env(safe-area-inset-bottom));
+    top: 50%;
     left: 50%;
-    transform: translateX(-50%);
-    width: min(95%, 1000px);
+    transform: translate(-50%, -50%);
+    width: min(70%, 800px);
     transition: opacity 0.3s ease;
     pointer-events: auto;
     z-index: 5;
@@ -352,6 +352,7 @@ body.show-hotspots .hotspot {
     display: block;
     min-height: 120px;
     background: transparent;
+    opacity: 0.95;
 }
 
 #dialogue-content {
@@ -367,35 +368,34 @@ body.show-hotspots .hotspot {
 }
 
 #dialogue-speaker {
-    font-size: clamp(18px, 4vw, 24px);
+    font-size: clamp(22px, 4.5vw, 28px);
     font-weight: bold;
     color: #000;
     text-transform: uppercase;
-    margin-bottom: clamp(8px, 1.8vw, 12px);
-    letter-spacing: 1.5px;
+    margin-bottom: clamp(10px, 2vw, 14px);
+    letter-spacing: 1.8px;
     font-family: 'Bangers', 'Comic Sans MS', 'Arial Black', sans-serif;
     line-height: 1.3;
 }
 
 #dialogue-text {
-    font-size: clamp(16px, 3.5vw, 22px);
-    line-height: 1.5;
+    font-size: clamp(18px, 4vw, 24px);
+    line-height: 1.6;
     color: #000;
-    margin-bottom: clamp(10px, 2.2vw, 14px);
+    margin-bottom: clamp(12px, 2.5vw, 16px);
     font-family: 'Comic Sans MS', 'Chalkboard SE', 'Trebuchet MS', sans-serif;
     font-weight: 600;
     flex-grow: 1;
     overflow-y: auto;
-    max-height: 220px;
+    max-height: 280px;
     -webkit-overflow-scrolling: touch;
-    padding: clamp(4px, 1vw, 8px);
+    padding: clamp(6px, 1.2vw, 10px);
 }
 
 /* Mobile: adjust dialogue box positioning and spacing */
 @media (max-width: 768px) {
     #dialogue-box {
-        width: 98%;
-        bottom: max(10px, env(safe-area-inset-bottom));
+        width: 90%;
     }
 
     #dialogue-content {
@@ -409,7 +409,7 @@ body.show-hotspots .hotspot {
 /* Very small phones */
 @media (max-width: 480px) {
     #dialogue-box {
-        bottom: max(5px, env(safe-area-inset-bottom));
+        width: 95%;
     }
 
     #dialogue-container {
@@ -488,25 +488,26 @@ body.show-hotspots .hotspot {
 }
 
 #dialogue-continue {
-    margin-top: clamp(8px, 2vw, 10px);
-    padding: clamp(8px, 2vw, 10px) clamp(18px, 4vw, 25px);
-    background: rgba(255, 255, 255, 0.9);
-    border: 3px solid #333;
-    border-radius: 8px;
+    margin-top: clamp(12px, 2.5vw, 16px);
+    padding: clamp(12px, 3vw, 16px) clamp(30px, 6vw, 40px);
+    background: rgba(255, 255, 255, 0.95);
+    border: 4px solid #333;
+    border-radius: 12px;
     color: #000;
-    font-size: clamp(13px, 2.8vw, 16px);
+    font-size: clamp(18px, 4vw, 22px);
     font-weight: bold;
     transition: all 0.3s ease;
     font-family: 'Bangers', 'Comic Sans MS', cursive;
-    align-self: flex-end;
+    align-self: center;
     cursor: pointer;
     touch-action: manipulation;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
 #dialogue-continue:hover {
     background: #FFD700;
-    transform: scale(1.08);
-    box-shadow: 0 0 12px rgba(255, 215, 0, 0.5);
+    transform: scale(1.12);
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.8), 0 6px 12px rgba(0, 0, 0, 0.4);
 }
 
 #dialogue-continue.hidden {
@@ -892,7 +893,7 @@ body.show-hotspots .hotspot {
     z-index: 50;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.5s ease-in-out;
+    transition: opacity 0.7s ease-in-out;
 }
 
 #fade-overlay.active {

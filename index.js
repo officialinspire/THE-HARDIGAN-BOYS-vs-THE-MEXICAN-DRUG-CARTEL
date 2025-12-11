@@ -326,7 +326,12 @@ const sceneRenderer = {
 
         // Fade to black (fade in overlay)
         await this.fadeTransition(true);
+
+        // Clear scene with character slide-out animations
         this.clearScene();
+
+        // Wait for clear animations
+        await new Promise(resolve => setTimeout(resolve, 800));
 
         const bg = document.getElementById('scene-background');
         bg.src = scene.background;
@@ -350,26 +355,38 @@ const sceneRenderer = {
             audioManager.playMusic(scene.music, true);
         }
 
+        // Fade from black (fade out overlay)
+        await this.fadeTransition(false);
+
         if (scene.dialogue && scene.dialogue.length > 0) {
             setTimeout(() => {
                 this.showDialogue(scene.dialogue[0]);
-            }, 800);
+            }, 500);
         }
 
         if (scene.onEnter) {
             scene.onEnter();
         }
 
-        // Fade from black (fade out overlay)
-        await this.fadeTransition(false);
         saveSystem.save();
     },
     
     clearScene() {
-        document.getElementById('character-layer').innerHTML = '';
-        document.getElementById('item-layer').innerHTML = '';
-        document.getElementById('hotspot-layer').innerHTML = '';
-        document.getElementById('dialogue-box').classList.add('hidden');
+        // Slide out characters before clearing
+        const characters = document.querySelectorAll('.character-sprite');
+        characters.forEach((char, index) => {
+            setTimeout(() => {
+                char.classList.remove('visible');
+            }, index * 100);
+        });
+
+        // Wait for animations to complete before clearing
+        setTimeout(() => {
+            document.getElementById('character-layer').innerHTML = '';
+            document.getElementById('item-layer').innerHTML = '';
+            document.getElementById('hotspot-layer').innerHTML = '';
+            document.getElementById('dialogue-box').classList.add('hidden');
+        }, characters.length * 100 + 600);
     },
     
     loadCharacters(characters) {
@@ -553,14 +570,14 @@ const sceneRenderer = {
     fadeTransition(fadeIn) {
         return new Promise(resolve => {
             const overlay = document.getElementById('fade-overlay');
-            
+
             if (fadeIn) {
                 overlay.classList.add('active');
-                setTimeout(resolve, 500);
+                setTimeout(resolve, 700);
             } else {
                 setTimeout(() => {
                     overlay.classList.remove('active');
-                    setTimeout(resolve, 500);
+                    setTimeout(resolve, 700);
                 }, 100);
             }
         });
@@ -649,33 +666,22 @@ const SCENES = {
                 label: 'TV Remote',
                 x: 56,
                 y: 68,
-                width: 3.5,
-                height: 2.5,
+                width: 5,
+                height: 4,
                 onClick() {
                     if (!inventory.has('tv_remote')) {
                         inventory.add('tv_remote');
                         sceneRenderer.showDialogue({
-                            speaker: 'SYSTEM',
-                            text: "Item acquired: TV REMOTE",
+                            speaker: 'JONAH',
+                            text: "Got the remote! Now I can... wait, it doesn't work.",
+                            position: 'right',
                             next: 'NEXT_DIALOGUE'
                         });
-                    }
-                }
-            },
-            {
-                id: 'conspiracy_notebook',
-                label: "Hank's Conspiracy Notebook",
-                x: 38,
-                y: 72,
-                width: 6,
-                height: 5,
-                onClick() {
-                    if (!inventory.has('conspiracy_notebook')) {
-                        inventory.add('conspiracy_notebook');
-                        notebook.add('THE NOTEBOOK', 'Hank\'s conspiracy theories and "research". Everything connects, apparently.');
+                    } else {
                         sceneRenderer.showDialogue({
-                            speaker: 'SYSTEM',
-                            text: "Item acquired: HANK'S CONSPIRACY NOTEBOOK",
+                            speaker: 'JONAH',
+                            text: "The remote doesn't work. Batteries are probably dead... or the universe is just against us.",
+                            position: 'right',
                             next: 'NEXT_DIALOGUE'
                         });
                     }
@@ -687,7 +693,7 @@ const SCENES = {
             {
                 id: 'television',
                 label: 'Television',
-                x: 10, y: 45, width: 15, height: 18,
+                x: 10, y: 38, width: 18, height: 25,
                 onClick() {
                     if (!gameState.objectsClicked.has('television')) {
                         gameState.objectsClicked.add('television');
@@ -703,7 +709,7 @@ const SCENES = {
             {
                 id: 'window',
                 label: 'Window',
-                x: 30, y: 12, width: 25, height: 32,
+                x: 30, y: 12, width: 20, height: 32,
                 onClick() {
                     if (!gameState.objectsClicked.has('window')) {
                         gameState.objectsClicked.add('window');
@@ -734,7 +740,7 @@ const SCENES = {
             {
                 id: 'lamp',
                 label: 'Lamp',
-                x: 82, y: 48, width: 8, height: 22,
+                x: 82, y: 25, width: 10, height: 35,
                 onClick() {
                     if (!gameState.objectsClicked.has('lamp')) {
                         gameState.objectsClicked.add('lamp');
@@ -744,6 +750,27 @@ const SCENES = {
                             position: 'left',
                             next: 'NEXT_DIALOGUE'
                         });
+                    }
+                }
+            },
+            {
+                id: 'notebook',
+                label: "Hank's Conspiracy Notebook",
+                x: 35, y: 70, width: 10, height: 8,
+                onClick() {
+                    if (!inventory.has('conspiracy_notebook')) {
+                        gameState.objectsClicked.add('notebook');
+                        inventory.add('conspiracy_notebook');
+                        notebook.add('THE NOTEBOOK', 'Hank\'s conspiracy theories and "research". Everything connects, apparently.');
+                        sceneRenderer.showDialogue({
+                            speaker: 'HANK',
+                            text: "Ah yes, my research. Every thread connects. Every pattern matters. Mostly.",
+                            position: 'left',
+                            next: 'NEXT_DIALOGUE'
+                        });
+                    } else {
+                        // Open notebook directly
+                        notebook.show();
                     }
                 }
             }
