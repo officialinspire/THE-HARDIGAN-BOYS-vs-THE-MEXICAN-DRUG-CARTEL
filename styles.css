@@ -1,6 +1,6 @@
 /* ============================================
    HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL
-   FIXED VERSION - ALL ISSUES RESOLVED
+   RESPONSIVE DESIGN - ALL DEVICES SUPPORTED
    ============================================ */
 
 /* ===== RESET & BASE ===== */
@@ -13,10 +13,14 @@
 html, body {
     width: 100%;
     height: 100%;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
     overflow: hidden;
     font-family: 'Courier New', 'Consolas', monospace;
     background: #000;
     color: #e0e0e0;
+    /* iPhone notch support */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 button {
@@ -30,6 +34,8 @@ button {
 #game-root {
     width: 100%;
     height: 100%;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
     position: relative;
     display: flex;
     justify-content: center;
@@ -41,13 +47,22 @@ button {
 #scene-container {
     position: relative;
     width: 100%;
-    max-width: 1920px;
     height: 100%;
-    max-height: 1080px;
-    aspect-ratio: 16/9;
+    max-width: 100vw;
+    max-height: 100vh;
+    max-height: -webkit-fill-available;
     overflow: hidden;
     background: #000;
     box-shadow: 0 0 50px rgba(0, 0, 0, 0.9);
+}
+
+/* Desktop: maintain 16:9 aspect ratio */
+@media (min-width: 1024px) {
+    #scene-container {
+        max-width: 1920px;
+        max-height: 1080px;
+        aspect-ratio: 16/9;
+    }
 }
 
 /* ===== BACKGROUND IMAGE ===== */
@@ -57,11 +72,18 @@ button {
     left: 0;
     width: 100%;
     height: 100%;
-    object-fit: contain;
+    object-fit: cover;
     object-position: center;
     z-index: 1;
     transition: opacity 0.5s ease;
     background: #000;
+}
+
+/* Desktop: use contain to maintain aspect ratio */
+@media (min-width: 1024px) {
+    #scene-background {
+        object-fit: contain;
+    }
 }
 
 /* ===== CHARACTER LAYER ===== */
@@ -77,12 +99,28 @@ button {
 
 .character-sprite {
     position: absolute;
-    max-width: 30%;
-    max-height: 60%;
+    max-width: 35%;
+    max-height: 55%;
     object-fit: contain;
     transition: transform 0.6s ease, opacity 0.6s ease;
     filter: drop-shadow(2px 4px 8px rgba(0, 0, 0, 0.7));
     background: transparent !important;
+}
+
+/* Mobile: smaller characters to fit screen */
+@media (max-width: 768px) {
+    .character-sprite {
+        max-width: 40%;
+        max-height: 45%;
+    }
+}
+
+/* Very small phones */
+@media (max-width: 480px) {
+    .character-sprite {
+        max-width: 45%;
+        max-height: 40%;
+    }
 }
 
 .character-sprite.slide-in-left {
@@ -101,7 +139,7 @@ button {
 }
 
 .char-left {
-    left: 5%;
+    left: 2%;
     bottom: 0;
 }
 
@@ -112,8 +150,19 @@ button {
 }
 
 .char-right {
-    right: 5%;
+    right: 2%;
     bottom: 0;
+}
+
+/* Mobile: adjust character positioning */
+@media (max-width: 768px) {
+    .char-left {
+        left: 1%;
+    }
+
+    .char-right {
+        right: 1%;
+    }
 }
 
 /* ===== HOTSPOT LAYER ===== */
@@ -165,10 +214,11 @@ body.show-hotspots .hotspot {
 /* HUD Buttons - TOP RIGHT */
 #hud-buttons {
     position: absolute;
-    top: 20px;
-    right: 20px;
+    top: max(20px, env(safe-area-inset-top));
+    right: max(20px, env(safe-area-inset-right));
     display: flex;
     gap: 15px;
+    z-index: 10;
 }
 
 .hud-btn {
@@ -183,6 +233,7 @@ body.show-hotspots .hotspot {
     font-size: 24px;
     transition: all 0.3s ease;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+    touch-action: manipulation;
 }
 
 .hud-btn:hover {
@@ -196,9 +247,9 @@ body.show-hotspots .hotspot {
 /* Scene title */
 #scene-title {
     position: absolute;
-    top: 20px;
-    left: 20px;
-    font-size: 14px;
+    top: max(20px, env(safe-area-inset-top));
+    left: max(20px, env(safe-area-inset-left));
+    font-size: clamp(11px, 2.5vw, 14px);
     font-weight: bold;
     color: #00ffff;
     text-transform: uppercase;
@@ -206,18 +257,20 @@ body.show-hotspots .hotspot {
                  2px 2px 4px rgba(0, 0, 0, 0.9);
     letter-spacing: 2px;
     opacity: 0.9;
+    max-width: 50%;
+    word-wrap: break-word;
 }
 
-/* ===== DIALOGUE BOX - FIXED ===== */
+/* ===== DIALOGUE BOX - FULLY RESPONSIVE ===== */
 #dialogue-box {
     position: absolute;
-    bottom: 60px;
+    bottom: max(20px, env(safe-area-inset-bottom));
     left: 50%;
     transform: translateX(-50%);
-    width: 95%;
-    max-width: 1000px;
+    width: min(95%, 1000px);
     transition: opacity 0.3s ease;
     pointer-events: auto;
+    z-index: 5;
 }
 
 #dialogue-box.hidden {
@@ -228,50 +281,90 @@ body.show-hotspots .hotspot {
 #dialogue-container {
     position: relative;
     width: 100%;
+    min-height: 120px;
 }
 
 #dialogue-bubble {
     width: 100%;
     height: auto;
     display: block;
+    min-height: 120px;
 }
 
 #dialogue-content {
     position: absolute;
-    top: 15%;
-    left: 10%;
-    right: 10%;
-    bottom: 15%;
+    top: 12%;
+    left: 8%;
+    right: 8%;
+    bottom: 12%;
     display: flex;
     flex-direction: column;
-    padding: 15px 20px;
+    padding: clamp(10px, 2vw, 20px);
+    overflow: hidden;
 }
 
 #dialogue-speaker {
-    font-size: 20px;
+    font-size: clamp(16px, 3.5vw, 20px);
     font-weight: bold;
     color: #000;
     text-transform: uppercase;
-    margin-bottom: 10px;
+    margin-bottom: clamp(6px, 1.5vw, 10px);
     letter-spacing: 1px;
     font-family: 'Bangers', 'Comic Sans MS', cursive;
+    line-height: 1.2;
 }
 
 #dialogue-text {
-    font-size: 18px;
-    line-height: 1.5;
+    font-size: clamp(14px, 3vw, 18px);
+    line-height: 1.4;
     color: #000;
-    margin-bottom: 12px;
+    margin-bottom: clamp(8px, 2vw, 12px);
     font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
     font-weight: 600;
     flex-grow: 1;
     overflow-y: auto;
+    max-height: 200px;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile: adjust dialogue box positioning and spacing */
+@media (max-width: 768px) {
+    #dialogue-box {
+        width: 98%;
+        bottom: max(10px, env(safe-area-inset-bottom));
+    }
+
+    #dialogue-content {
+        top: 10%;
+        left: 6%;
+        right: 6%;
+        bottom: 10%;
+    }
+}
+
+/* Very small phones */
+@media (max-width: 480px) {
+    #dialogue-box {
+        bottom: max(5px, env(safe-area-inset-bottom));
+    }
+
+    #dialogue-container {
+        min-height: 100px;
+    }
+
+    #dialogue-bubble {
+        min-height: 100px;
+    }
+
+    #dialogue-text {
+        max-height: 150px;
+    }
 }
 
 /* NARRATION STYLING - GOLD/YELLOW */
 #dialogue-speaker.narration {
     font-family: 'Creepster', cursive;
-    font-size: 26px;
+    font-size: clamp(18px, 4vw, 26px);
     color: #FFD700;
     text-shadow: 3px 3px 6px rgba(0, 0, 0, 1),
                  0 0 12px rgba(255, 215, 0, 0.8);
@@ -279,52 +372,68 @@ body.show-hotspots .hotspot {
 
 #dialogue-text.narration {
     font-family: 'Creepster', cursive;
-    font-size: 22px;
+    font-size: clamp(15px, 3.5vw, 22px);
     color: #FFD700;
     text-shadow: 2px 2px 5px rgba(0, 0, 0, 1),
                  0 0 10px rgba(255, 215, 0, 0.6);
-    line-height: 1.6;
+    line-height: 1.5;
 }
 
 #dialogue-choices {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-top: 8px;
+    gap: clamp(6px, 1.5vw, 10px);
+    margin-top: clamp(6px, 1.5vw, 8px);
 }
 
 .dialogue-choice {
-    padding: 12px 18px;
+    padding: clamp(8px, 2vw, 12px) clamp(12px, 3vw, 18px);
     background: rgba(255, 255, 255, 0.95);
     border: 3px solid #333;
     border-radius: 8px;
     color: #000;
-    font-size: 16px;
+    font-size: clamp(13px, 2.8vw, 16px);
     font-weight: bold;
     text-align: left;
     transition: all 0.3s ease;
     font-family: 'Bangers', 'Comic Sans MS', cursive;
+    cursor: pointer;
+    touch-action: manipulation;
+    line-height: 1.3;
 }
 
-.dialogue-choice:hover {
+.dialogue-choice:hover,
+.dialogue-choice:active {
     background: #FFD700;
     border-color: #000;
-    transform: translateX(8px);
+    transform: translateX(6px);
     box-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
 }
 
+@media (max-width: 768px) {
+    .dialogue-choice:hover {
+        transform: none;
+    }
+
+    .dialogue-choice:active {
+        transform: scale(0.98);
+    }
+}
+
 #dialogue-continue {
-    margin-top: 10px;
-    padding: 10px 25px;
+    margin-top: clamp(8px, 2vw, 10px);
+    padding: clamp(8px, 2vw, 10px) clamp(18px, 4vw, 25px);
     background: rgba(255, 255, 255, 0.9);
     border: 3px solid #333;
     border-radius: 8px;
     color: #000;
-    font-size: 16px;
+    font-size: clamp(13px, 2.8vw, 16px);
     font-weight: bold;
     transition: all 0.3s ease;
     font-family: 'Bangers', 'Comic Sans MS', cursive;
     align-self: flex-end;
+    cursor: pointer;
+    touch-action: manipulation;
 }
 
 #dialogue-continue:hover {
@@ -400,22 +509,41 @@ body.show-hotspots .hotspot {
     box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
 }
 
-/* ===== INVENTORY ===== */
+/* ===== INVENTORY - RESPONSIVE GRID ===== */
 #inventory-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 15px;
-    margin: 20px 0;
-    min-height: 200px;
+    grid-template-columns: repeat(auto-fill, minmax(clamp(90px, 20vw, 120px), 1fr));
+    gap: clamp(10px, 2vw, 15px);
+    margin: clamp(15px, 3vw, 20px) 0;
+    min-height: clamp(150px, 30vh, 200px);
+    max-height: 60vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .inventory-item {
     background: rgba(30, 30, 35, 0.8);
     border: 2px solid #444;
     border-radius: 8px;
-    padding: 15px;
+    padding: clamp(10px, 2vw, 15px);
     text-align: center;
     transition: all 0.3s ease;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+@media (max-width: 768px) {
+    #inventory-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    #inventory-grid {
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        gap: 10px;
+    }
 }
 
 .inventory-item:hover {
@@ -427,17 +555,19 @@ body.show-hotspots .hotspot {
 }
 
 .inventory-item img {
-    width: 80px;
-    height: 80px;
+    width: clamp(60px, 15vw, 80px);
+    height: clamp(60px, 15vw, 80px);
     object-fit: contain;
-    margin-bottom: 10px;
+    margin-bottom: clamp(6px, 1.5vw, 10px);
     background: transparent !important;
 }
 
 .inventory-item-name {
-    font-size: 12px;
+    font-size: clamp(10px, 2vw, 12px);
     color: #aaa;
     text-transform: uppercase;
+    word-wrap: break-word;
+    line-height: 1.2;
 }
 
 .inventory-empty {
@@ -448,13 +578,12 @@ body.show-hotspots .hotspot {
     padding: 40px;
 }
 
-/* ===== NOTEBOOK UI - FIXED ALIGNMENT ===== */
+/* ===== NOTEBOOK UI - FULLY RESPONSIVE ===== */
 .notebook-ui {
     position: relative;
-    width: 90%;
-    max-width: 1000px;
-    height: 85%;
-    max-height: 700px;
+    width: min(90%, 1000px);
+    height: min(85%, 700px);
+    max-height: 85vh;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -469,15 +598,46 @@ body.show-hotspots .hotspot {
 #notebook-text-overlay {
     position: absolute;
     top: 10%;
-    left: 15%;
-    right: 15%;
+    left: 12%;
+    right: 12%;
     bottom: 10%;
     overflow-y: auto;
-    padding: 50px 40px;
+    overflow-x: hidden;
+    padding: clamp(25px, 5vw, 50px) clamp(20px, 4vw, 40px);
     color: #1a1a1a;
     font-family: 'Courier New', monospace;
-    font-size: 14px;
-    line-height: 2;
+    font-size: clamp(12px, 2.5vw, 14px);
+    line-height: 1.8;
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+    .notebook-ui {
+        width: 95%;
+        height: 90%;
+    }
+
+    #notebook-text-overlay {
+        left: 10%;
+        right: 10%;
+        top: 8%;
+        bottom: 8%;
+    }
+}
+
+@media (max-width: 480px) {
+    .notebook-ui {
+        width: 98%;
+        height: 95%;
+    }
+
+    #notebook-text-overlay {
+        left: 8%;
+        right: 8%;
+        top: 6%;
+        bottom: 6%;
+        line-height: 1.6;
+    }
 }
 
 #notebook-entries {
@@ -506,15 +666,15 @@ body.show-hotspots .hotspot {
 
 .notebook-close-btn {
     position: absolute;
-    top: 15px;
-    right: 15px;
-    width: 45px;
-    height: 45px;
+    top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    width: clamp(38px, 8vw, 45px);
+    height: clamp(38px, 8vw, 45px);
     background: rgba(0, 0, 0, 0.8);
     border: 2px solid #ffd700;
     border-radius: 50%;
     color: #ffd700;
-    font-size: 30px;
+    font-size: clamp(24px, 5vw, 30px);
     font-weight: bold;
     display: flex;
     align-items: center;
@@ -522,7 +682,9 @@ body.show-hotspots .hotspot {
     cursor: pointer;
     transition: all 0.3s ease;
     line-height: 1;
-    padding-bottom: 4px;
+    padding-bottom: 3px;
+    touch-action: manipulation;
+    z-index: 10;
 }
 
 .notebook-close-btn:hover {
@@ -585,18 +747,31 @@ body.show-hotspots .hotspot {
     box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
 }
 
-/* ===== SETTINGS ===== */
+/* ===== SETTINGS - RESPONSIVE ===== */
 .settings-item {
-    margin: 25px 0;
+    margin: clamp(18px, 4vw, 25px) 0;
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: clamp(10px, 2vw, 15px);
+    flex-wrap: wrap;
 }
 
 .settings-item label {
     color: #ccc;
     flex: 1;
-    font-size: 16px;
+    min-width: 150px;
+    font-size: clamp(14px, 3vw, 16px);
+}
+
+@media (max-width: 480px) {
+    .settings-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .settings-item label {
+        width: 100%;
+    }
 }
 
 .settings-item input[type="range"] {
@@ -628,8 +803,9 @@ body.show-hotspots .hotspot {
 
 .settings-item span {
     color: #ffd700;
-    min-width: 50px;
+    min-width: clamp(40px, 8vw, 50px);
     text-align: right;
+    font-size: clamp(13px, 2.5vw, 15px);
 }
 
 .settings-item input[type="checkbox"] {
@@ -656,7 +832,7 @@ body.show-hotspots .hotspot {
     opacity: 1;
 }
 
-/* ===== MAIN MENU - CENTERED ===== */
+/* ===== MAIN MENU - FULLY RESPONSIVE ===== */
 body.main-menu #scene-container {
     background-image: url('./assets/ui/ui_main_menu_bg.png');
     background-size: cover;
@@ -665,46 +841,51 @@ body.main-menu #scene-container {
 
 #main-menu-content {
     position: absolute;
-    top: 52%;
+    top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     text-align: center;
     z-index: 10;
     width: 90%;
     max-width: 650px;
+    padding: 0 10px;
 }
 
 #main-menu-title {
-    font-size: 40px;
+    font-size: clamp(20px, 6vw, 40px);
     color: #ffd700;
     text-transform: uppercase;
-    letter-spacing: 3px;
-    margin-bottom: 45px;
+    letter-spacing: clamp(1px, 0.5vw, 3px);
+    margin-bottom: clamp(25px, 5vw, 45px);
     text-shadow: 0 0 25px rgba(255, 215, 0, 0.9),
                  4px 4px 10px rgba(0, 0, 0, 0.95);
-    line-height: 1.3;
-    background: rgba(0, 0, 0, 0.8);
-    padding: 28px 45px;
+    line-height: 1.2;
+    background: rgba(0, 0, 0, 0.85);
+    padding: clamp(15px, 4vw, 28px) clamp(20px, 5vw, 45px);
     border-radius: 15px;
     border: 3px solid rgba(255, 215, 0, 0.4);
     display: inline-block;
+    max-width: 100%;
+    word-wrap: break-word;
 }
 
 .menu-btn {
     display: block;
     width: 100%;
     max-width: 420px;
-    margin: 18px auto;
-    padding: 20px 40px;
+    margin: clamp(12px, 3vw, 18px) auto;
+    padding: clamp(14px, 3vw, 20px) clamp(25px, 5vw, 40px);
     background: rgba(20, 20, 25, 0.88);
     border: 3px solid #555;
     border-radius: 12px;
     color: #e0e0e0;
-    font-size: 24px;
+    font-size: clamp(18px, 4vw, 24px);
     font-weight: bold;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: clamp(1px, 0.3vw, 2px);
     transition: all 0.3s ease;
+    cursor: pointer;
+    touch-action: manipulation;
 }
 
 .menu-btn:hover:not(:disabled) {
@@ -720,94 +901,155 @@ body.main-menu #scene-container {
     cursor: not-allowed;
 }
 
-/* ===== RESPONSIVE ===== */
+/* ===== COMPREHENSIVE RESPONSIVE MEDIA QUERIES ===== */
+
+/* Large tablets and small desktops */
 @media (max-width: 1200px) {
-    #dialogue-text {
-        font-size: 16px;
-    }
-    
-    .menu-btn {
-        font-size: 22px;
-        padding: 18px 35px;
-    }
-    
-    #main-menu-title {
-        font-size: 36px;
-        padding: 24px 40px;
-    }
-    
     .phone-ui {
         width: 420px;
         height: 720px;
     }
 }
 
+/* Tablets in portrait and large phones in landscape */
 @media (max-width: 768px) {
-    #scene-title {
-        font-size: 12px;
-        top: 10px;
-        left: 10px;
-    }
-    
     #hud-buttons {
-        top: 10px;
-        right: 10px;
         gap: 10px;
     }
-    
+
     .hud-btn {
-        width: 42px;
-        height: 42px;
-        font-size: 20px;
+        width: 44px;
+        height: 44px;
+        font-size: 22px;
     }
-    
-    #dialogue-box {
-        width: 98%;
-        bottom: 40px;
-    }
-    
-    #dialogue-content {
-        padding: 12px 15px;
-    }
-    
-    #dialogue-speaker {
-        font-size: 17px;
-    }
-    
-    #dialogue-text {
-        font-size: 15px;
-    }
-    
-    .menu-btn {
-        font-size: 20px;
-        padding: 16px 28px;
-        margin: 14px auto;
-    }
-    
-    #main-menu-title {
-        font-size: 28px;
-        padding: 22px 32px;
-        margin-bottom: 35px;
-    }
-    
+
     .overlay-content {
-        padding: 25px;
+        padding: 25px 20px;
         max-width: 95%;
     }
-    
+
     .phone-ui {
-        width: 320px;
-        height: 550px;
+        width: min(90vw, 350px);
+        height: min(75vh, 600px);
     }
-    
+
     .phone-buttons {
-        gap: 18px;
-        margin-top: 60px;
+        gap: 15px;
+        margin-top: 50px;
+        width: 70%;
     }
-    
+
     .phone-buttons button {
-        font-size: 15px;
-        padding: 14px 18px;
+        font-size: clamp(14px, 3vw, 16px);
+        padding: 12px 16px;
+    }
+}
+
+/* Small phones and iPhone SE */
+@media (max-width: 480px) {
+    #hud-buttons {
+        gap: 8px;
+    }
+
+    .hud-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 20px;
+    }
+
+    .overlay-content {
+        padding: 20px 15px;
+        max-width: 98%;
+        max-height: 90vh;
+    }
+
+    .overlay-content h2 {
+        font-size: clamp(20px, 5vw, 24px);
+        margin-bottom: 20px;
+    }
+
+    .phone-ui {
+        width: min(95vw, 300px);
+        height: min(80vh, 520px);
+    }
+
+    .phone-buttons {
+        gap: 12px;
+        margin-top: 40px;
+        width: 75%;
+    }
+
+    .phone-buttons button {
+        font-size: clamp(13px, 3vw, 15px);
+        padding: 10px 14px;
+    }
+
+    #main-menu-content {
+        width: 95%;
+    }
+}
+
+/* Landscape orientation optimization */
+@media (max-height: 500px) and (orientation: landscape) {
+    #dialogue-box {
+        bottom: max(5px, env(safe-area-inset-bottom));
+    }
+
+    #dialogue-container {
+        min-height: 80px;
+    }
+
+    #dialogue-bubble {
+        min-height: 80px;
+    }
+
+    #dialogue-text {
+        max-height: 100px;
+    }
+
+    .character-sprite {
+        max-height: 65%;
+    }
+
+    #hud-buttons {
+        gap: 8px;
+    }
+
+    .hud-btn {
+        width: 38px;
+        height: 38px;
+        font-size: 18px;
+    }
+
+    .phone-ui {
+        width: min(50vw, 320px);
+        height: min(90vh, 450px);
+    }
+}
+
+/* iPhone X, 11, 12, 13, 14 with notch */
+@media only screen
+  and (min-device-width: 375px)
+  and (max-device-width: 428px)
+  and (-webkit-min-device-pixel-ratio: 3) {
+    #hud-buttons {
+        top: max(25px, env(safe-area-inset-top, 44px));
+    }
+
+    #scene-title {
+        top: max(25px, env(safe-area-inset-top, 44px));
+    }
+
+    #dialogue-box {
+        bottom: max(15px, env(safe-area-inset-bottom, 34px));
+    }
+}
+
+/* Very wide screens (ultrawide monitors) */
+@media (min-width: 1921px) {
+    #scene-container {
+        max-width: 2560px;
+        max-height: 1440px;
     }
 }
 
