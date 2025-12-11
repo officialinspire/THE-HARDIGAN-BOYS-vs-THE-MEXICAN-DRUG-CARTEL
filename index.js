@@ -337,6 +337,10 @@ const sceneRenderer = {
             this.loadCharacters(scene.characters);
         }
 
+        if (scene.items) {
+            this.loadItems(scene.items);
+        }
+
         if (scene.hotspots) {
             this.loadHotspots(scene.hotspots);
         }
@@ -363,6 +367,7 @@ const sceneRenderer = {
     
     clearScene() {
         document.getElementById('character-layer').innerHTML = '';
+        document.getElementById('item-layer').innerHTML = '';
         document.getElementById('hotspot-layer').innerHTML = '';
         document.getElementById('dialogue-box').classList.add('hidden');
     },
@@ -406,9 +411,45 @@ const sceneRenderer = {
         });
     },
     
+    loadItems(items) {
+        const itemLayer = document.getElementById('item-layer');
+
+        items.forEach(item => {
+            // Skip if item already collected
+            if (inventory.has(item.id)) {
+                return;
+            }
+
+            const div = document.createElement('div');
+            div.className = 'scene-item';
+            div.id = `scene-item-${item.id}`;
+            div.style.left = item.x + '%';
+            div.style.top = item.y + '%';
+            div.style.width = item.width + '%';
+            div.style.height = item.height + '%';
+            div.title = item.label || '';
+
+            const img = document.createElement('img');
+            img.src = `./assets/items/item_${item.id}.png`;
+            img.alt = item.label || item.id;
+            div.appendChild(img);
+
+            div.addEventListener('click', () => {
+                SFXGenerator.playButtonClick();
+                if (item.onClick) {
+                    item.onClick();
+                    // Mark as collected visually
+                    div.classList.add('collected');
+                }
+            });
+
+            itemLayer.appendChild(div);
+        });
+    },
+
     loadHotspots(hotspots) {
         const hotspotLayer = document.getElementById('hotspot-layer');
-        
+
         hotspots.forEach(hotspot => {
             const div = document.createElement('div');
             div.className = 'hotspot';
@@ -417,37 +458,41 @@ const sceneRenderer = {
             div.style.width = hotspot.width + '%';
             div.style.height = hotspot.height + '%';
             div.title = hotspot.label || '';
-            
+
             div.addEventListener('click', () => {
                 SFXGenerator.playButtonClick();
                 if (hotspot.onClick) {
                     hotspot.onClick();
                 }
             });
-            
+
             hotspotLayer.appendChild(div);
         });
     },
     
     showDialogue(dialogueEntry) {
         const dialogueBox = document.getElementById('dialogue-box');
+        const dialogueContainer = document.getElementById('dialogue-container');
         const dialogueBubble = document.getElementById('dialogue-bubble');
         const speaker = document.getElementById('dialogue-speaker');
         const text = document.getElementById('dialogue-text');
         const choicesDiv = document.getElementById('dialogue-choices');
         const continueBtn = document.getElementById('dialogue-continue');
-        
+
         choicesDiv.innerHTML = '';
         continueBtn.classList.add('hidden');
-        
+
         const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
 
         if (isNarration) {
-            dialogueBubble.src = './assets/menu_dialogue/dialogue-bubble-large-left.png';
+            // Use stylish container for narrative events
+            dialogueContainer.classList.add('narrative-mode');
             speaker.className = 'narration';
             text.className = 'narration';
             speaker.textContent = '';
         } else {
+            // Remove narrative mode and use speech bubble
+            dialogueContainer.classList.remove('narrative-mode');
             const isLeft = dialogueEntry.position === 'left' || Math.random() < 0.5;
             dialogueBubble.src = isLeft ?
                 './assets/menu_dialogue/dialogue-bubble-large-left.png' :
@@ -456,10 +501,10 @@ const sceneRenderer = {
             text.className = '';
             speaker.textContent = dialogueEntry.speaker;
         }
-        
+
         dialogueBox.classList.remove('hidden');
         text.textContent = dialogueEntry.text || '';
-        
+
         SFXGenerator.playDialogueAdvance();
         
         if (dialogueEntry.choices && dialogueEntry.choices.length > 0) {
@@ -597,12 +642,52 @@ const SCENES = {
             { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_excited.png', position: 'right' }
         ],
-        
+
+        items: [
+            {
+                id: 'tv_remote',
+                label: 'TV Remote',
+                x: 56,
+                y: 68,
+                width: 3.5,
+                height: 2.5,
+                onClick() {
+                    if (!inventory.has('tv_remote')) {
+                        inventory.add('tv_remote');
+                        sceneRenderer.showDialogue({
+                            speaker: 'SYSTEM',
+                            text: "Item acquired: TV REMOTE",
+                            next: 'NEXT_DIALOGUE'
+                        });
+                    }
+                }
+            },
+            {
+                id: 'conspiracy_notebook',
+                label: "Hank's Conspiracy Notebook",
+                x: 38,
+                y: 72,
+                width: 6,
+                height: 5,
+                onClick() {
+                    if (!inventory.has('conspiracy_notebook')) {
+                        inventory.add('conspiracy_notebook');
+                        notebook.add('THE NOTEBOOK', 'Hank\'s conspiracy theories and "research". Everything connects, apparently.');
+                        sceneRenderer.showDialogue({
+                            speaker: 'SYSTEM',
+                            text: "Item acquired: HANK'S CONSPIRACY NOTEBOOK",
+                            next: 'NEXT_DIALOGUE'
+                        });
+                    }
+                }
+            }
+        ],
+
         hotspots: [
             {
                 id: 'television',
                 label: 'Television',
-                x: 3, y: 52, width: 10, height: 12,
+                x: 10, y: 45, width: 15, height: 18,
                 onClick() {
                     if (!gameState.objectsClicked.has('television')) {
                         gameState.objectsClicked.add('television');
@@ -618,7 +703,7 @@ const SCENES = {
             {
                 id: 'window',
                 label: 'Window',
-                x: 28, y: 8, width: 28, height: 35,
+                x: 30, y: 12, width: 25, height: 32,
                 onClick() {
                     if (!gameState.objectsClicked.has('window')) {
                         gameState.objectsClicked.add('window');
@@ -647,25 +732,9 @@ const SCENES = {
                 }
             },
             {
-                id: 'notebook',
-                label: "Hank's Conspiracy Notebook",
-                x: 35, y: 62, width: 12, height: 8,
-                onClick() {
-                    if (!inventory.has('conspiracy_notebook')) {
-                        inventory.add('conspiracy_notebook');
-                        notebook.add('THE NOTEBOOK', 'Hank\'s conspiracy theories and "research". Everything connects, apparently.');
-                        sceneRenderer.showDialogue({
-                            speaker: 'SYSTEM',
-                            text: "Item acquired: HANK'S CONSPIRACY NOTEBOOK",
-                            next: 'NEXT_DIALOGUE'
-                        });
-                    }
-                }
-            },
-            {
                 id: 'lamp',
                 label: 'Lamp',
-                x: 78, y: 52, width: 10, height: 18,
+                x: 82, y: 48, width: 8, height: 22,
                 onClick() {
                     if (!gameState.objectsClicked.has('lamp')) {
                         gameState.objectsClicked.add('lamp');

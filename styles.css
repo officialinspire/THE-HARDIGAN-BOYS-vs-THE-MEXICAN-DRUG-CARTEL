@@ -146,7 +146,7 @@ button {
 }
 
 .char-left {
-    left: 2%;
+    left: 8%;
     bottom: 0;
 }
 
@@ -157,19 +157,54 @@ button {
 }
 
 .char-right {
-    right: 2%;
+    right: 8%;
     bottom: 0;
 }
 
 /* Mobile: adjust character positioning */
 @media (max-width: 768px) {
     .char-left {
-        left: 1%;
+        left: 5%;
     }
 
     .char-right {
-        right: 1%;
+        right: 5%;
     }
+}
+
+/* ===== ITEM LAYER ===== */
+#item-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.scene-item {
+    position: absolute;
+    pointer-events: auto;
+    transition: transform 0.3s ease, filter 0.3s ease;
+    cursor: pointer;
+}
+
+.scene-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.scene-item:hover {
+    transform: scale(1.1);
+    filter: brightness(1.2);
+}
+
+.scene-item.collected {
+    opacity: 0;
+    pointer-events: none;
 }
 
 /* ===== HOTSPOT LAYER ===== */
@@ -291,11 +326,32 @@ body.show-hotspots .hotspot {
     min-height: 120px;
 }
 
+/* Narrative Container - Stylish box without speech bubble */
+#dialogue-container.narrative-mode {
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.92) 0%, rgba(20, 20, 30, 0.95) 100%);
+    border: 3px solid #FFD700;
+    border-radius: 12px;
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.6),
+                inset 0 0 20px rgba(255, 215, 0, 0.1);
+    padding: clamp(18px, 3vw, 28px);
+    min-height: auto;
+}
+
+#dialogue-container.narrative-mode #dialogue-bubble {
+    display: none;
+}
+
+#dialogue-container.narrative-mode #dialogue-content {
+    position: static;
+    padding: 0;
+}
+
 #dialogue-bubble {
     width: 100%;
     height: auto;
     display: block;
     min-height: 120px;
+    background: transparent;
 }
 
 #dialogue-content {
@@ -306,32 +362,33 @@ body.show-hotspots .hotspot {
     bottom: 12%;
     display: flex;
     flex-direction: column;
-    padding: clamp(10px, 2vw, 20px);
+    padding: clamp(12px, 2vw, 22px);
     overflow: hidden;
 }
 
 #dialogue-speaker {
-    font-size: clamp(16px, 3.5vw, 20px);
+    font-size: clamp(18px, 4vw, 24px);
     font-weight: bold;
     color: #000;
     text-transform: uppercase;
-    margin-bottom: clamp(6px, 1.5vw, 10px);
-    letter-spacing: 1px;
-    font-family: 'Bangers', 'Comic Sans MS', cursive;
-    line-height: 1.2;
+    margin-bottom: clamp(8px, 1.8vw, 12px);
+    letter-spacing: 1.5px;
+    font-family: 'Bangers', 'Comic Sans MS', 'Arial Black', sans-serif;
+    line-height: 1.3;
 }
 
 #dialogue-text {
-    font-size: clamp(14px, 3vw, 18px);
-    line-height: 1.4;
+    font-size: clamp(16px, 3.5vw, 22px);
+    line-height: 1.5;
     color: #000;
-    margin-bottom: clamp(8px, 2vw, 12px);
-    font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
+    margin-bottom: clamp(10px, 2.2vw, 14px);
+    font-family: 'Comic Sans MS', 'Chalkboard SE', 'Trebuchet MS', sans-serif;
     font-weight: 600;
     flex-grow: 1;
     overflow-y: auto;
-    max-height: 200px;
+    max-height: 220px;
     -webkit-overflow-scrolling: touch;
+    padding: clamp(4px, 1vw, 8px);
 }
 
 /* Mobile: adjust dialogue box positioning and spacing */
@@ -370,20 +427,23 @@ body.show-hotspots .hotspot {
 
 /* NARRATION STYLING - GOLD/YELLOW */
 #dialogue-speaker.narration {
-    font-family: 'Creepster', cursive;
-    font-size: clamp(18px, 4vw, 26px);
+    font-family: 'Creepster', 'Comic Sans MS', cursive;
+    font-size: clamp(22px, 4.5vw, 30px);
     color: #FFD700;
-    text-shadow: 3px 3px 6px rgba(0, 0, 0, 1),
-                 0 0 12px rgba(255, 215, 0, 0.8);
+    text-shadow: 3px 3px 8px rgba(0, 0, 0, 1),
+                 0 0 15px rgba(255, 215, 0, 0.9);
+    letter-spacing: 2px;
 }
 
 #dialogue-text.narration {
-    font-family: 'Creepster', cursive;
-    font-size: clamp(15px, 3.5vw, 22px);
+    font-family: 'Comic Sans MS', 'Trebuchet MS', sans-serif;
+    font-size: clamp(17px, 4vw, 24px);
     color: #FFD700;
-    text-shadow: 2px 2px 5px rgba(0, 0, 0, 1),
-                 0 0 10px rgba(255, 215, 0, 0.6);
-    line-height: 1.5;
+    text-shadow: 2px 2px 6px rgba(0, 0, 0, 1),
+                 0 0 12px rgba(255, 215, 0, 0.7);
+    line-height: 1.6;
+    font-weight: 700;
+    padding: clamp(6px, 1.5vw, 10px);
 }
 
 #dialogue-choices {
