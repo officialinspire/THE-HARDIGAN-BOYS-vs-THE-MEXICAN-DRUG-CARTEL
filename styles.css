@@ -72,15 +72,22 @@ button {
     left: 0;
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     object-position: center;
     z-index: 1;
     transition: opacity 0.5s ease;
     background: #000;
 }
 
-/* Desktop: use contain to maintain aspect ratio */
-@media (min-width: 1024px) {
+/* Mobile portrait: use cover to fill screen */
+@media (max-width: 768px) and (orientation: portrait) {
+    #scene-background {
+        object-fit: cover;
+    }
+}
+
+/* Mobile landscape: use contain to show full image */
+@media (max-width: 768px) and (orientation: landscape) {
     #scene-background {
         object-fit: contain;
     }
@@ -814,22 +821,23 @@ body.show-hotspots .hotspot {
     cursor: pointer;
 }
 
-/* ===== FADE OVERLAY ===== */
+/* ===== FADE OVERLAY - BLACK TRANSITIONS ===== */
 #fade-overlay {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: #000;
+    background: #000000;
     z-index: 50;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.5s ease;
+    transition: opacity 0.5s ease-in-out;
 }
 
 #fade-overlay.active {
     opacity: 1;
+    pointer-events: auto;
 }
 
 /* ===== MAIN MENU - FULLY RESPONSIVE ===== */
@@ -899,6 +907,29 @@ body.main-menu #scene-container {
 .menu-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+}
+
+/* ===== LANDSCAPE ORIENTATION MESSAGE FOR MOBILE ===== */
+@media (max-width: 768px) and (orientation: portrait) {
+    #game-root::before {
+        content: 'Please rotate your device to landscape mode for the best experience';
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.95);
+        color: #ffd700;
+        padding: 30px 40px;
+        border-radius: 15px;
+        border: 3px solid #ffd700;
+        text-align: center;
+        font-size: 18px;
+        font-weight: bold;
+        z-index: 9999;
+        max-width: 80%;
+        line-height: 1.5;
+        box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+    }
 }
 
 /* ===== COMPREHENSIVE RESPONSIVE MEDIA QUERIES ===== */
