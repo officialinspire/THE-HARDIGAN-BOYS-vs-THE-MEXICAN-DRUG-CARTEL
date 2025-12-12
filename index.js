@@ -95,7 +95,10 @@ const gameState = {
         showHotspots: true
     },
     currentDialogueIndex: 0,
-    objectsClicked: new Set()
+    objectsClicked: new Set(),
+    dialogueLock: false,
+    actionLock: false,
+    sceneTransitioning: false
 };
 
 // ===== AUDIO MANAGEMENT =====
@@ -313,11 +316,21 @@ const sceneRenderer = {
     currentScene: null,
     
     async loadScene(sceneId) {
+        // Prevent multiple simultaneous scene transitions
+        if (gameState.sceneTransitioning) {
+            console.log('Scene transition already in progress, ignoring request');
+            return;
+        }
+
         const scene = SCENES[sceneId];
         if (!scene) {
             console.error(`Scene not found: ${sceneId}`);
             return;
         }
+
+        gameState.sceneTransitioning = true;
+        gameState.dialogueLock = false;
+        gameState.actionLock = false;
 
         this.currentScene = scene;
         gameState.currentSceneId = sceneId;
@@ -335,6 +348,16 @@ const sceneRenderer = {
 
         const bg = document.getElementById('scene-background');
         bg.src = scene.background;
+
+        // Ensure background loads before fading in
+        await new Promise(resolve => {
+            if (bg.complete) {
+                resolve();
+            } else {
+                bg.onload = () => resolve();
+                bg.onerror = () => resolve(); // Continue even if image fails
+            }
+        });
 
         document.getElementById('scene-title').textContent = scene.title || '';
 
@@ -355,8 +378,10 @@ const sceneRenderer = {
             audioManager.playMusic(scene.music, true);
         }
 
-        // Fade from black (fade out overlay)
+        // Fade from black (fade out overlay) - scene automatically shows without clicking
         await this.fadeTransition(false);
+
+        gameState.sceneTransitioning = false;
 
         if (scene.dialogue && scene.dialogue.length > 0) {
             setTimeout(() => {
@@ -452,12 +477,17 @@ const sceneRenderer = {
             div.appendChild(img);
 
             div.addEventListener('click', () => {
+                if (gameState.actionLock || gameState.sceneTransitioning) return;
+                gameState.actionLock = true;
                 SFXGenerator.playButtonClick();
                 if (item.onClick) {
                     item.onClick();
                     // Mark as collected visually
                     div.classList.add('collected');
                 }
+                setTimeout(() => {
+                    gameState.actionLock = false;
+                }, 300);
             });
 
             itemLayer.appendChild(div);
@@ -477,10 +507,15 @@ const sceneRenderer = {
             div.title = hotspot.label || '';
 
             div.addEventListener('click', () => {
+                if (gameState.actionLock || gameState.sceneTransitioning) return;
+                gameState.actionLock = true;
                 SFXGenerator.playButtonClick();
                 if (hotspot.onClick) {
                     hotspot.onClick();
                 }
+                setTimeout(() => {
+                    gameState.actionLock = false;
+                }, 300);
             });
 
             hotspotLayer.appendChild(div);
@@ -488,6 +523,14 @@ const sceneRenderer = {
     },
     
     showDialogue(dialogueEntry) {
+        // Prevent multiple dialogues from showing simultaneously
+        if (gameState.dialogueLock) {
+            console.log('Dialogue already showing, ignoring request');
+            return;
+        }
+
+        gameState.dialogueLock = true;
+
         const dialogueBox = document.getElementById('dialogue-box');
         const dialogueContainer = document.getElementById('dialogue-container');
         const dialogueBubble = document.getElementById('dialogue-bubble');
@@ -523,23 +566,30 @@ const sceneRenderer = {
         text.textContent = dialogueEntry.text || '';
 
         SFXGenerator.playDialogueAdvance();
-        
+
         if (dialogueEntry.choices && dialogueEntry.choices.length > 0) {
             dialogueEntry.choices.forEach(choice => {
                 const btn = document.createElement('button');
                 btn.className = 'dialogue-choice';
                 btn.textContent = choice.text;
                 btn.addEventListener('click', () => {
+                    if (gameState.actionLock) return;
+                    gameState.actionLock = true;
+                    gameState.dialogueLock = false;
                     SFXGenerator.playButtonClick();
                     if (choice.action) {
                         choice.action();
                     }
+                    gameState.actionLock = false;
                 });
                 choicesDiv.appendChild(btn);
             });
         } else if (dialogueEntry.next) {
             continueBtn.classList.remove('hidden');
             continueBtn.onclick = () => {
+                if (gameState.actionLock) return;
+                gameState.actionLock = true;
+                gameState.dialogueLock = false;
                 SFXGenerator.playDialogueAdvance();
                 if (dialogueEntry.next === 'NEXT_DIALOGUE') {
                     this.nextDialogue();
@@ -548,9 +598,11 @@ const sceneRenderer = {
                 } else {
                     this.loadScene(dialogueEntry.next);
                 }
+                gameState.actionLock = false;
             };
         } else {
             setTimeout(() => {
+                gameState.dialogueLock = false;
                 this.nextDialogue();
             }, 3000);
         }
@@ -674,8 +726,8 @@ const SCENES = {
             {
                 id: 'tv_remote',
                 label: 'TV Remote',
-                x: 56,
-                y: 68,
+                x: 48,
+                y: 70,
                 width: 5,
                 height: 4,
                 onClick() {
@@ -766,7 +818,7 @@ const SCENES = {
             {
                 id: 'notebook',
                 label: "Hank's Conspiracy Notebook",
-                x: 35, y: 70, width: 10, height: 8,
+                x: 38, y: 62, width: 10, height: 8,
                 onClick() {
                     if (!inventory.has('conspiracy_notebook')) {
                         gameState.objectsClicked.add('notebook');
