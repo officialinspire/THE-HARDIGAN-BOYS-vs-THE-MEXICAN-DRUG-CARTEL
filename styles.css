@@ -86,10 +86,18 @@ button {
     }
 }
 
-/* Mobile landscape: use contain to show full image */
+/* Mobile landscape: use contain to show full image with proper scaling */
 @media (max-width: 768px) and (orientation: landscape) {
     #scene-background {
         object-fit: contain;
+        object-position: center;
+    }
+
+    #scene-container {
+        width: 100%;
+        height: 100vh;
+        max-width: 100vw;
+        max-height: 100vh;
     }
 }
 
@@ -146,12 +154,12 @@ button {
 }
 
 .char-left {
-    left: 8%;
+    left: 5%;
     bottom: 0;
 }
 
 .char-left-2 {
-    left: 28%;
+    left: 32%;
     bottom: 0;
 }
 
@@ -162,31 +170,31 @@ button {
 }
 
 .char-right {
-    right: 8%;
+    right: 5%;
     bottom: 0;
 }
 
 .char-right-2 {
-    right: 28%;
+    right: 32%;
     bottom: 0;
 }
 
 /* Mobile: adjust character positioning */
 @media (max-width: 768px) {
     .char-left {
-        left: 5%;
+        left: 3%;
     }
 
     .char-left-2 {
-        left: 25%;
+        left: 30%;
     }
 
     .char-right {
-        right: 5%;
+        right: 3%;
     }
 
     .char-right-2 {
-        right: 25%;
+        right: 30%;
     }
 }
 
@@ -271,11 +279,35 @@ body.show-hotspots .hotspot {
     pointer-events: auto;
 }
 
-/* HUD Buttons - TOP RIGHT */
-#hud-buttons {
+/* HUD Container - Unified top bar */
+#hud-buttons,
+#scene-title {
     position: absolute;
-    top: max(20px, env(safe-area-inset-top));
-    right: max(20px, env(safe-area-inset-right));
+}
+
+/* Create a pseudo-element for the unified HUD background */
+#hud::before {
+    content: '';
+    position: absolute;
+    top: max(10px, env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(95%, 1920px);
+    height: 70px;
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.92) 0%, rgba(20, 20, 30, 0.95) 100%);
+    border: 3px solid #FFD700;
+    border-radius: 12px;
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.6),
+                inset 0 0 20px rgba(255, 215, 0, 0.1),
+                0 4px 12px rgba(0, 0, 0, 0.8);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* HUD Buttons - TOP RIGHT within container */
+#hud-buttons {
+    top: max(22px, calc(env(safe-area-inset-top) + 12px));
+    right: max(30px, calc(env(safe-area-inset-right) + 10px));
     display: flex;
     gap: 15px;
     z-index: 10;
@@ -304,21 +336,24 @@ body.show-hotspots .hotspot {
                 0 0 15px rgba(255, 215, 0, 0.3);
 }
 
-/* Scene title */
+/* Scene title - within HUD container */
 #scene-title {
-    position: absolute;
-    top: max(20px, env(safe-area-inset-top));
-    left: max(20px, env(safe-area-inset-left));
-    font-size: clamp(11px, 2.5vw, 14px);
+    top: max(30px, calc(env(safe-area-inset-top) + 20px));
+    left: max(30px, calc(env(safe-area-inset-left) + 10px));
+    font-size: clamp(14px, 3vw, 18px);
     font-weight: bold;
-    color: #00ffff;
+    color: #FFD700;
     text-transform: uppercase;
-    text-shadow: 0 0 10px rgba(0, 255, 255, 0.8),
-                 2px 2px 4px rgba(0, 0, 0, 0.9);
+    text-shadow: 0 0 15px rgba(255, 215, 0, 0.9),
+                 2px 2px 6px rgba(0, 0, 0, 0.95);
     letter-spacing: 2px;
-    opacity: 0.9;
+    opacity: 1;
     max-width: 50%;
     word-wrap: break-word;
+    z-index: 10;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
 }
 
 /* ===== DIALOGUE BOX - FULLY RESPONSIVE ===== */
@@ -327,7 +362,7 @@ body.show-hotspots .hotspot {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: min(70%, 800px);
+    width: min(59.5%, 680px);
     transition: opacity 0.3s ease;
     pointer-events: auto;
     z-index: 5;
@@ -426,7 +461,7 @@ body.show-hotspots .hotspot {
 /* Mobile: adjust dialogue box positioning and spacing */
 @media (max-width: 768px) {
     #dialogue-box {
-        width: 90%;
+        width: 76.5%;
     }
 
     #dialogue-content {
@@ -440,7 +475,7 @@ body.show-hotspots .hotspot {
 /* Very small phones */
 @media (max-width: 480px) {
     #dialogue-box {
-        width: 95%;
+        width: 80.75%;
     }
 
     #dialogue-container {
@@ -1068,14 +1103,25 @@ body.main-menu #scene-container {
 
 /* Tablets in portrait and large phones in landscape */
 @media (max-width: 768px) {
+    #hud::before {
+        height: 60px;
+        width: min(98%, 100vw);
+    }
+
     #hud-buttons {
         gap: 10px;
+        top: max(18px, calc(env(safe-area-inset-top) + 8px));
     }
 
     .hud-btn {
         width: 44px;
         height: 44px;
         font-size: 22px;
+    }
+
+    #scene-title {
+        top: max(24px, calc(env(safe-area-inset-top) + 14px));
+        font-size: clamp(12px, 2.8vw, 16px);
     }
 
     .overlay-content {
@@ -1102,14 +1148,24 @@ body.main-menu #scene-container {
 
 /* Small phones and iPhone SE */
 @media (max-width: 480px) {
+    #hud::before {
+        height: 55px;
+    }
+
     #hud-buttons {
         gap: 8px;
+        top: max(16px, calc(env(safe-area-inset-top) + 6px));
     }
 
     .hud-btn {
         width: 40px;
         height: 40px;
         font-size: 20px;
+    }
+
+    #scene-title {
+        top: max(22px, calc(env(safe-area-inset-top) + 12px));
+        font-size: clamp(11px, 2.5vw, 14px);
     }
 
     .overlay-content {
@@ -1144,10 +1200,25 @@ body.main-menu #scene-container {
     }
 }
 
-/* Landscape orientation optimization */
+/* Landscape orientation optimization - prevent zoom issues */
 @media (max-height: 500px) and (orientation: landscape) {
+    #scene-container {
+        width: 100%;
+        height: 100%;
+        max-width: 100vw;
+        max-height: 100vh;
+    }
+
+    #scene-background {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: center;
+    }
+
     #dialogue-box {
         bottom: max(5px, env(safe-area-inset-bottom));
+        width: min(55%, 600px);
     }
 
     #dialogue-container {
@@ -1163,17 +1234,30 @@ body.main-menu #scene-container {
     }
 
     .character-sprite {
-        max-height: 65%;
+        max-height: 60%;
+        max-width: 30%;
+    }
+
+    #hud::before {
+        height: 50px;
+        top: max(5px, env(safe-area-inset-top));
     }
 
     #hud-buttons {
         gap: 8px;
+        top: max(13px, calc(env(safe-area-inset-top) + 8px));
     }
 
     .hud-btn {
         width: 38px;
         height: 38px;
         font-size: 18px;
+    }
+
+    #scene-title {
+        top: max(18px, calc(env(safe-area-inset-top) + 13px));
+        font-size: clamp(10px, 2.2vw, 13px);
+        padding: 6px 10px;
     }
 
     .phone-ui {
