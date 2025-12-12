@@ -508,9 +508,9 @@ const sceneRenderer = {
             text.className = 'narration';
             speaker.textContent = '';
         } else {
-            // Remove narrative mode and use speech bubble
+            // Remove narrative mode and use speech bubble matching character position
             dialogueContainer.classList.remove('narrative-mode');
-            const isLeft = dialogueEntry.position === 'left' || Math.random() < 0.5;
+            const isLeft = dialogueEntry.position === 'left';
             dialogueBubble.src = isLeft ?
                 './assets/menu_dialogue/dialogue-bubble-large-left.png' :
                 './assets/menu_dialogue/dialogue-bubble-large-right.png';
@@ -640,11 +640,21 @@ const SCENES = {
                     }
                 });
             }
-            
+
             document.getElementById('btn-options').addEventListener('click', () => {
                 SFXGenerator.playButtonClick();
                 document.getElementById('settings-overlay').classList.remove('hidden');
             });
+
+            // Fade in menu buttons with staggered animation after menu loads
+            setTimeout(() => {
+                const menuButtons = document.querySelectorAll('.menu-btn');
+                menuButtons.forEach((btn, index) => {
+                    setTimeout(() => {
+                        btn.classList.add('fade-in');
+                    }, index * 150); // 150ms delay between each button
+                });
+            }, 300); // Start after 300ms to let the scene fade in first
         }
     },
     
