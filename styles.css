@@ -459,6 +459,27 @@ body.show-hotspots .hotspot {
     padding: clamp(6px, 1.5vw, 10px);
 }
 
+/* CHOICE STYLING - YELLOW AND LARGER */
+#dialogue-speaker.choice-speaker {
+    font-family: 'Bangers', 'Impact', 'Arial Black', sans-serif;
+    font-size: clamp(28px, 6vw, 38px);
+    color: #FFD700;
+    text-shadow: 3px 3px 8px rgba(0, 0, 0, 1),
+                 0 0 20px rgba(255, 215, 0, 0.9);
+    letter-spacing: 3px;
+}
+
+#dialogue-text.choice-text {
+    font-family: 'Comic Sans MS', 'Trebuchet MS', sans-serif;
+    font-size: clamp(22px, 5vw, 30px);
+    color: #FFD700;
+    text-shadow: 2px 2px 6px rgba(0, 0, 0, 1),
+                 0 0 15px rgba(255, 215, 0, 0.8);
+    line-height: 1.6;
+    font-weight: 800;
+    padding: clamp(8px, 2vw, 14px);
+}
+
 #dialogue-choices {
     display: flex;
     flex-direction: column;

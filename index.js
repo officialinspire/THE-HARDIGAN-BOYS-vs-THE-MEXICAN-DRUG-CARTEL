@@ -292,7 +292,7 @@ const lightingEffects = {
                 width: 100%;
                 height: 100%;
                 pointer-events: none;
-                z-index: 5;
+                z-index: 2;
                 transition: opacity 0.5s ease;
             `;
 
@@ -338,7 +338,7 @@ const lightingEffects = {
                 width: 100%;
                 height: 100%;
                 pointer-events: none;
-                z-index: 5;
+                z-index: 2;
                 background: rgba(0, 0, 0, 0.5);
                 transition: opacity 0.5s ease;
             `;
@@ -590,6 +590,12 @@ const sceneRenderer = {
             document.getElementById('item-layer').innerHTML = '';
             document.getElementById('hotspot-layer').innerHTML = '';
             document.getElementById('dialogue-box').classList.add('hidden');
+
+            // Remove police light effect if present
+            const policeLight = document.getElementById('police-light-effect');
+            if (policeLight) {
+                policeLight.remove();
+            }
         }, characters.length * 100 + 600);
     },
     
@@ -913,7 +919,9 @@ const SCENES = {
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_excited.png', position: 'right' }
         ],
 
-        items: [
+        items: [],
+
+        hotspots: [
             {
                 id: 'tv_remote',
                 label: 'TV Remote',
@@ -933,10 +941,7 @@ const SCENES = {
                         next: 'NEXT_DIALOGUE'
                     });
                 }
-            }
-        ],
-
-        hotspots: [
+            },
             {
                 id: 'television',
                 label: 'Television',
@@ -1069,6 +1074,63 @@ const SCENES = {
             gameState.lighting.lampOn = false;
             gameState.lighting.tvOn = false;
             lightingEffects.updateLighting();
+
+            // Add subtle police light strobing effect to window
+            const sceneContainer = document.getElementById('scene-container');
+            const policeLight = document.createElement('div');
+            policeLight.id = 'police-light-effect';
+            policeLight.style.cssText = `
+                position: absolute;
+                top: 12%;
+                left: 30%;
+                width: 20%;
+                height: 32%;
+                pointer-events: none;
+                z-index: 2;
+                opacity: 0;
+                animation: policeLightStrobe 3s ease-in-out infinite;
+            `;
+            sceneContainer.appendChild(policeLight);
+
+            // Add CSS animation if not already present
+            if (!document.getElementById('police-light-style')) {
+                const style = document.createElement('style');
+                style.id = 'police-light-style';
+                style.textContent = `
+                    @keyframes policeLightStrobe {
+                        0%, 100% {
+                            opacity: 0;
+                            background: transparent;
+                        }
+                        10% {
+                            opacity: 0.15;
+                            background: radial-gradient(ellipse at center, rgba(255, 0, 0, 0.4) 0%, transparent 70%);
+                        }
+                        15% {
+                            opacity: 0;
+                        }
+                        20% {
+                            opacity: 0.15;
+                            background: radial-gradient(ellipse at center, rgba(0, 0, 255, 0.4) 0%, transparent 70%);
+                        }
+                        25% {
+                            opacity: 0;
+                        }
+                        30% {
+                            opacity: 0.15;
+                            background: radial-gradient(ellipse at center, rgba(255, 0, 0, 0.4) 0%, transparent 70%);
+                        }
+                        35% {
+                            opacity: 0;
+                        }
+                        50%, 90% {
+                            opacity: 0;
+                            background: transparent;
+                        }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
         }
     },
     
@@ -1081,7 +1143,7 @@ const SCENES = {
 
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
-            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'right' }
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused-right.png', position: 'right' }
         ],
 
         hotspots: [],
@@ -1144,7 +1206,7 @@ const SCENES = {
                     sceneRenderer.addCharacter({
                         id: 'mom',
                         name: 'MOM',
-                        sprite: 'char_mom_stern.png',
+                        sprite: 'char_mom_worried-left.png',
                         position: 'left'
                     }, 100);
                 }
