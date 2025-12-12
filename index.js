@@ -36,16 +36,34 @@ const SFXGenerator = {
         if (!this.audioContext) return;
         const osc = this.audioContext.createOscillator();
         const gain = this.audioContext.createGain();
-        
+
         osc.connect(gain);
         gain.connect(this.audioContext.destination);
-        
+
         osc.frequency.setValueAtTime(600, this.audioContext.currentTime);
         gain.gain.setValueAtTime(0.2 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.05);
-        
+
         osc.start(this.audioContext.currentTime);
         osc.stop(this.audioContext.currentTime + 0.05);
+    },
+
+    playContinueButton() {
+        if (!this.audioContext) return;
+        const osc = this.audioContext.createOscillator();
+        const gain = this.audioContext.createGain();
+
+        osc.connect(gain);
+        gain.connect(this.audioContext.destination);
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(900, this.audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1200, this.audioContext.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.25 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.08);
+
+        osc.start(this.audioContext.currentTime);
+        osc.stop(this.audioContext.currentTime + 0.08);
     },
     
     playMenuOpen() {
@@ -787,7 +805,7 @@ const sceneRenderer = {
                 if (gameState.actionLock) return;
                 gameState.actionLock = true;
                 gameState.dialogueLock = false;
-                SFXGenerator.playDialogueAdvance();
+                SFXGenerator.playContinueButton();
                 if (dialogueEntry.next === 'NEXT_DIALOGUE') {
                     this.nextDialogue();
                 } else if (typeof dialogueEntry.next === 'function') {
@@ -1058,12 +1076,12 @@ const SCENES = {
                     document.getElementById('dialogue-box').classList.add('hidden');
                 },
                 onShow: () => {
-                    // Slide in Mom when her dialogue appears
+                    // Slide in Mom when her dialogue appears (use right-2 so she doesn't overlap with Jonah)
                     sceneRenderer.addCharacter({
                         id: 'mom',
                         name: 'MOM',
                         sprite: 'char_mom_annoyed.png',
-                        position: 'right'
+                        position: 'right-2'
                     }, 100);
                 }
             }
@@ -1170,7 +1188,7 @@ const SCENES = {
                     sceneRenderer.removeCharacter('jonah');
                     setTimeout(() => {
                         sceneRenderer.nextDialogue();
-                    }, 700);
+                    }, 800);
                 }
             },
             {
@@ -1191,7 +1209,7 @@ const SCENES = {
                             id: 'mr_rivera',
                             name: 'MR. RIVERA',
                             sprite: 'char_carlos_detained.png',
-                            position: 'right'
+                            position: 'right-2'
                         }, 100);
                     }, 200);
                 }
@@ -1207,7 +1225,7 @@ const SCENES = {
                         id: 'mom',
                         name: 'MOM',
                         sprite: 'char_mom_worried-left.png',
-                        position: 'left'
+                        position: 'left-2'
                     }, 100);
                 }
             },
