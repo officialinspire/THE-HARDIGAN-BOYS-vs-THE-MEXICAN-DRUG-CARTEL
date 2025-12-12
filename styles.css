@@ -363,6 +363,7 @@ body.show-hotspots .hotspot {
     bottom: 12%;
     display: flex;
     flex-direction: column;
+    align-items: center;
     padding: clamp(12px, 2vw, 22px);
     overflow: hidden;
 }
@@ -376,20 +377,23 @@ body.show-hotspots .hotspot {
     letter-spacing: 1.8px;
     font-family: 'Bangers', 'Comic Sans MS', 'Arial Black', sans-serif;
     line-height: 1.3;
+    width: 100%;
+    text-align: center;
 }
 
 #dialogue-text {
     font-size: clamp(18px, 4vw, 24px);
     line-height: 1.6;
     color: #000;
-    margin-bottom: clamp(12px, 2.5vw, 16px);
+    margin-bottom: clamp(8px, 1.5vw, 12px);
     font-family: 'Comic Sans MS', 'Chalkboard SE', 'Trebuchet MS', sans-serif;
     font-weight: 600;
-    flex-grow: 1;
     overflow-y: auto;
     max-height: 280px;
     -webkit-overflow-scrolling: touch;
     padding: clamp(6px, 1.2vw, 10px);
+    width: 100%;
+    text-align: center;
 }
 
 /* Mobile: adjust dialogue box positioning and spacing */
@@ -451,6 +455,7 @@ body.show-hotspots .hotspot {
     flex-direction: column;
     gap: clamp(6px, 1.5vw, 10px);
     margin-top: clamp(6px, 1.5vw, 8px);
+    width: 100%;
 }
 
 .dialogue-choice {
@@ -488,17 +493,16 @@ body.show-hotspots .hotspot {
 }
 
 #dialogue-continue {
-    margin-top: clamp(12px, 2.5vw, 16px);
-    padding: clamp(12px, 3vw, 16px) clamp(30px, 6vw, 40px);
+    margin-top: clamp(8px, 1.5vw, 12px);
+    padding: clamp(10px, 2.5vw, 14px) clamp(24px, 5vw, 32px);
     background: rgba(255, 255, 255, 0.95);
     border: 4px solid #333;
     border-radius: 12px;
     color: #000;
-    font-size: clamp(18px, 4vw, 22px);
+    font-size: clamp(16px, 3.5vw, 20px);
     font-weight: bold;
     transition: all 0.3s ease;
     font-family: 'Bangers', 'Comic Sans MS', cursive;
-    align-self: center;
     cursor: pointer;
     touch-action: manipulation;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
@@ -955,6 +959,12 @@ body.main-menu #scene-container {
     transition: all 0.3s ease;
     cursor: pointer;
     touch-action: manipulation;
+    opacity: 0;
+    transform: translateY(20px);
+}
+
+.menu-btn.fade-in {
+    animation: menuFadeIn 0.6s ease-out forwards;
 }
 
 .menu-btn:hover:not(:disabled) {
@@ -1155,6 +1165,17 @@ body.main-menu #scene-container {
     0%, 100% { transform: translateX(0); }
     25% { transform: translateX(-5px); }
     75% { transform: translateX(5px); }
+}
+
+@keyframes menuFadeIn {
+    0% {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .pulse {
