@@ -1183,13 +1183,7 @@ const SCENES = {
                 speaker: 'JONAH',
                 text: "Bro, that's the Riveras' house.",
                 position: 'right',
-                next: () => {
-                    // Slide out Jonah after his dialogue
-                    sceneRenderer.removeCharacter('jonah');
-                    setTimeout(() => {
-                        sceneRenderer.nextDialogue();
-                    }, 800);
-                }
+                next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'HANK',
@@ -1197,13 +1191,18 @@ const SCENES = {
                 position: 'left',
                 next: 'NEXT_DIALOGUE',
                 onShow: () => {
+                    // Remove Jonah before adding Ice Agent and Mr. Rivera
+                    sceneRenderer.removeCharacter('jonah');
+
                     // Add Ice Agent and Mr. Rivera on the right side when Hank points them out
-                    sceneRenderer.addCharacter({
-                        id: 'ice_agent',
-                        name: 'ICE AGENT',
-                        sprite: 'char_ice_generic_1.png',
-                        position: 'right'
-                    }, 100);
+                    setTimeout(() => {
+                        sceneRenderer.addCharacter({
+                            id: 'ice_agent',
+                            name: 'ICE AGENT',
+                            sprite: 'char_ice_generic_1.png',
+                            position: 'right'
+                        }, 100);
+                    }, 300);
                     setTimeout(() => {
                         sceneRenderer.addCharacter({
                             id: 'mr_rivera',
@@ -1211,7 +1210,7 @@ const SCENES = {
                             sprite: 'char_carlos_detained.png',
                             position: 'right-2'
                         }, 100);
-                    }, 200);
+                    }, 500);
                 }
             },
             {
@@ -1220,11 +1219,11 @@ const SCENES = {
                 position: 'left',
                 next: 'NEXT_DIALOGUE',
                 onShow: () => {
-                    // Add Mom on the left side (to the right of Hank)
+                    // Add Mom on the left side (adjacent to Hank)
                     sceneRenderer.addCharacter({
                         id: 'mom',
                         name: 'MOM',
-                        sprite: 'char_mom_worried-left.png',
+                        sprite: 'char_mom_worried.png',
                         position: 'left-2'
                     }, 100);
                 }
@@ -1319,10 +1318,10 @@ const SCENES = {
         title: 'Illegal Backyard Heroism',
         background: './assets/backgrounds/bg_rivera_backyard_night.png',
         music: 'The Raid Escape.mp3',
-        
+
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
-            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'center' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared_left.png', position: 'left-2' },
             { id: 'sofia', name: 'SOFIA', sprite: 'char_sofia_upset.png', position: 'right' }
         ],
         

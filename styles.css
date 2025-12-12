@@ -336,10 +336,11 @@ body.show-hotspots .hotspot {
                 0 0 15px rgba(255, 215, 0, 0.3);
 }
 
-/* Scene title - within HUD container */
+/* Scene title - within HUD container, positioned more to the right */
 #scene-title {
     top: max(30px, calc(env(safe-area-inset-top) + 20px));
-    left: max(30px, calc(env(safe-area-inset-left) + 10px));
+    left: 50%;
+    transform: translateX(-50%);
     font-size: clamp(14px, 3vw, 18px);
     font-weight: bold;
     color: #FFD700;
@@ -352,8 +353,9 @@ body.show-hotspots .hotspot {
     word-wrap: break-word;
     z-index: 10;
     padding: 8px 12px;
-    background: rgba(0, 0, 0, 0.3);
+    background: transparent;
     border-radius: 6px;
+    text-align: center;
 }
 
 /* ===== DIALOGUE BOX - FULLY RESPONSIVE ===== */
@@ -580,7 +582,7 @@ body.show-hotspots .hotspot {
 }
 
 #dialogue-continue {
-    margin-top: clamp(12px, 2.5vw, 18px);
+    margin-top: clamp(16px, 3vw, 22px);
     padding: clamp(10px, 2.5vw, 14px) clamp(24px, 5vw, 32px);
     background: rgba(255, 255, 255, 0.95);
     border: 4px solid #333;
@@ -594,6 +596,9 @@ body.show-hotspots .hotspot {
     touch-action: manipulation;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
     align-self: center;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 #dialogue-continue:hover {
@@ -1121,6 +1126,8 @@ body.main-menu #scene-container {
 
     #scene-title {
         top: max(24px, calc(env(safe-area-inset-top) + 14px));
+        left: 50%;
+        transform: translateX(-50%);
         font-size: clamp(12px, 2.8vw, 16px);
     }
 
@@ -1165,6 +1172,8 @@ body.main-menu #scene-container {
 
     #scene-title {
         top: max(22px, calc(env(safe-area-inset-top) + 12px));
+        left: 50%;
+        transform: translateX(-50%);
         font-size: clamp(11px, 2.5vw, 14px);
     }
 
@@ -1256,6 +1265,8 @@ body.main-menu #scene-container {
 
     #scene-title {
         top: max(18px, calc(env(safe-area-inset-top) + 13px));
+        left: 50%;
+        transform: translateX(-50%);
         font-size: clamp(10px, 2.2vw, 13px);
         padding: 6px 10px;
     }
@@ -1277,6 +1288,8 @@ body.main-menu #scene-container {
 
     #scene-title {
         top: max(25px, env(safe-area-inset-top, 44px));
+        left: 50%;
+        transform: translateX(-50%);
     }
 
     #dialogue-box {
