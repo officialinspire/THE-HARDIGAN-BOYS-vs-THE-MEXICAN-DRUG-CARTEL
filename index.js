@@ -52,17 +52,53 @@ const SFXGenerator = {
         if (!this.audioContext) return;
         const osc = this.audioContext.createOscillator();
         const gain = this.audioContext.createGain();
-        
+
         osc.connect(gain);
         gain.connect(this.audioContext.destination);
-        
+
         osc.frequency.setValueAtTime(600, this.audioContext.currentTime);
         osc.frequency.exponentialRampToValueAtTime(1000, this.audioContext.currentTime + 0.15);
         gain.gain.setValueAtTime(0.25 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.15);
-        
+
         osc.start(this.audioContext.currentTime);
         osc.stop(this.audioContext.currentTime + 0.15);
+    },
+
+    playLampClick() {
+        if (!this.audioContext) return;
+        const osc = this.audioContext.createOscillator();
+        const gain = this.audioContext.createGain();
+
+        osc.connect(gain);
+        gain.connect(this.audioContext.destination);
+
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(200, this.audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(100, this.audioContext.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.15 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.08);
+
+        osc.start(this.audioContext.currentTime);
+        osc.stop(this.audioContext.currentTime + 0.08);
+    },
+
+    playTVClick() {
+        if (!this.audioContext) return;
+        const osc = this.audioContext.createOscillator();
+        const gain = this.audioContext.createGain();
+
+        osc.connect(gain);
+        gain.connect(this.audioContext.destination);
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(300, this.audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(150, this.audioContext.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.2 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.12);
+
+        osc.start(this.audioContext.currentTime);
+        osc.stop(this.audioContext.currentTime + 0.12);
     }
 };
 
@@ -98,7 +134,11 @@ const gameState = {
     objectsClicked: new Set(),
     dialogueLock: false,
     actionLock: false,
-    sceneTransitioning: false
+    sceneTransitioning: false,
+    lighting: {
+        lampOn: false,
+        tvOn: false
+    }
 };
 
 // ===== AUDIO MANAGEMENT =====
@@ -230,6 +270,95 @@ const saveSystem = {
     }
 };
 
+// ===== LIGHTING EFFECTS SYSTEM =====
+const lightingEffects = {
+    updateLighting() {
+        const sceneContainer = document.getElementById('scene-container');
+
+        // Remove existing lighting overlays
+        const existingOverlay = document.getElementById('lighting-overlay');
+        if (existingOverlay) {
+            existingOverlay.remove();
+        }
+
+        // Create new overlay based on current state
+        if (gameState.lighting.lampOn || gameState.lighting.tvOn) {
+            const overlay = document.createElement('div');
+            overlay.id = 'lighting-overlay';
+            overlay.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                z-index: 5;
+                transition: opacity 0.5s ease;
+            `;
+
+            if (gameState.lighting.lampOn && !gameState.lighting.tvOn) {
+                // Warm incandescent lamp glow
+                overlay.style.background = `
+                    radial-gradient(ellipse 40% 50% at 85% 30%,
+                        rgba(255, 220, 150, 0.4) 0%,
+                        rgba(255, 200, 100, 0.2) 30%,
+                        transparent 70%)
+                `;
+            } else if (gameState.lighting.tvOn && !gameState.lighting.lampOn) {
+                // Cool blue TV glow
+                overlay.style.background = `
+                    radial-gradient(ellipse 35% 40% at 18% 50%,
+                        rgba(120, 180, 255, 0.3) 0%,
+                        rgba(100, 150, 220, 0.15) 40%,
+                        transparent 70%)
+                `;
+            } else if (gameState.lighting.lampOn && gameState.lighting.tvOn) {
+                // Both lights on - combined glow
+                overlay.style.background = `
+                    radial-gradient(ellipse 40% 50% at 85% 30%,
+                        rgba(255, 220, 150, 0.35) 0%,
+                        rgba(255, 200, 100, 0.15) 30%,
+                        transparent 60%),
+                    radial-gradient(ellipse 35% 40% at 18% 50%,
+                        rgba(120, 180, 255, 0.25) 0%,
+                        rgba(100, 150, 220, 0.12) 40%,
+                        transparent 60%)
+                `;
+            }
+
+            sceneContainer.appendChild(overlay);
+        } else {
+            // Both lights off - darken the room
+            const overlay = document.createElement('div');
+            overlay.id = 'lighting-overlay';
+            overlay.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                z-index: 5;
+                background: rgba(0, 0, 0, 0.5);
+                transition: opacity 0.5s ease;
+            `;
+            sceneContainer.appendChild(overlay);
+        }
+    },
+
+    toggleLamp() {
+        gameState.lighting.lampOn = !gameState.lighting.lampOn;
+        SFXGenerator.playLampClick();
+        this.updateLighting();
+    },
+
+    toggleTV() {
+        gameState.lighting.tvOn = !gameState.lighting.tvOn;
+        SFXGenerator.playTVClick();
+        this.updateLighting();
+    }
+};
+
 // ===== INVENTORY SYSTEM =====
 const inventory = {
     add(itemId) {
@@ -314,7 +443,57 @@ const notebook = {
 // ===== SCENE RENDERING =====
 const sceneRenderer = {
     currentScene: null,
-    
+
+    addCharacter(char, slideDelay = 100) {
+        const charLayer = document.getElementById('character-layer');
+        const img = document.createElement('img');
+        img.className = `character-sprite char-${char.position || 'center'}`;
+        img.id = char.id ? `char-${char.id}` : undefined;
+
+        let spriteName = char.sprite;
+        if (char.position === 'left' && !spriteName.includes('-left') && !spriteName.includes('-right')) {
+            spriteName = spriteName.replace('.png', '-left.png');
+        } else if (char.position === 'right' && !spriteName.includes('-left') && !spriteName.includes('-right')) {
+            spriteName = spriteName.replace('.png', '-right.png');
+        }
+
+        img.src = `./assets/characters/${spriteName}`;
+        img.alt = char.name;
+
+        img.onerror = () => {
+            if (spriteName !== char.sprite) {
+                console.warn(`Directional sprite ${spriteName} not found, using ${char.sprite}`);
+                img.src = `./assets/characters/${char.sprite}`;
+            }
+        };
+
+        if (char.position === 'left') {
+            img.classList.add('slide-in-left');
+        } else if (char.position === 'right') {
+            img.classList.add('slide-in-right');
+        }
+
+        charLayer.appendChild(img);
+
+        setTimeout(() => {
+            img.classList.add('visible');
+        }, slideDelay);
+    },
+
+    removeCharacter(charId, slideOut = true) {
+        const char = document.getElementById(`char-${charId}`);
+        if (char) {
+            if (slideOut) {
+                char.classList.remove('visible');
+                setTimeout(() => {
+                    char.remove();
+                }, 600);
+            } else {
+                char.remove();
+            }
+        }
+    },
+
     async loadScene(sceneId) {
         // Prevent multiple simultaneous scene transitions
         if (gameState.sceneTransitioning) {
@@ -531,6 +710,11 @@ const sceneRenderer = {
 
         gameState.dialogueLock = true;
 
+        // Call onShow callback if it exists (for character slide-ins, etc.)
+        if (dialogueEntry.onShow) {
+            dialogueEntry.onShow();
+        }
+
         const dialogueBox = document.getElementById('dialogue-box');
         const dialogueContainer = document.getElementById('dialogue-container');
         const dialogueBubble = document.getElementById('dialogue-bubble');
@@ -543,6 +727,7 @@ const sceneRenderer = {
         continueBtn.classList.add('hidden');
 
         const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
+        const isChoice = dialogueEntry.speaker === 'CHOICE' || dialogueEntry.speaker === 'FINAL CHOICE';
 
         if (isNarration) {
             // Use stylish container for narrative events
@@ -550,6 +735,12 @@ const sceneRenderer = {
             speaker.className = 'narration';
             text.className = 'narration';
             speaker.textContent = '';
+        } else if (isChoice) {
+            // Use dialogue box style for choices instead of bubble
+            dialogueContainer.classList.add('narrative-mode');
+            speaker.className = 'choice-speaker';
+            text.className = 'choice-text';
+            speaker.textContent = dialogueEntry.speaker;
         } else {
             // Remove narrative mode and use speech bubble matching character position
             dialogueContainer.classList.remove('narrative-mode');
@@ -710,13 +901,13 @@ const SCENES = {
         }
     },
     
-    // ===== S1: LIVING ROOM INTRO - CORRECTED HOTSPOTS ===== 
+    // ===== S1: LIVING ROOM INTRO - CORRECTED HOTSPOTS =====
     S1_LIVING_ROOM_INTRO: {
         id: 'S1_LIVING_ROOM_INTRO',
         title: 'Another Normal Night',
         background: './assets/backgrounds/bg_hardigan_livingroom_night_02.png',
         music: 'Hardigan Noir Tension.mp3',
-        
+
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_excited.png', position: 'right' }
@@ -731,22 +922,16 @@ const SCENES = {
                 width: 5,
                 height: 4,
                 onClick() {
-                    if (!inventory.has('tv_remote')) {
-                        inventory.add('tv_remote');
-                        sceneRenderer.showDialogue({
-                            speaker: 'JONAH',
-                            text: "Got the remote! Now I can... wait, it doesn't work.",
-                            position: 'right',
-                            next: 'NEXT_DIALOGUE'
-                        });
-                    } else {
-                        sceneRenderer.showDialogue({
-                            speaker: 'JONAH',
-                            text: "The remote doesn't work. Batteries are probably dead... or the universe is just against us.",
-                            position: 'right',
-                            next: 'NEXT_DIALOGUE'
-                        });
-                    }
+                    gameState.objectsClicked.add('remote');
+                    lightingEffects.toggleTV();
+                    sceneRenderer.showDialogue({
+                        speaker: 'JONAH',
+                        text: gameState.lighting.tvOn ?
+                            "*click* There we go. Peak entertainment: the news yelling about cartels." :
+                            "*click* And... off it goes. Back to existential silence.",
+                        position: 'right',
+                        next: 'NEXT_DIALOGUE'
+                    });
                 }
             }
         ],
@@ -757,15 +942,16 @@ const SCENES = {
                 label: 'Television',
                 x: 10, y: 38, width: 18, height: 25,
                 onClick() {
-                    if (!gameState.objectsClicked.has('television')) {
-                        gameState.objectsClicked.add('television');
-                        sceneRenderer.showDialogue({
-                            speaker: 'JONAH',
-                            text: "Channel cycle, baby! News, reality TV, more news... It's all the same panic with different fonts.",
-                            position: 'right',
-                            next: 'NEXT_DIALOGUE'
-                        });
-                    }
+                    gameState.objectsClicked.add('television');
+                    lightingEffects.toggleTV();
+                    sceneRenderer.showDialogue({
+                        speaker: 'JONAH',
+                        text: gameState.lighting.tvOn ?
+                            "*click* Channel cycle, baby! News, reality TV, more news... It's all the same panic with different fonts." :
+                            "*click* Annnnd it's off. Who needs information anyway?",
+                        position: 'right',
+                        next: 'NEXT_DIALOGUE'
+                    });
                 }
             },
             {
@@ -804,15 +990,16 @@ const SCENES = {
                 label: 'Lamp',
                 x: 82, y: 25, width: 10, height: 35,
                 onClick() {
-                    if (!gameState.objectsClicked.has('lamp')) {
-                        gameState.objectsClicked.add('lamp');
-                        sceneRenderer.showDialogue({
-                            speaker: 'HANK',
-                            text: "Mood lighting for the collapse of the republic.",
-                            position: 'left',
-                            next: 'NEXT_DIALOGUE'
-                        });
-                    }
+                    gameState.objectsClicked.add('lamp');
+                    lightingEffects.toggleLamp();
+                    sceneRenderer.showDialogue({
+                        speaker: 'HANK',
+                        text: gameState.lighting.lampOn ?
+                            "*click* There. Mood lighting for the collapse of the republic." :
+                            "*click* Lights off. Very noir. Very ominous.",
+                        position: 'left',
+                        next: 'NEXT_DIALOGUE'
+                    });
                 }
             },
             {
@@ -858,12 +1045,31 @@ const SCENES = {
             },
             {
                 speaker: 'MOM',
-                text: "(offscreen) If either of you used this much energy on school, we'd be rich by now!",
+                text: "If either of you used this much energy on school, we'd be rich by now!",
+                position: 'right',
                 next: () => {
+                    // Slide out Mom after her dialogue
+                    sceneRenderer.removeCharacter('mom');
                     document.getElementById('dialogue-box').classList.add('hidden');
+                },
+                onShow: () => {
+                    // Slide in Mom when her dialogue appears
+                    sceneRenderer.addCharacter({
+                        id: 'mom',
+                        name: 'MOM',
+                        sprite: 'char_mom_annoyed.png',
+                        position: 'right'
+                    }, 100);
                 }
             }
-        ]
+        ],
+
+        onEnter() {
+            // Initialize lighting - start with both off for dramatic effect
+            gameState.lighting.lampOn = false;
+            gameState.lighting.tvOn = false;
+            lightingEffects.updateLighting();
+        }
     },
     
     // ===== S2: THE RAID =====
@@ -872,13 +1078,14 @@ const SCENES = {
         title: 'The Raid',
         background: './assets/backgrounds/bg_street_suburb_raid_night.png',
         music: 'Dark Police Intensity.mp3',
-        
+
         characters: [
-            { id: 'ice_agent', name: 'ICE AGENT', sprite: 'char_ice_generic_1.png', position: 'right' }
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'right' }
         ],
-        
+
         hotspots: [],
-        
+
         dialogue: [
             {
                 speaker: 'JONAH',
@@ -896,22 +1103,56 @@ const SCENES = {
                 speaker: 'JONAH',
                 text: "Bro, that's the Riveras' house.",
                 position: 'right',
-                next: 'NEXT_DIALOGUE'
-            },
-            {
-                speaker: 'MOM',
-                text: "Away from the window. Now. Both of you.",
-                next: 'NEXT_DIALOGUE'
+                next: () => {
+                    // Slide out Jonah after his dialogue
+                    sceneRenderer.removeCharacter('jonah');
+                    setTimeout(() => {
+                        sceneRenderer.nextDialogue();
+                    }, 700);
+                }
             },
             {
                 speaker: 'HANK',
                 text: "Mom, they're taking Carlos. He literally coached the neighborhood soccer team.",
                 position: 'left',
-                next: 'NEXT_DIALOGUE'
+                next: 'NEXT_DIALOGUE',
+                onShow: () => {
+                    // Add Ice Agent and Mr. Rivera on the right side when Hank points them out
+                    sceneRenderer.addCharacter({
+                        id: 'ice_agent',
+                        name: 'ICE AGENT',
+                        sprite: 'char_ice_generic_1.png',
+                        position: 'right'
+                    }, 100);
+                    setTimeout(() => {
+                        sceneRenderer.addCharacter({
+                            id: 'mr_rivera',
+                            name: 'MR. RIVERA',
+                            sprite: 'char_carlos_detained.png',
+                            position: 'right'
+                        }, 100);
+                    }, 200);
+                }
+            },
+            {
+                speaker: 'MOM',
+                text: "Away from the window. Now. Both of you.",
+                position: 'left',
+                next: 'NEXT_DIALOGUE',
+                onShow: () => {
+                    // Add Mom on the left side (to the right of Hank)
+                    sceneRenderer.addCharacter({
+                        id: 'mom',
+                        name: 'MOM',
+                        sprite: 'char_mom_stern.png',
+                        position: 'left'
+                    }, 100);
+                }
             },
             {
                 speaker: 'MOM',
                 text: "We are not getting involved. Do you hear me?",
+                position: 'left',
                 next: () => {
                     sceneRenderer.showDialogue({
                         speaker: 'CHOICE',
