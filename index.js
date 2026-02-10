@@ -699,6 +699,14 @@ const positioningSystem = {
 const sceneRenderer = {
     currentScene: null,
 
+    // Transition queue system
+    transitionQueue: [],
+    isTransitioning: false,
+
+    // Transition state callbacks
+    onTransitionStart: null,
+    onTransitionComplete: null,
+
     addCharacter(char, slideDelay = 100) {
         const charLayer = document.getElementById('character-layer');
         const img = document.createElement('img');
@@ -755,22 +763,56 @@ const sceneRenderer = {
         }
     },
 
-    async loadScene(sceneId) {
-        // Prevent multiple simultaneous scene transitions
-        if (gameState.sceneTransitioning) {
-            console.log('Scene transition already in progress, ignoring request');
+    // Public API: queues scene transitions to prevent race conditions
+    loadScene(sceneId) {
+        this.queueSceneTransition(sceneId);
+    },
+
+    queueSceneTransition(sceneId) {
+        this.transitionQueue.push(sceneId);
+
+        if (!this.isTransitioning) {
+            this._processQueue();
+        }
+    },
+
+    async _processQueue() {
+        if (this.transitionQueue.length === 0) {
             return;
         }
 
+        // Skip to the latest queued scene (intermediate requests are stale)
+        const sceneId = this.transitionQueue[this.transitionQueue.length - 1];
+        this.transitionQueue = [];
+
+        await this._executeSceneLoad(sceneId);
+
+        // Process any scenes queued during this transition
+        if (this.transitionQueue.length > 0) {
+            this._processQueue();
+        }
+    },
+
+    async _executeSceneLoad(sceneId) {
         const scene = SCENES[sceneId];
         if (!scene) {
             console.error(`Scene not found: ${sceneId}`);
             return;
         }
 
+        // Set transitioning state
+        this.isTransitioning = true;
         gameState.sceneTransitioning = true;
         gameState.dialogueLock = false;
         gameState.actionLock = false;
+
+        // Block all interactions during transition
+        this._setInteractionBlocking(true);
+
+        // Fire transition start callback
+        if (this.onTransitionStart) {
+            try { this.onTransitionStart(sceneId); } catch (e) { console.error('onTransitionStart error:', e); }
+        }
 
         this.currentScene = scene;
         gameState.currentSceneId = sceneId;
@@ -780,11 +822,8 @@ const sceneRenderer = {
         // Fade to black (fade in overlay)
         await this.fadeTransition(true);
 
-        // Clear scene with character slide-out animations
-        this.clearScene();
-
-        // Wait for clear animations
-        await new Promise(resolve => setTimeout(resolve, 800));
+        // Clear scene and wait for all character removal animations to complete
+        await this.clearScene();
 
         const bg = document.getElementById('scene-background');
         bg.src = scene.background;
@@ -818,14 +857,22 @@ const sceneRenderer = {
             audioManager.playMusic(scene.music, true);
         }
 
-        // Fade from black (fade out overlay) - scene automatically shows without clicking
+        // Fade from black (fade out overlay)
         await this.fadeTransition(false);
 
+        // Clear transitioning state
+        this.isTransitioning = false;
         gameState.sceneTransitioning = false;
+
+        // Unblock interactions
+        this._setInteractionBlocking(false);
 
         if (scene.dialogue && scene.dialogue.length > 0) {
             setTimeout(() => {
-                this.showDialogue(scene.dialogue[0]);
+                // Guard: don't show dialogue if another transition started
+                if (!this.isTransitioning) {
+                    this.showDialogue(scene.dialogue[0]);
+                }
             }, 500);
         }
 
@@ -833,31 +880,54 @@ const sceneRenderer = {
             scene.onEnter();
         }
 
+        // Fire transition complete callback
+        if (this.onTransitionComplete) {
+            try { this.onTransitionComplete(sceneId); } catch (e) { console.error('onTransitionComplete error:', e); }
+        }
+
         saveSystem.save();
+    },
+
+    _setInteractionBlocking(block) {
+        const container = document.getElementById('scene-container');
+        if (block) {
+            container.classList.add('scene-transitioning');
+        } else {
+            container.classList.remove('scene-transitioning');
+        }
     },
     
     clearScene() {
-        // Slide out characters before clearing
-        const characters = document.querySelectorAll('.character-sprite');
-        characters.forEach((char, index) => {
+        return new Promise(resolve => {
+            const characters = document.querySelectorAll('.character-sprite');
+            const charCount = characters.length;
+
+            // Stagger character slide-out animations
+            characters.forEach((char, index) => {
+                setTimeout(() => {
+                    char.classList.remove('visible');
+                }, index * 100);
+            });
+
+            // Calculate actual animation completion time
+            const animationTime = charCount > 0 ? (charCount * 100 + 600) : 0;
+
+            // Wait for all slide-out animations, then clear DOM
             setTimeout(() => {
-                char.classList.remove('visible');
-            }, index * 100);
+                document.getElementById('character-layer').innerHTML = '';
+                document.getElementById('item-layer').innerHTML = '';
+                document.getElementById('hotspot-layer').innerHTML = '';
+                document.getElementById('dialogue-box').classList.add('hidden');
+
+                // Remove police light effect if present
+                const policeLight = document.getElementById('police-light-effect');
+                if (policeLight) {
+                    policeLight.remove();
+                }
+
+                resolve();
+            }, animationTime);
         });
-
-        // Wait for animations to complete before clearing
-        setTimeout(() => {
-            document.getElementById('character-layer').innerHTML = '';
-            document.getElementById('item-layer').innerHTML = '';
-            document.getElementById('hotspot-layer').innerHTML = '';
-            document.getElementById('dialogue-box').classList.add('hidden');
-
-            // Remove police light effect if present
-            const policeLight = document.getElementById('police-light-effect');
-            if (policeLight) {
-                policeLight.remove();
-            }
-        }, characters.length * 100 + 600);
     },
     
     loadCharacters(characters) {
@@ -989,6 +1059,12 @@ const sceneRenderer = {
     },
     
     showDialogue(dialogueEntry) {
+        // Block dialogue during scene transitions
+        if (this.isTransitioning) {
+            console.log('Scene transition in progress, blocking dialogue');
+            return;
+        }
+
         // Prevent multiple dialogues from showing simultaneously
         if (gameState.dialogueLock) {
             console.log('Dialogue already showing, ignoring request');
@@ -1051,7 +1127,7 @@ const sceneRenderer = {
                 btn.className = 'dialogue-choice';
                 btn.textContent = choice.text;
                 btn.addEventListener('click', () => {
-                    if (gameState.actionLock) return;
+                    if (gameState.actionLock || this.isTransitioning) return;
                     gameState.actionLock = true;
                     gameState.dialogueLock = false;
                     SFXGenerator.playButtonClick();
@@ -1065,7 +1141,7 @@ const sceneRenderer = {
         } else if (dialogueEntry.next) {
             continueBtn.classList.remove('hidden');
             continueBtn.onclick = () => {
-                if (gameState.actionLock) return;
+                if (gameState.actionLock || this.isTransitioning) return;
                 gameState.actionLock = true;
                 gameState.dialogueLock = false;
                 SFXGenerator.playContinueButton();
@@ -1087,9 +1163,12 @@ const sceneRenderer = {
     },
     
     nextDialogue() {
+        // Block dialogue advancement during transitions
+        if (this.isTransitioning) return;
+
         gameState.currentDialogueIndex++;
         const scene = this.currentScene;
-        
+
         if (scene.dialogue && gameState.currentDialogueIndex < scene.dialogue.length) {
             this.showDialogue(scene.dialogue[gameState.currentDialogueIndex]);
         } else {

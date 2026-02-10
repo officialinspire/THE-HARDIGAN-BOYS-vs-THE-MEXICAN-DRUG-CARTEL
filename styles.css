@@ -976,6 +976,15 @@ body.show-hotspots .hotspot {
     pointer-events: auto;
 }
 
+/* ===== TRANSITION INTERACTION BLOCKING ===== */
+#scene-container.scene-transitioning #character-layer,
+#scene-container.scene-transitioning #item-layer,
+#scene-container.scene-transitioning #hotspot-layer,
+#scene-container.scene-transitioning #dialogue-box,
+#scene-container.scene-transitioning #hud-buttons {
+    pointer-events: none !important;
+}
+
 /* ===== MAIN MENU - FULLY RESPONSIVE ===== */
 body.main-menu #scene-container {
     background-image: url('./assets/ui/ui_main_menu_bg.png');
