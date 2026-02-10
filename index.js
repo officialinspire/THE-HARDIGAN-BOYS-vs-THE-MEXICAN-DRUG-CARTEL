@@ -1089,25 +1089,48 @@ const sceneRenderer = {
         choicesDiv.innerHTML = '';
         continueBtn.classList.add('hidden');
 
+        // Clear previous position classes and inline overrides from bounds clamping
+        dialogueBox.classList.remove('dialogue-left', 'dialogue-right', 'dialogue-center');
+        dialogueBox.style.left = '';
+        dialogueBox.style.right = '';
+        dialogueBox.style.top = '';
+        dialogueBox.style.bottom = '';
+
         const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
         const isChoice = dialogueEntry.speaker === 'CHOICE' || dialogueEntry.speaker === 'FINAL CHOICE';
 
         if (isNarration) {
-            // Use stylish container for narrative events
+            // Use stylish container for narrative events - centered
             dialogueContainer.classList.add('narrative-mode');
+            dialogueBox.classList.add('dialogue-center');
             speaker.className = 'narration';
             text.className = 'narration';
             speaker.textContent = '';
         } else if (isChoice) {
-            // Use dialogue box style for choices instead of bubble
+            // Use dialogue box style for choices instead of bubble - centered
             dialogueContainer.classList.add('narrative-mode');
+            dialogueBox.classList.add('dialogue-center');
             speaker.className = 'choice-speaker';
             text.className = 'choice-text';
             speaker.textContent = dialogueEntry.speaker;
         } else {
             // Remove narrative mode and use speech bubble matching character position
             dialogueContainer.classList.remove('narrative-mode');
-            const isLeft = dialogueEntry.position === 'left';
+
+            // Determine position alignment from dialogueEntry.position
+            const pos = dialogueEntry.position || 'left';
+            const isLeft = pos === 'left' || pos === 'left-2';
+            const isRight = pos === 'right' || pos === 'right-2';
+
+            if (isLeft) {
+                dialogueBox.classList.add('dialogue-left');
+            } else if (isRight) {
+                dialogueBox.classList.add('dialogue-right');
+            } else {
+                // center or unknown position
+                dialogueBox.classList.add('dialogue-center');
+            }
+
             dialogueBubble.src = isLeft ?
                 './assets/menu_dialogue/dialogue-bubble-large-left.png' :
                 './assets/menu_dialogue/dialogue-bubble-large-right.png';
@@ -1117,6 +1140,10 @@ const sceneRenderer = {
         }
 
         dialogueBox.classList.remove('hidden');
+
+        // Safety bounds check: ensure dialogue stays within viewport
+        this._clampDialogueToViewport(dialogueBox);
+
         text.textContent = dialogueEntry.text || '';
 
         SFXGenerator.playDialogueAdvance();
@@ -1162,6 +1189,37 @@ const sceneRenderer = {
         }
     },
     
+    _clampDialogueToViewport(dialogueBox) {
+        // After render, ensure the dialogue box stays within the scene container
+        requestAnimationFrame(() => {
+            const container = document.getElementById('scene-container');
+            if (!container) return;
+            const containerRect = container.getBoundingClientRect();
+            const boxRect = dialogueBox.getBoundingClientRect();
+
+            // Clamp left edge: don't go past container left
+            if (boxRect.left < containerRect.left) {
+                dialogueBox.style.left = '2%';
+                dialogueBox.style.right = 'auto';
+            }
+            // Clamp right edge: don't go past container right
+            if (boxRect.right > containerRect.right) {
+                dialogueBox.style.right = '2%';
+                dialogueBox.style.left = 'auto';
+            }
+            // Clamp top: don't overlap HUD (keep at least 15% from top)
+            if (boxRect.top < containerRect.top + containerRect.height * 0.12) {
+                dialogueBox.style.bottom = 'auto';
+                dialogueBox.style.top = '15%';
+            }
+            // Clamp bottom: don't go off screen
+            if (boxRect.bottom > containerRect.bottom) {
+                dialogueBox.style.bottom = '2%';
+                dialogueBox.style.top = 'auto';
+            }
+        });
+    },
+
     nextDialogue() {
         // Block dialogue advancement during transitions
         if (this.isTransitioning) return;
