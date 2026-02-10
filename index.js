@@ -630,6 +630,41 @@ const positioningSystem = {
     },
 
     /**
+     * Calculate pixel position for a hotspot given native image coordinates.
+     * Converts pixel x/y/width/height in 1920×1080 image space into
+     * absolute pixel positions within the container, accounting for
+     * object-fit scaling and letterboxing/pillarboxing offsets.
+     *
+     * @param {number} imgX - X position in native image pixels (0-1920)
+     * @param {number} imgY - Y position in native image pixels (0-1080)
+     * @param {number} imgW - Width in native image pixels
+     * @param {number} imgH - Height in native image pixels
+     * @returns {object} CSS position properties {left, top, width, height} in px
+     */
+    calculateHotspotPosition(imgX, imgY, imgW, imgH) {
+        const rect = this.getBackgroundRect();
+
+        if (!rect) {
+            // Fallback: convert native coords to percentages
+            return {
+                left: (imgX / this.REF_WIDTH * 100) + '%',
+                top: (imgY / this.REF_HEIGHT * 100) + '%',
+                width: (imgW / this.REF_WIDTH * 100) + '%',
+                height: (imgH / this.REF_HEIGHT * 100) + '%',
+            };
+        }
+
+        const { renderedW, renderedH, offsetX, offsetY, scaleX, scaleY } = rect;
+
+        return {
+            left: (offsetX + imgX * scaleX) + 'px',
+            top: (offsetY + imgY * scaleY) + 'px',
+            width: (imgW * scaleX) + 'px',
+            height: (imgH * scaleY) + 'px',
+        };
+    },
+
+    /**
      * Apply calculated position styles to an element.
      */
     applyPosition(element, posStyles) {
@@ -687,8 +722,19 @@ const positioningSystem = {
             const w = parseFloat(hotspotEl.dataset.origW);
             const h = parseFloat(hotspotEl.dataset.origH);
             if (!isNaN(x) && !isNaN(y)) {
-                const pos = this.calculateItemPosition(x, y, w, h);
+                let pos;
+                if (hotspotEl.dataset.coordSystem === 'native') {
+                    pos = this.calculateHotspotPosition(x, y, w, h);
+                } else {
+                    pos = this.calculateItemPosition(x, y, w, h);
+                }
                 this.applyPosition(hotspotEl, pos);
+
+                // Update debug label if present
+                const label = hotspotEl.querySelector('.hotspot-debug-label');
+                if (label) {
+                    label.textContent = `${hotspotEl.dataset.hotspotId || ''} [${Math.round(parseFloat(pos.left))}，${Math.round(parseFloat(pos.top))} ${Math.round(parseFloat(pos.width))}×${Math.round(parseFloat(pos.height))}]`;
+                }
             }
         });
     },
@@ -1030,19 +1076,48 @@ const sceneRenderer = {
             const div = document.createElement('div');
             div.className = 'hotspot';
 
-            // Store original percentage coords for resize recalculation
+            // Determine coordinate system: native (1920×1080 pixels) or percentage
+            const isNative = hotspot.coordSystem === 'native';
+
+            // Store original coords and coordinate system for resize recalculation
             div.dataset.origX = hotspot.x;
             div.dataset.origY = hotspot.y;
             div.dataset.origW = hotspot.width;
             div.dataset.origH = hotspot.height;
+            div.dataset.coordSystem = isNative ? 'native' : 'percentage';
+            div.dataset.hotspotId = hotspot.id || '';
 
-            // Apply calculated pixel position
-            const pos = positioningSystem.calculateItemPosition(hotspot.x, hotspot.y, hotspot.width, hotspot.height);
+            // Apply calculated pixel position using the appropriate conversion
+            let pos;
+            if (isNative) {
+                pos = positioningSystem.calculateHotspotPosition(hotspot.x, hotspot.y, hotspot.width, hotspot.height);
+            } else {
+                pos = positioningSystem.calculateItemPosition(hotspot.x, hotspot.y, hotspot.width, hotspot.height);
+            }
             positioningSystem.applyPosition(div, pos);
 
             div.title = hotspot.label || '';
 
-            div.addEventListener('click', () => {
+            // Debug label: shows hotspot id and computed screen coordinates
+            const debugLabel = document.createElement('span');
+            debugLabel.className = 'hotspot-debug-label';
+            debugLabel.textContent = `${hotspot.id || ''} [${Math.round(parseFloat(pos.left))}，${Math.round(parseFloat(pos.top))} ${Math.round(parseFloat(pos.width))}×${Math.round(parseFloat(pos.height))}]`;
+            div.appendChild(debugLabel);
+
+            div.addEventListener('click', (e) => {
+                // Debug: log click position in native image coordinates
+                if (gameState.settings.showHotspots) {
+                    const rect = positioningSystem.getBackgroundRect();
+                    if (rect) {
+                        const containerRect = document.getElementById('scene-container').getBoundingClientRect();
+                        const clickX = e.clientX - containerRect.left;
+                        const clickY = e.clientY - containerRect.top;
+                        const imgX = Math.round((clickX - rect.offsetX) / rect.scaleX);
+                        const imgY = Math.round((clickY - rect.offsetY) / rect.scaleY);
+                        console.log(`[Hotspot Debug] Click on "${hotspot.id || hotspot.label}" → native image coords: (${imgX}, ${imgY}) | screen: (${Math.round(clickX)}, ${Math.round(clickY)})`);
+                    }
+                }
+
                 if (gameState.actionLock || gameState.sceneTransitioning) return;
                 gameState.actionLock = true;
                 SFXGenerator.playButtonClick();
@@ -1343,10 +1418,11 @@ const SCENES = {
             {
                 id: 'tv_remote',
                 label: 'TV Remote',
-                x: 48,
-                y: 70,
-                width: 5,
-                height: 4,
+                coordSystem: 'native',
+                x: 922,
+                y: 756,
+                width: 96,
+                height: 43,
                 onClick() {
                     gameState.objectsClicked.add('remote');
                     lightingEffects.toggleTV();
@@ -1363,7 +1439,8 @@ const SCENES = {
             {
                 id: 'television',
                 label: 'Television',
-                x: 10, y: 38, width: 18, height: 25,
+                coordSystem: 'native',
+                x: 192, y: 410, width: 346, height: 270,
                 onClick() {
                     gameState.objectsClicked.add('television');
                     lightingEffects.toggleTV();
@@ -1380,7 +1457,8 @@ const SCENES = {
             {
                 id: 'window',
                 label: 'Window',
-                x: 30, y: 12, width: 20, height: 32,
+                coordSystem: 'native',
+                x: 576, y: 130, width: 384, height: 346,
                 onClick() {
                     if (!gameState.objectsClicked.has('window')) {
                         gameState.objectsClicked.add('window');
@@ -1411,7 +1489,8 @@ const SCENES = {
             {
                 id: 'lamp',
                 label: 'Lamp',
-                x: 82, y: 25, width: 10, height: 35,
+                coordSystem: 'native',
+                x: 1574, y: 270, width: 192, height: 378,
                 onClick() {
                     gameState.objectsClicked.add('lamp');
                     lightingEffects.toggleLamp();
@@ -1428,7 +1507,8 @@ const SCENES = {
             {
                 id: 'notebook',
                 label: "Hank's Conspiracy Notebook",
-                x: 38, y: 62, width: 10, height: 8,
+                coordSystem: 'native',
+                x: 730, y: 670, width: 192, height: 86,
                 onClick() {
                     if (!inventory.has('conspiracy_notebook')) {
                         gameState.objectsClicked.add('notebook');
@@ -2445,6 +2525,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (gameState.settings.showHotspots) {
         document.body.classList.add('show-hotspots');
     }
+
+    // Debug: log click position in native image coordinates when debug mode is on
+    document.getElementById('scene-container').addEventListener('click', (e) => {
+        if (!gameState.settings.showHotspots) return;
+        const rect = positioningSystem.getBackgroundRect();
+        if (!rect) return;
+        const containerRect = e.currentTarget.getBoundingClientRect();
+        const clickX = e.clientX - containerRect.left;
+        const clickY = e.clientY - containerRect.top;
+        const imgX = Math.round((clickX - rect.offsetX) / rect.scaleX);
+        const imgY = Math.round((clickY - rect.offsetY) / rect.scaleY);
+        const pctX = ((clickX - rect.offsetX) / rect.renderedW * 100).toFixed(1);
+        const pctY = ((clickY - rect.offsetY) / rect.renderedH * 100).toFixed(1);
+        console.log(`[Debug] Click → native: (${imgX}, ${imgY}) | percent: (${pctX}%, ${pctY}%) | screen: (${Math.round(clickX)}, ${Math.round(clickY)})`);
+    });
 
     // Responsive positioning: recalculate on resize with debounce
     let resizeTimer;
