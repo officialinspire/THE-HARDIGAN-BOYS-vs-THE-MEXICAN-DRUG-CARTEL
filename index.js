@@ -169,6 +169,110 @@ const errorLogger = {
 
 const spriteTransparencyProcessor = {
     whiteThreshold: 238,
+    edgeColorTolerance: 40,
+    edgeBrightnessFloor: 110,
+
+    _getDominantEdgeColor(pixels, width, height) {
+        const bins = new Map();
+        const pushPixel = (x, y) => {
+            const i = (y * width + x) * 4;
+            const a = pixels[i + 3];
+            if (a < 8) return;
+            const r = pixels[i];
+            const g = pixels[i + 1];
+            const b = pixels[i + 2];
+            const key = `${Math.round(r / 16)}-${Math.round(g / 16)}-${Math.round(b / 16)}`;
+            const bucket = bins.get(key) || { count: 0, r: 0, g: 0, b: 0 };
+            bucket.count += 1;
+            bucket.r += r;
+            bucket.g += g;
+            bucket.b += b;
+            bins.set(key, bucket);
+        };
+
+        for (let x = 0; x < width; x++) {
+            pushPixel(x, 0);
+            pushPixel(x, height - 1);
+        }
+        for (let y = 1; y < height - 1; y++) {
+            pushPixel(0, y);
+            pushPixel(width - 1, y);
+        }
+
+        let winner = null;
+        bins.forEach(bucket => {
+            if (!winner || bucket.count > winner.count) {
+                winner = bucket;
+            }
+        });
+
+        if (!winner || winner.count === 0) return null;
+
+        return {
+            r: winner.r / winner.count,
+            g: winner.g / winner.count,
+            b: winner.b / winner.count,
+        };
+    },
+
+    _isNearColor(r, g, b, target) {
+        if (!target) return false;
+        const dr = r - target.r;
+        const dg = g - target.g;
+        const db = b - target.b;
+        const distance = Math.sqrt(dr * dr + dg * dg + db * db);
+        const brightness = (r + g + b) / 3;
+        return distance <= this.edgeColorTolerance && brightness >= this.edgeBrightnessFloor;
+    },
+
+    _removeConnectedEdgeBackground(pixels, width, height, targetColor) {
+        if (!targetColor) return 0;
+
+        const visited = new Uint8Array(width * height);
+        const queue = [];
+        const push = (x, y) => {
+            if (x < 0 || y < 0 || x >= width || y >= height) return;
+            const idx = y * width + x;
+            if (visited[idx]) return;
+            visited[idx] = 1;
+            queue.push(idx);
+        };
+
+        for (let x = 0; x < width; x++) {
+            push(x, 0);
+            push(x, height - 1);
+        }
+        for (let y = 1; y < height - 1; y++) {
+            push(0, y);
+            push(width - 1, y);
+        }
+
+        let removed = 0;
+        while (queue.length > 0) {
+            const idx = queue.pop();
+            const x = idx % width;
+            const y = Math.floor(idx / width);
+            const i = idx * 4;
+
+            if (pixels[i + 3] === 0) continue;
+
+            const r = pixels[i];
+            const g = pixels[i + 1];
+            const b = pixels[i + 2];
+            const nearWhite = r >= this.whiteThreshold && g >= this.whiteThreshold && b >= this.whiteThreshold;
+
+            if (nearWhite || this._isNearColor(r, g, b, targetColor)) {
+                pixels[i + 3] = 0;
+                removed += 1;
+                push(x + 1, y);
+                push(x - 1, y);
+                push(x, y + 1);
+                push(x, y - 1);
+            }
+        }
+
+        return removed;
+    },
 
     makeWhitePixelsTransparent(imageEl) {
         if (!imageEl || imageEl.dataset.whiteRemoved === 'true') return;
@@ -190,6 +294,9 @@ const spriteTransparencyProcessor = {
                 const imageData = ctx.getImageData(0, 0, width, height);
                 const pixels = imageData.data;
                 const threshold = this.whiteThreshold;
+                const edgeColor = this._getDominantEdgeColor(pixels, width, height);
+
+                this._removeConnectedEdgeBackground(pixels, width, height, edgeColor);
 
                 for (let i = 0; i < pixels.length; i += 4) {
                     const r = pixels[i];
@@ -1009,12 +1116,19 @@ const sceneRenderer = {
     // Transition state callbacks
     onTransitionStart: null,
     onTransitionComplete: null,
+    validZones: new Set(['left', 'left-2', 'center', 'right-2', 'right']),
+
+    normalizeZoneName(zoneName) {
+        return this.validZones.has(zoneName) ? zoneName : 'center';
+    },
 
     normalizeCharacterZones(characters) {
         const sideCounts = { left: 0, right: 0 };
 
         return (characters || []).map(char => {
             const normalized = { ...char };
+
+            normalized.position = this.normalizeZoneName(normalized.position || 'center');
 
             if (normalized.position === 'left') {
                 sideCounts.left += 1;
@@ -1036,9 +1150,11 @@ const sceneRenderer = {
         if (resolvedZone === 'right' && existingZones.has('right')) resolvedZone = 'right-2';
 
         const img = document.createElement('img');
-        const zoneName = resolvedZone;
+        const zoneName = this.normalizeZoneName(resolvedZone);
         img.className = `character-sprite char-${zoneName}`;
         img.dataset.zone = zoneName;
+        img.dataset.characterId = char.id || '';
+        img.dataset.characterName = (char.name || '').toUpperCase();
         img.id = char.id ? `char-${char.id}` : undefined;
 
         let spriteName = char.sprite;
@@ -1281,9 +1397,11 @@ const sceneRenderer = {
 
         normalizedCharacters.forEach((char, index) => {
             const img = document.createElement('img');
-            const zoneName = char.position || 'center';
+            const zoneName = this.normalizeZoneName(char.position || 'center');
             img.className = `character-sprite char-${zoneName}`;
             img.dataset.zone = zoneName;
+            img.dataset.characterId = char.id || '';
+            img.dataset.characterName = (char.name || '').toUpperCase();
 
             let spriteName = char.sprite;
             if (char.position === 'left' && !spriteName.includes('-left') && !spriteName.includes('-right')) {
@@ -1495,7 +1613,7 @@ const sceneRenderer = {
             } else {
                 dialogueContainer.classList.remove('narrative-mode');
 
-                const pos = dialogueEntry.position || 'left';
+                const pos = this.normalizeZoneName(dialogueEntry.position || 'left');
                 const isLeft = pos === 'left' || pos === 'left-2';
                 const isRight = pos === 'right' || pos === 'right-2';
 
@@ -1514,7 +1632,7 @@ const sceneRenderer = {
                 text.className = '';
                 speaker.textContent = dialogueEntry.speaker;
 
-                this._positionDialogueNearCharacter(dialogueBox, pos);
+                this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
             }
 
             dialogueBox.classList.remove('hidden');
@@ -1604,19 +1722,45 @@ const sceneRenderer = {
         });
     },
 
-    _positionDialogueNearCharacter(dialogueBox, zoneName) {
-        const container = document.getElementById('scene-container');
-        if (!container || !dialogueBox || !zoneName) return;
+    _resolveDialogueCharacter(zoneName, dialogueEntry) {
+        const speakerName = (dialogueEntry?.speaker || '').toUpperCase().trim();
+        const sceneChars = this.currentScene?.characters || [];
+
+        const bySpeakerMeta = sceneChars.find(char => {
+            const charName = (char.name || '').toUpperCase().trim();
+            return speakerName && charName === speakerName;
+        });
+
+        if (bySpeakerMeta?.id) {
+            const byId = document.querySelector(`#character-layer .character-sprite[data-character-id="${bySpeakerMeta.id}"]`);
+            if (byId) return byId;
+        }
+
+        if (speakerName) {
+            const byName = Array.from(document.querySelectorAll('#character-layer .character-sprite'))
+                .find(el => (el.dataset.characterName || '').trim() === speakerName);
+            if (byName) return byName;
+        }
 
         const possibleZones = [zoneName];
         if (zoneName === 'left') possibleZones.push('left-2');
+        if (zoneName === 'left-2') possibleZones.push('left');
         if (zoneName === 'right') possibleZones.push('right-2');
+        if (zoneName === 'right-2') possibleZones.push('right');
 
-        let characterEl = null;
         for (const zone of possibleZones) {
-            characterEl = document.querySelector(`#character-layer .character-sprite[data-zone="${zone}"]`);
-            if (characterEl) break;
+            const characterEl = document.querySelector(`#character-layer .character-sprite[data-zone="${zone}"]`);
+            if (characterEl) return characterEl;
         }
+
+        return null;
+    },
+
+    _positionDialogueNearCharacter(dialogueBox, zoneName, dialogueEntry) {
+        const container = document.getElementById('scene-container');
+        if (!container || !dialogueBox || !zoneName) return;
+
+        const characterEl = this._resolveDialogueCharacter(zoneName, dialogueEntry);
 
         if (!characterEl) return;
 
@@ -1631,13 +1775,23 @@ const sceneRenderer = {
                 (charRect.top - containerRect.top) - boxRect.height - margin
             );
 
-            const charCenterX = (charRect.left - containerRect.left) + (charRect.width / 2);
-            const baseLeft = charCenterX - (boxRect.width / 2);
-
-            const speakerOffset = zoneName.startsWith('left') ? 80 : -80;
+            const charLeft = charRect.left - containerRect.left;
+            const charRight = charRect.right - containerRect.left;
             const minLeft = containerRect.width * 0.02;
             const maxLeft = containerRect.width - boxRect.width - minLeft;
-            const leftPx = Math.min(maxLeft, Math.max(minLeft, baseLeft + speakerOffset));
+            let leftPx;
+
+            if (zoneName.startsWith('left')) {
+                // Comic-style: bubble floats up and to the right of left-side speaker.
+                leftPx = charLeft + (charRect.width * 0.55);
+            } else if (zoneName.startsWith('right')) {
+                // Mirror placement for right-side speaker.
+                leftPx = charRight - boxRect.width - (charRect.width * 0.15);
+            } else {
+                leftPx = (charLeft + charRight) / 2 - (boxRect.width / 2);
+            }
+
+            leftPx = Math.min(maxLeft, Math.max(minLeft, leftPx));
 
             dialogueBox.style.left = `${leftPx}px`;
             dialogueBox.style.right = 'auto';
@@ -2763,6 +2917,44 @@ const SCENES = {
     }
 };
 
+const sceneIntegrity = {
+    validateAndNormalize() {
+        const validZones = new Set(['left', 'left-2', 'center', 'right-2', 'right']);
+
+        Object.values(SCENES).forEach(scene => {
+            if (!scene || typeof scene !== 'object') return;
+
+            scene.characters = (scene.characters || []).map((char, idx) => {
+                const normalized = { ...char };
+                normalized.position = validZones.has(normalized.position) ? normalized.position : 'center';
+                if (!normalized.id) {
+                    normalized.id = `${scene.id || 'scene'}-char-${idx}`;
+                }
+                return normalized;
+            });
+
+            const fallbackZoneBySpeaker = new Map(
+                scene.characters
+                    .filter(char => char?.name && char?.position)
+                    .map(char => [String(char.name).toUpperCase(), char.position])
+            );
+
+            scene.dialogue = (scene.dialogue || []).map(entry => {
+                if (!entry || typeof entry !== 'object') return entry;
+                const normalizedEntry = { ...entry };
+                if (normalizedEntry.position && !validZones.has(normalizedEntry.position)) {
+                    normalizedEntry.position = 'center';
+                }
+                if (!normalizedEntry.position && normalizedEntry.speaker) {
+                    const inferredZone = fallbackZoneBySpeaker.get(String(normalizedEntry.speaker).toUpperCase());
+                    if (inferredZone) normalizedEntry.position = inferredZone;
+                }
+                return normalizedEntry;
+            });
+        });
+    }
+};
+
 // ===== UI EVENT HANDLERS =====
 function setupUIHandlers() {
     // Inventory button
@@ -2790,13 +2982,25 @@ function setupUIHandlers() {
         audioManager.playMusic('game-menu-theme.mp3');
     });
     
-    // Resume button
-    document.getElementById('btn-resume').addEventListener('click', () => {
-        SFXGenerator.playButtonClick();
+    const closePauseMenu = () => {
         document.getElementById('pause-menu').classList.add('hidden');
         const currentScene = SCENES[gameState.currentSceneId];
         if (currentScene && currentScene.music) {
             audioManager.playMusic(currentScene.music);
+        }
+    };
+
+    // Resume button
+    document.getElementById('btn-resume').addEventListener('click', () => {
+        SFXGenerator.playButtonClick();
+        closePauseMenu();
+    });
+
+    // Clicking outside the phone closes the pause menu for faster gameplay flow.
+    document.getElementById('pause-menu').addEventListener('click', (event) => {
+        if (event.target.id === 'pause-menu') {
+            SFXGenerator.playButtonClick();
+            closePauseMenu();
         }
     });
     
@@ -2870,6 +3074,9 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
     // Initialize audio
     audioManager.init();
     mobileOptimizer.init();
+
+    // Normalize scene data before the first scene loads.
+    sceneIntegrity.validateAndNormalize();
 
     // Setup UI handlers
     setupUIHandlers();
