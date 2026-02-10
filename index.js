@@ -159,11 +159,199 @@ const gameState = {
     }
 };
 
+
+
+const errorLogger = {
+    log(context, error, meta = {}) {
+        console.error(`[${context}]`, error, meta);
+    }
+};
+
+function getMissingAssetPlaceholder(src, width = 200, height = 120) {
+    const filename = (src || 'missing-asset').split('/').pop();
+    const label = encodeURIComponent(filename);
+    return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${width}' height='${height}'%3E%3Crect width='100%25' height='100%25' fill='%23151515' stroke='%23ffd700' stroke-width='2'/%3E%3Ctext x='50%25' y='50%25' fill='%23ffd700' font-size='12' text-anchor='middle' dominant-baseline='middle'%3E${label}%3C/text%3E%3C/svg%3E`;
+}
+
+function safeAsync(handler, context) {
+    return async (...args) => {
+        try {
+            return await handler(...args);
+        } catch (error) {
+            errorLogger.log(context, error, { args });
+            return null;
+        }
+    };
+}
+
+const mobileOptimizer = {
+    resizeDebounceMs: 300,
+    init() {
+        this.setupTouchGuards();
+        this.setupIOSBouncePrevention();
+        this.setupOrientationLock();
+    },
+
+    isMobile() {
+        return window.matchMedia('(max-width: 1024px)').matches || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    },
+
+    setupTouchGuards() {
+        let lastTouch = 0;
+        document.addEventListener('touchend', (event) => {
+            const target = event.target.closest('button, .dialogue-choice, .hud-btn, .menu-btn, .overlay-close, .hotspot, .scene-item');
+            if (!target) return;
+
+            const now = Date.now();
+            if (now - lastTouch < 350) {
+                event.preventDefault();
+            }
+            lastTouch = now;
+        }, { passive: false });
+    },
+
+    setupIOSBouncePrevention() {
+        document.body.addEventListener('touchmove', (event) => {
+            const scrollContainer = event.target.closest('#dialogue-text, #inventory-grid, #notebook-text-overlay, .overlay-content');
+            if (!scrollContainer) {
+                event.preventDefault();
+            }
+        }, { passive: false });
+    },
+
+    async setupOrientationLock() {
+        if (!this.isMobile()) return;
+        if (screen.orientation && screen.orientation.lock) {
+            try {
+                await screen.orientation.lock('landscape');
+            } catch (error) {
+                errorLogger.log('orientation-lock', error);
+            }
+        }
+
+        const applyOrientationState = () => {
+            const isPortrait = window.matchMedia('(orientation: portrait)').matches;
+            const overlay = document.getElementById('orientation-overlay');
+            if (!overlay) return;
+            overlay.classList.toggle('hidden', !isPortrait || !this.isMobile());
+            overlay.setAttribute('aria-hidden', (!isPortrait || !this.isMobile()).toString());
+        };
+
+        window.addEventListener('orientationchange', applyOrientationState);
+        window.addEventListener('resize', applyOrientationState);
+        applyOrientationState();
+    }
+};
+
+const assetLoader = {
+    errors: [],
+    loadedAssets: new Set(),
+    maxConcurrentLoads: 6,
+
+    updateProgress(progress, statusText) {
+        const progressBar = document.getElementById('loading-progress-bar');
+        const progressText = document.getElementById('loading-progress-text');
+        const status = document.getElementById('loading-status');
+        const progressTrack = document.getElementById('loading-progress-track');
+
+        if (progressBar) progressBar.style.width = `${progress}%`;
+        if (progressText) progressText.textContent = `${Math.round(progress)}%`;
+        if (status && statusText) status.textContent = statusText;
+        if (progressTrack) progressTrack.setAttribute('aria-valuenow', String(Math.round(progress)));
+    },
+
+    hideLoadingScreen() {
+        const loadingScreen = document.getElementById('loading-screen');
+        if (loadingScreen) {
+            loadingScreen.classList.add('hidden');
+        }
+    },
+
+    registerImageFallback(img, src) {
+        img.addEventListener('error', () => {
+            const filename = src.split('/').pop();
+            errorLogger.log('asset-fallback', new Error(`Missing asset: ${src}`), { filename });
+            img.alt = `Missing asset: ${filename}`;
+            img.src = getMissingAssetPlaceholder(src, img.width || 240, img.height || 140);
+        }, { once: true });
+    },
+
+    getCriticalAssets() {
+        const sceneAssets = [
+            SCENES.S0_MAIN_MENU?.background,
+            SCENES.S1_LIVING_ROOM_INTRO?.background,
+            SCENES.S2_ICE_RAID_WINDOW?.background
+        ].filter(Boolean);
+
+        return [
+            ...new Set([
+                ...sceneAssets,
+                './assets/menu_dialogue/dialogue-bubble-large-left.png',
+                './assets/menu_dialogue/dialogue-bubble-large-right.png',
+                './assets/ui/ui_main_menu_bg.png'
+            ])
+        ];
+    },
+
+    async preloadSingleAsset(src) {
+        if (!src || this.loadedAssets.has(src)) return;
+
+        await new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                this.loadedAssets.add(src);
+                resolve();
+            };
+            img.onerror = () => {
+                this.errors.push(src);
+                errorLogger.log('preload-assets', new Error(`Failed to preload image`), { src });
+                resolve();
+            };
+            img.src = src;
+        });
+    },
+
+    async preloadAssets(assetList) {
+        const assets = assetList || this.getCriticalAssets();
+        const total = assets.length || 1;
+        let completed = 0;
+
+        this.updateProgress(0, 'Loading critical assets...');
+
+        for (let i = 0; i < assets.length; i += this.maxConcurrentLoads) {
+            const chunk = assets.slice(i, i + this.maxConcurrentLoads);
+            await Promise.all(chunk.map(async (src) => {
+                await this.preloadSingleAsset(src);
+                completed += 1;
+                this.updateProgress((completed / total) * 100, `Loaded ${completed}/${total}`);
+            }));
+        }
+
+        this.updateProgress(100, this.errors.length ? `Loaded with ${this.errors.length} warning(s)` : 'Assets loaded');
+    },
+
+    lazyLoadSceneAssets(scene) {
+        if (!scene) return;
+        const lazyAssets = [];
+        (scene.characters || []).forEach(char => {
+            if (char?.sprite) {
+                lazyAssets.push(`./assets/characters/${char.sprite}`);
+            }
+        });
+        (scene.items || []).forEach(item => {
+            if (item?.id) lazyAssets.push(`./assets/items/item_${item.id}.png`);
+        });
+        safeAsync(() => Promise.all(lazyAssets.map(src => this.preloadSingleAsset(src))), 'lazy-load-scene-assets')();
+    }
+};
+
 // ===== AUDIO MANAGEMENT =====
 const audioManager = {
     musicPlayer: null,
     sfxPlayer: null,
     currentTrack: null,
+    maxConcurrentSfx: 2,
+    activeSfx: 0,
     
     init() {
         this.musicPlayer = document.getElementById('music-player');
@@ -173,64 +361,83 @@ const audioManager = {
     },
     
     playMusic(filename, fadeIn = true) {
-        if (!filename || this.currentTrack === filename) return;
+        try {
+            if (!filename || this.currentTrack === filename) return;
 
-        const fadeOut = () => {
-            return new Promise(resolve => {
-                if (!this.musicPlayer.paused) {
-                    let vol = this.musicPlayer.volume;
-                    const fadeInterval = setInterval(() => {
-                        vol -= 0.05;
-                        if (vol <= 0) {
-                            clearInterval(fadeInterval);
-                            this.musicPlayer.pause();
-                            this.musicPlayer.volume = 0;
-                            resolve();
+            const fadeOut = () => {
+                return new Promise(resolve => {
+                    if (!this.musicPlayer.paused) {
+                        let vol = this.musicPlayer.volume;
+                        const fadeInterval = setInterval(() => {
+                            vol -= 0.05;
+                            if (vol <= 0) {
+                                clearInterval(fadeInterval);
+                                this.musicPlayer.pause();
+                                this.musicPlayer.volume = 0;
+                                resolve();
+                            } else {
+                                this.musicPlayer.volume = vol;
+                            }
+                        }, 50);
+                    } else {
+                        resolve();
+                    }
+                });
+            };
+
+            fadeOut().then(() => {
+                this.musicPlayer.src = `./audio/${filename}`;
+                const targetVol = gameState.settings.musicVolume / 100;
+
+                // Always fade in music for smooth transitions
+                this.musicPlayer.volume = 0;
+                this.musicPlayer.play().catch(err => errorLogger.log('audio-play-music', err, { filename }));
+
+                if (fadeIn) {
+                    let vol = 0;
+                    const fadeInInterval = setInterval(() => {
+                        vol += 0.03;
+                        if (vol >= targetVol) {
+                            clearInterval(fadeInInterval);
+                            this.musicPlayer.volume = targetVol;
                         } else {
                             this.musicPlayer.volume = vol;
                         }
                     }, 50);
                 } else {
-                    resolve();
-                }
-            });
-        };
-
-        fadeOut().then(() => {
-            this.musicPlayer.src = `./audio/${filename}`;
-            const targetVol = gameState.settings.musicVolume / 100;
-
-            // Always fade in music for smooth transitions
-            this.musicPlayer.volume = 0;
-            this.musicPlayer.play().catch(err => console.warn('Audio play failed:', err));
-
-            if (fadeIn) {
-                let vol = 0;
-                const fadeInInterval = setInterval(() => {
-                    vol += 0.03;
-                    if (vol >= targetVol) {
-                        clearInterval(fadeInInterval);
+                    // Even if fadeIn is false, do a quick fade for smoothness
+                    setTimeout(() => {
                         this.musicPlayer.volume = targetVol;
-                    } else {
-                        this.musicPlayer.volume = vol;
-                    }
-                }, 50);
-            } else {
-                // Even if fadeIn is false, do a quick fade for smoothness
-                setTimeout(() => {
-                    this.musicPlayer.volume = targetVol;
-                }, 100);
-            }
+                    }, 100);
+                }
 
-            this.currentTrack = filename;
-        });
+                this.currentTrack = filename;
+            });
+        } catch (error) {
+            errorLogger.log('audio-playMusic', error, { filename });
+        }
     },
     
     playSFX(filename) {
-        if (!filename) return;
-        this.sfxPlayer.src = `./audio/${filename}`;
-        this.sfxPlayer.volume = gameState.settings.sfxVolume / 100;
-        this.sfxPlayer.play().catch(err => console.warn('SFX play failed:', err));
+        try {
+            if (!filename) return;
+            if (this.activeSfx >= this.maxConcurrentSfx) {
+                return;
+            }
+
+            this.activeSfx += 1;
+            this.sfxPlayer.src = `./audio/${filename}`;
+            this.sfxPlayer.volume = gameState.settings.sfxVolume / 100;
+            this.sfxPlayer.play()
+                .catch(err => errorLogger.log('audio-playSFX', err, { filename }))
+                .finally(() => {
+                    setTimeout(() => {
+                        this.activeSfx = Math.max(0, this.activeSfx - 1);
+                    }, 120);
+                });
+        } catch (error) {
+            errorLogger.log('audio-playSFX', error, { filename });
+        }
     },
     
     updateVolumes() {
@@ -768,8 +975,10 @@ const sceneRenderer = {
             spriteName = spriteName.replace('.png', '-right.png');
         }
 
-        img.src = `./assets/characters/${spriteName}`;
+        const spriteSrc = `./assets/characters/${spriteName}`;
+        img.src = spriteSrc;
         img.alt = char.name;
+        assetLoader.registerImageFallback(img, spriteSrc);
 
         // Apply calculated pixel position
         const pos = positioningSystem.calculateCharacterPosition(zoneName);
@@ -846,92 +1055,105 @@ const sceneRenderer = {
             return;
         }
 
-        // Set transitioning state
-        this.isTransitioning = true;
-        gameState.sceneTransitioning = true;
-        gameState.dialogueLock = false;
-        gameState.actionLock = false;
+        try {
+            // Set transitioning state
+            this.isTransitioning = true;
+            gameState.sceneTransitioning = true;
+            gameState.dialogueLock = false;
+            gameState.actionLock = false;
 
-        // Block all interactions during transition
-        this._setInteractionBlocking(true);
+            // Block all interactions during transition
+            this._setInteractionBlocking(true);
 
-        // Fire transition start callback
-        if (this.onTransitionStart) {
-            try { this.onTransitionStart(sceneId); } catch (e) { console.error('onTransitionStart error:', e); }
-        }
-
-        this.currentScene = scene;
-        gameState.currentSceneId = sceneId;
-        gameState.currentDialogueIndex = 0;
-        gameState.objectsClicked.clear();
-
-        // Fade to black (fade in overlay)
-        await this.fadeTransition(true);
-
-        // Clear scene and wait for all character removal animations to complete
-        await this.clearScene();
-
-        const bg = document.getElementById('scene-background');
-        bg.src = scene.background;
-
-        // Ensure background loads before fading in
-        await new Promise(resolve => {
-            if (bg.complete) {
-                resolve();
-            } else {
-                bg.onload = () => resolve();
-                bg.onerror = () => resolve(); // Continue even if image fails
+            // Fire transition start callback
+            if (this.onTransitionStart) {
+                try { this.onTransitionStart(sceneId); } catch (e) { errorLogger.log('onTransitionStart', e, { sceneId }); }
             }
-        });
 
-        document.getElementById('scene-title').textContent = scene.title || '';
+            this.currentScene = scene;
+            gameState.currentSceneId = sceneId;
+            gameState.currentDialogueIndex = 0;
+            gameState.objectsClicked.clear();
 
-        if (scene.characters) {
-            this.loadCharacters(scene.characters);
-        }
+            // Fade to black (fade in overlay)
+            await this.fadeTransition(true);
 
-        if (scene.items) {
-            this.loadItems(scene.items);
-        }
+            // Clear scene and wait for all character removal animations to complete
+            await this.clearScene();
 
-        if (scene.hotspots) {
-            this.loadHotspots(scene.hotspots);
-        }
+            const bg = document.getElementById('scene-background');
+            assetLoader.registerImageFallback(bg, scene.background);
+            bg.src = scene.background;
 
-        // Always play music with fade in for smooth transitions
-        if (scene.music) {
-            audioManager.playMusic(scene.music, true);
-        }
-
-        // Fade from black (fade out overlay)
-        await this.fadeTransition(false);
-
-        // Clear transitioning state
-        this.isTransitioning = false;
-        gameState.sceneTransitioning = false;
-
-        // Unblock interactions
-        this._setInteractionBlocking(false);
-
-        if (scene.dialogue && scene.dialogue.length > 0) {
-            setTimeout(() => {
-                // Guard: don't show dialogue if another transition started
-                if (!this.isTransitioning) {
-                    this.showDialogue(scene.dialogue[0]);
+            // Ensure background loads before fading in
+            await new Promise(resolve => {
+                if (bg.complete) {
+                    resolve();
+                } else {
+                    bg.onload = () => resolve();
+                    bg.onerror = () => resolve(); // Continue even if image fails
                 }
-            }, 500);
-        }
+            });
 
-        if (scene.onEnter) {
-            scene.onEnter();
-        }
+            document.getElementById('scene-title').textContent = scene.title || '';
 
-        // Fire transition complete callback
-        if (this.onTransitionComplete) {
-            try { this.onTransitionComplete(sceneId); } catch (e) { console.error('onTransitionComplete error:', e); }
-        }
+            if (scene.characters) {
+                this.loadCharacters(scene.characters);
+            }
 
-        saveSystem.save();
+            if (scene.items) {
+                this.loadItems(scene.items);
+            }
+
+            if (scene.hotspots) {
+                this.loadHotspots(scene.hotspots);
+            }
+
+            // Lazy-load non-critical assets for future interactions
+            assetLoader.lazyLoadSceneAssets(scene);
+
+            // Always play music with fade in for smooth transitions
+            if (scene.music) {
+                audioManager.playMusic(scene.music, true);
+            }
+
+            // Fade from black (fade out overlay)
+            await this.fadeTransition(false);
+
+            if (scene.dialogue && scene.dialogue.length > 0) {
+                setTimeout(() => {
+                    // Guard: don't show dialogue if another transition started
+                    if (!this.isTransitioning) {
+                        this.showDialogue(scene.dialogue[0]);
+                    }
+                }, 500);
+            }
+
+            if (scene.onEnter) {
+                try {
+                    scene.onEnter();
+                } catch (error) {
+                    errorLogger.log('scene-onEnter', error, { sceneId });
+                }
+            }
+
+            // Fire transition complete callback
+            if (this.onTransitionComplete) {
+                try { this.onTransitionComplete(sceneId); } catch (e) { errorLogger.log('onTransitionComplete', e, { sceneId }); }
+            }
+
+            saveSystem.save();
+        } catch (error) {
+            errorLogger.log('scene-transition', error, { sceneId });
+            document.getElementById('dialogue-box').classList.add('hidden');
+        } finally {
+            // Clear transitioning state
+            this.isTransitioning = false;
+            gameState.sceneTransitioning = false;
+
+            // Unblock interactions
+            this._setInteractionBlocking(false);
+        }
     },
 
     _setInteractionBlocking(block) {
@@ -960,9 +1182,9 @@ const sceneRenderer = {
 
             // Wait for all slide-out animations, then clear DOM
             setTimeout(() => {
-                document.getElementById('character-layer').innerHTML = '';
-                document.getElementById('item-layer').innerHTML = '';
-                document.getElementById('hotspot-layer').innerHTML = '';
+                document.getElementById('character-layer').replaceChildren();
+                document.getElementById('item-layer').replaceChildren();
+                document.getElementById('hotspot-layer').replaceChildren();
                 document.getElementById('dialogue-box').classList.add('hidden');
 
                 // Remove police light effect if present
@@ -970,6 +1192,9 @@ const sceneRenderer = {
                 if (policeLight) {
                     policeLight.remove();
                 }
+
+                // Remove any stale detached character nodes to keep memory usage stable
+                document.querySelectorAll('.character-sprite:not(#character-layer .character-sprite)').forEach(node => node.remove());
 
                 resolve();
             }, animationTime);
@@ -992,8 +1217,10 @@ const sceneRenderer = {
                 spriteName = spriteName.replace('.png', '-right.png');
             }
 
-            img.src = `./assets/characters/${spriteName}`;
+            const spriteSrc = `./assets/characters/${spriteName}`;
+            img.src = spriteSrc;
             img.alt = char.name;
+            assetLoader.registerImageFallback(img, spriteSrc);
             img.style.zIndex = index + 1;
 
             // Apply calculated pixel position
@@ -1047,8 +1274,10 @@ const sceneRenderer = {
             div.title = item.label || '';
 
             const img = document.createElement('img');
-            img.src = `./assets/items/item_${item.id}.png`;
+            const itemSrc = `./assets/items/item_${item.id}.png`;
+            img.src = itemSrc;
             img.alt = item.label || item.id;
+            assetLoader.registerImageFallback(img, itemSrc);
             div.appendChild(img);
 
             div.addEventListener('click', () => {
@@ -1134,136 +1363,138 @@ const sceneRenderer = {
     },
     
     showDialogue(dialogueEntry) {
-        // Block dialogue during scene transitions
-        if (this.isTransitioning) {
-            console.log('Scene transition in progress, blocking dialogue');
-            return;
-        }
-
-        // Prevent multiple dialogues from showing simultaneously
-        if (gameState.dialogueLock) {
-            console.log('Dialogue already showing, ignoring request');
-            return;
-        }
-
-        gameState.dialogueLock = true;
-
-        // Call onShow callback if it exists (for character slide-ins, etc.)
-        if (dialogueEntry.onShow) {
-            dialogueEntry.onShow();
-        }
-
-        const dialogueBox = document.getElementById('dialogue-box');
-        const dialogueContainer = document.getElementById('dialogue-container');
-        const dialogueBubble = document.getElementById('dialogue-bubble');
-        const speaker = document.getElementById('dialogue-speaker');
-        const text = document.getElementById('dialogue-text');
-        const choicesDiv = document.getElementById('dialogue-choices');
-        const continueBtn = document.getElementById('dialogue-continue');
-
-        choicesDiv.innerHTML = '';
-        continueBtn.classList.add('hidden');
-
-        // Clear previous position classes and inline overrides from bounds clamping
-        dialogueBox.classList.remove('dialogue-left', 'dialogue-right', 'dialogue-center');
-        dialogueBox.style.left = '';
-        dialogueBox.style.right = '';
-        dialogueBox.style.top = '';
-        dialogueBox.style.bottom = '';
-
-        const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
-        const isChoice = dialogueEntry.speaker === 'CHOICE' || dialogueEntry.speaker === 'FINAL CHOICE';
-
-        if (isNarration) {
-            // Use stylish container for narrative events - centered
-            dialogueContainer.classList.add('narrative-mode');
-            dialogueBox.classList.add('dialogue-center');
-            speaker.className = 'narration';
-            text.className = 'narration';
-            speaker.textContent = '';
-        } else if (isChoice) {
-            // Use dialogue box style for choices instead of bubble - centered
-            dialogueContainer.classList.add('narrative-mode');
-            dialogueBox.classList.add('dialogue-center');
-            speaker.className = 'choice-speaker';
-            text.className = 'choice-text';
-            speaker.textContent = dialogueEntry.speaker;
-        } else {
-            // Remove narrative mode and use speech bubble matching character position
-            dialogueContainer.classList.remove('narrative-mode');
-
-            // Determine position alignment from dialogueEntry.position
-            const pos = dialogueEntry.position || 'left';
-            const isLeft = pos === 'left' || pos === 'left-2';
-            const isRight = pos === 'right' || pos === 'right-2';
-
-            if (isLeft) {
-                dialogueBox.classList.add('dialogue-left');
-            } else if (isRight) {
-                dialogueBox.classList.add('dialogue-right');
-            } else {
-                // center or unknown position
-                dialogueBox.classList.add('dialogue-center');
+        try {
+            // Block dialogue during scene transitions
+            if (this.isTransitioning) {
+                console.log('Scene transition in progress, blocking dialogue');
+                return;
             }
 
-            dialogueBubble.src = isLeft ?
-                './assets/menu_dialogue/dialogue-bubble-large-left.png' :
-                './assets/menu_dialogue/dialogue-bubble-large-right.png';
-            speaker.className = '';
-            text.className = '';
-            speaker.textContent = dialogueEntry.speaker;
-        }
+            // Prevent multiple dialogues from showing simultaneously
+            if (gameState.dialogueLock) {
+                console.log('Dialogue already showing, ignoring request');
+                return;
+            }
 
-        dialogueBox.classList.remove('hidden');
+            gameState.dialogueLock = true;
 
-        // Safety bounds check: ensure dialogue stays within viewport
-        this._clampDialogueToViewport(dialogueBox);
+            // Call onShow callback if it exists (for character slide-ins, etc.)
+            if (dialogueEntry.onShow) {
+                dialogueEntry.onShow();
+            }
 
-        text.textContent = dialogueEntry.text || '';
+            const dialogueBox = document.getElementById('dialogue-box');
+            const dialogueContainer = document.getElementById('dialogue-container');
+            const dialogueBubble = document.getElementById('dialogue-bubble');
+            const speaker = document.getElementById('dialogue-speaker');
+            const text = document.getElementById('dialogue-text');
+            const choicesDiv = document.getElementById('dialogue-choices');
+            const continueBtn = document.getElementById('dialogue-continue');
 
-        SFXGenerator.playDialogueAdvance();
+            choicesDiv.innerHTML = '';
+            continueBtn.classList.add('hidden');
 
-        if (dialogueEntry.choices && dialogueEntry.choices.length > 0) {
-            dialogueEntry.choices.forEach(choice => {
-                const btn = document.createElement('button');
-                btn.className = 'dialogue-choice';
-                btn.textContent = choice.text;
-                btn.addEventListener('click', () => {
+            // Clear previous position classes and inline overrides from bounds clamping
+            dialogueBox.classList.remove('dialogue-left', 'dialogue-right', 'dialogue-center');
+            dialogueBox.style.left = '';
+            dialogueBox.style.right = '';
+            dialogueBox.style.top = '';
+            dialogueBox.style.bottom = '';
+
+            const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
+            const isChoice = dialogueEntry.speaker === 'CHOICE' || dialogueEntry.speaker === 'FINAL CHOICE';
+
+            if (isNarration) {
+                dialogueContainer.classList.add('narrative-mode');
+                dialogueBox.classList.add('dialogue-center');
+                speaker.className = 'narration';
+                text.className = 'narration';
+                speaker.textContent = '';
+            } else if (isChoice) {
+                dialogueContainer.classList.add('narrative-mode');
+                dialogueBox.classList.add('dialogue-center');
+                speaker.className = 'choice-speaker';
+                text.className = 'choice-text';
+                speaker.textContent = dialogueEntry.speaker;
+            } else {
+                dialogueContainer.classList.remove('narrative-mode');
+
+                const pos = dialogueEntry.position || 'left';
+                const isLeft = pos === 'left' || pos === 'left-2';
+                const isRight = pos === 'right' || pos === 'right-2';
+
+                if (isLeft) {
+                    dialogueBox.classList.add('dialogue-left');
+                } else if (isRight) {
+                    dialogueBox.classList.add('dialogue-right');
+                } else {
+                    dialogueBox.classList.add('dialogue-center');
+                }
+
+                dialogueBubble.src = isLeft ?
+                    './assets/menu_dialogue/dialogue-bubble-large-left.png' :
+                    './assets/menu_dialogue/dialogue-bubble-large-right.png';
+                speaker.className = '';
+                text.className = '';
+                speaker.textContent = dialogueEntry.speaker;
+            }
+
+            dialogueBox.classList.remove('hidden');
+            this._clampDialogueToViewport(dialogueBox);
+            text.textContent = dialogueEntry.text || '';
+
+            SFXGenerator.playDialogueAdvance();
+
+            if (dialogueEntry.choices && dialogueEntry.choices.length > 0) {
+                dialogueEntry.choices.forEach(choice => {
+                    const btn = document.createElement('button');
+                    btn.className = 'dialogue-choice';
+                    btn.textContent = choice.text;
+                    btn.addEventListener('click', () => {
+                        if (gameState.actionLock || this.isTransitioning) return;
+                        gameState.actionLock = true;
+                        gameState.dialogueLock = false;
+                        SFXGenerator.playButtonClick();
+                        if (choice.action) {
+                            choice.action();
+                        }
+                        gameState.actionLock = false;
+                    });
+                    choicesDiv.appendChild(btn);
+                });
+            } else if (dialogueEntry.next) {
+                continueBtn.classList.remove('hidden');
+                continueBtn.onclick = () => {
                     if (gameState.actionLock || this.isTransitioning) return;
                     gameState.actionLock = true;
                     gameState.dialogueLock = false;
-                    SFXGenerator.playButtonClick();
-                    if (choice.action) {
-                        choice.action();
+                    SFXGenerator.playContinueButton();
+                    if (dialogueEntry.next === 'NEXT_DIALOGUE') {
+                        this.nextDialogue();
+                    } else if (typeof dialogueEntry.next === 'function') {
+                        dialogueEntry.next();
+                    } else {
+                        this.loadScene(dialogueEntry.next);
                     }
                     gameState.actionLock = false;
-                });
-                choicesDiv.appendChild(btn);
-            });
-        } else if (dialogueEntry.next) {
-            continueBtn.classList.remove('hidden');
-            continueBtn.onclick = () => {
-                if (gameState.actionLock || this.isTransitioning) return;
-                gameState.actionLock = true;
-                gameState.dialogueLock = false;
-                SFXGenerator.playContinueButton();
-                if (dialogueEntry.next === 'NEXT_DIALOGUE') {
+                };
+            } else {
+                setTimeout(() => {
+                    gameState.dialogueLock = false;
                     this.nextDialogue();
-                } else if (typeof dialogueEntry.next === 'function') {
-                    dialogueEntry.next();
-                } else {
-                    this.loadScene(dialogueEntry.next);
-                }
-                gameState.actionLock = false;
-            };
-        } else {
-            setTimeout(() => {
-                gameState.dialogueLock = false;
-                this.nextDialogue();
-            }, 3000);
+                }, 3000);
+            }
+        } catch (error) {
+            errorLogger.log('dialogue-render', error, { sceneId: gameState.currentSceneId, dialogueEntry });
+            const dialogueBox = document.getElementById('dialogue-box');
+            if (dialogueBox) {
+                dialogueBox.classList.add('hidden');
+            }
+            gameState.dialogueLock = false;
+            setTimeout(() => this.nextDialogue(), 500);
         }
     },
-    
+
     _clampDialogueToViewport(dialogueBox) {
         // After render, ensure the dialogue box stays within the scene container
         requestAnimationFrame(() => {
@@ -2512,11 +2743,12 @@ function setupUIHandlers() {
 }
 
 // ===== INITIALIZATION =====
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', safeAsync(async () => {
     console.log('🎮 Initializing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL...');
 
     // Initialize audio
     audioManager.init();
+    mobileOptimizer.init();
 
     // Setup UI handlers
     setupUIHandlers();
@@ -2525,6 +2757,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (gameState.settings.showHotspots) {
         document.body.classList.add('show-hotspots');
     }
+
+    await assetLoader.preloadAssets();
 
     // Debug: log click position in native image coordinates when debug mode is on
     document.getElementById('scene-container').addEventListener('click', (e) => {
@@ -2546,19 +2780,28 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('resize', () => {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
-            positioningSystem.recalculateAll();
-        }, 150);
+            try {
+                positioningSystem.recalculateAll();
+            } catch (error) {
+                errorLogger.log('resize-recalculate', error);
+            }
+        }, mobileOptimizer.resizeDebounceMs);
     });
 
     // Also recalculate on orientation change (mobile)
     window.addEventListener('orientationchange', () => {
         setTimeout(() => {
-            positioningSystem.recalculateAll();
+            try {
+                positioningSystem.recalculateAll();
+            } catch (error) {
+                errorLogger.log('orientation-recalculate', error);
+            }
         }, 300);
     });
 
     // Load main menu
     sceneRenderer.loadScene('S0_MAIN_MENU');
+    setTimeout(() => assetLoader.hideLoadingScreen(), 250);
 
     console.log('✅ Game initialized successfully!');
-});
+}, 'bootstrap'));
