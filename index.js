@@ -167,6 +167,56 @@ const errorLogger = {
     }
 };
 
+const spriteTransparencyProcessor = {
+    whiteThreshold: 238,
+
+    makeWhitePixelsTransparent(imageEl) {
+        if (!imageEl || imageEl.dataset.whiteRemoved === 'true') return;
+
+        const process = () => {
+            try {
+                const canvas = document.createElement('canvas');
+                const width = imageEl.naturalWidth || imageEl.width;
+                const height = imageEl.naturalHeight || imageEl.height;
+                if (!width || !height) return;
+
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                if (!ctx) return;
+
+                ctx.drawImage(imageEl, 0, 0, width, height);
+                const imageData = ctx.getImageData(0, 0, width, height);
+                const pixels = imageData.data;
+                const threshold = this.whiteThreshold;
+
+                for (let i = 0; i < pixels.length; i += 4) {
+                    const r = pixels[i];
+                    const g = pixels[i + 1];
+                    const b = pixels[i + 2];
+
+                    if (r >= threshold && g >= threshold && b >= threshold) {
+                        pixels[i + 3] = 0;
+                    }
+                }
+
+                ctx.putImageData(imageData, 0, 0);
+                imageEl.dataset.whiteRemoved = 'true';
+                imageEl.src = canvas.toDataURL('image/png');
+            } catch (error) {
+                errorLogger.log('sprite-transparency', error, { src: imageEl.src });
+            }
+        };
+
+        if (imageEl.complete && imageEl.naturalWidth > 0) {
+            process();
+        } else {
+            imageEl.addEventListener('load', process, { once: true });
+        }
+    }
+};
+
 function getMissingAssetPlaceholder(src, width = 200, height = 120) {
     const filename = (src || 'missing-asset').split('/').pop();
     const label = encodeURIComponent(filename);
@@ -679,10 +729,10 @@ const positioningSystem = {
     // Each zone has a left-anchor fraction and whether it uses left or right CSS property
     zones: {
         'left':    { anchor: 0.05, side: 'left' },
-        'left-2':  { anchor: 0.32, side: 'left' },
+        'left-2':  { anchor: 0.22, side: 'left' },
         'center':  { anchor: 0.50, side: 'left', centered: true },
         'right':   { anchor: 0.05, side: 'right' },
-        'right-2': { anchor: 0.32, side: 'right' },
+        'right-2': { anchor: 0.22, side: 'right' },
     },
 
     /**
@@ -800,10 +850,10 @@ const positioningSystem = {
     _fallbackCharacterPosition(zoneName) {
         const fallbacks = {
             'left':    { left: '5%', right: 'auto', bottom: '0' },
-            'left-2':  { left: '32%', right: 'auto', bottom: '0' },
+            'left-2':  { left: '22%', right: 'auto', bottom: '0' },
             'center':  { left: '50%', right: 'auto', bottom: '0', transform: 'translateX(-50%)' },
             'right':   { right: '5%', left: 'auto', bottom: '0' },
-            'right-2': { right: '32%', left: 'auto', bottom: '0' },
+            'right-2': { right: '22%', left: 'auto', bottom: '0' },
         };
         return fallbacks[zoneName] || fallbacks['center'];
     },
@@ -960,10 +1010,33 @@ const sceneRenderer = {
     onTransitionStart: null,
     onTransitionComplete: null,
 
+    normalizeCharacterZones(characters) {
+        const sideCounts = { left: 0, right: 0 };
+
+        return (characters || []).map(char => {
+            const normalized = { ...char };
+
+            if (normalized.position === 'left') {
+                sideCounts.left += 1;
+                if (sideCounts.left > 1) normalized.position = 'left-2';
+            } else if (normalized.position === 'right') {
+                sideCounts.right += 1;
+                if (sideCounts.right > 1) normalized.position = 'right-2';
+            }
+
+            return normalized;
+        });
+    },
+
     addCharacter(char, slideDelay = 100) {
         const charLayer = document.getElementById('character-layer');
+        const existingZones = new Set(Array.from(charLayer.querySelectorAll('.character-sprite')).map(el => el.dataset.zone));
+        let resolvedZone = char.position || 'center';
+        if (resolvedZone === 'left' && existingZones.has('left')) resolvedZone = 'left-2';
+        if (resolvedZone === 'right' && existingZones.has('right')) resolvedZone = 'right-2';
+
         const img = document.createElement('img');
-        const zoneName = char.position || 'center';
+        const zoneName = resolvedZone;
         img.className = `character-sprite char-${zoneName}`;
         img.dataset.zone = zoneName;
         img.id = char.id ? `char-${char.id}` : undefined;
@@ -979,6 +1052,7 @@ const sceneRenderer = {
         img.src = spriteSrc;
         img.alt = char.name;
         assetLoader.registerImageFallback(img, spriteSrc);
+        spriteTransparencyProcessor.makeWhitePixelsTransparent(img);
 
         // Apply calculated pixel position
         const pos = positioningSystem.calculateCharacterPosition(zoneName);
@@ -1203,8 +1277,9 @@ const sceneRenderer = {
     
     loadCharacters(characters) {
         const charLayer = document.getElementById('character-layer');
+        const normalizedCharacters = this.normalizeCharacterZones(characters);
 
-        characters.forEach((char, index) => {
+        normalizedCharacters.forEach((char, index) => {
             const img = document.createElement('img');
             const zoneName = char.position || 'center';
             img.className = `character-sprite char-${zoneName}`;
@@ -1221,6 +1296,7 @@ const sceneRenderer = {
             img.src = spriteSrc;
             img.alt = char.name;
             assetLoader.registerImageFallback(img, spriteSrc);
+            spriteTransparencyProcessor.makeWhitePixelsTransparent(img);
             img.style.zIndex = index + 1;
 
             // Apply calculated pixel position
@@ -1437,6 +1513,8 @@ const sceneRenderer = {
                 speaker.className = '';
                 text.className = '';
                 speaker.textContent = dialogueEntry.speaker;
+
+                this._positionDialogueNearCharacter(dialogueBox, pos);
             }
 
             dialogueBox.classList.remove('hidden');
@@ -1523,6 +1601,49 @@ const sceneRenderer = {
                 dialogueBox.style.bottom = '2%';
                 dialogueBox.style.top = 'auto';
             }
+        });
+    },
+
+    _positionDialogueNearCharacter(dialogueBox, zoneName) {
+        const container = document.getElementById('scene-container');
+        if (!container || !dialogueBox || !zoneName) return;
+
+        const possibleZones = [zoneName];
+        if (zoneName === 'left') possibleZones.push('left-2');
+        if (zoneName === 'right') possibleZones.push('right-2');
+
+        let characterEl = null;
+        for (const zone of possibleZones) {
+            characterEl = document.querySelector(`#character-layer .character-sprite[data-zone="${zone}"]`);
+            if (characterEl) break;
+        }
+
+        if (!characterEl) return;
+
+        requestAnimationFrame(() => {
+            const containerRect = container.getBoundingClientRect();
+            const charRect = characterEl.getBoundingClientRect();
+            const boxRect = dialogueBox.getBoundingClientRect();
+
+            const margin = 20;
+            const topPx = Math.max(
+                containerRect.height * 0.14,
+                (charRect.top - containerRect.top) - boxRect.height - margin
+            );
+
+            const charCenterX = (charRect.left - containerRect.left) + (charRect.width / 2);
+            const baseLeft = charCenterX - (boxRect.width / 2);
+
+            const speakerOffset = zoneName.startsWith('left') ? 80 : -80;
+            const minLeft = containerRect.width * 0.02;
+            const maxLeft = containerRect.width - boxRect.width - minLeft;
+            const leftPx = Math.min(maxLeft, Math.max(minLeft, baseLeft + speakerOffset));
+
+            dialogueBox.style.left = `${leftPx}px`;
+            dialogueBox.style.right = 'auto';
+            dialogueBox.style.top = `${topPx}px`;
+            dialogueBox.style.bottom = 'auto';
+            dialogueBox.style.transform = 'none';
         });
     },
 
