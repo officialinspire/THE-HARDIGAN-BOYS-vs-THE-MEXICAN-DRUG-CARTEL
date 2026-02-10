@@ -112,6 +112,11 @@ button {
     pointer-events: none;
 }
 
+/*
+ * Character positioning is now calculated dynamically by positioningSystem in JS.
+ * Inline styles (pixel values) override these CSS class fallbacks.
+ * The CSS classes remain as fallbacks if JS hasn't run yet.
+ */
 .character-sprite {
     position: absolute;
     max-width: 35%;
@@ -122,22 +127,7 @@ button {
     background: transparent !important;
 }
 
-/* Mobile: smaller characters to fit screen */
-@media (max-width: 768px) {
-    .character-sprite {
-        max-width: 40%;
-        max-height: 45%;
-    }
-}
-
-/* Very small phones */
-@media (max-width: 480px) {
-    .character-sprite {
-        max-width: 45%;
-        max-height: 40%;
-    }
-}
-
+/* Slide-in animations */
 .character-sprite.slide-in-left {
     transform: translateX(-100%);
     opacity: 0;
@@ -148,11 +138,18 @@ button {
     opacity: 0;
 }
 
+/* Visible state after slide-in completes */
 .character-sprite.visible {
     transform: translateX(0);
     opacity: 1;
 }
 
+/* Center-zone characters need translateX(-50%) even when visible */
+.character-sprite.char-center.visible {
+    transform: translateX(-50%);
+}
+
+/* Fallback position classes (overridden by inline pixel styles from positioningSystem) */
 .char-left {
     left: 5%;
     bottom: 0;
@@ -177,25 +174,6 @@ button {
 .char-right-2 {
     right: 32%;
     bottom: 0;
-}
-
-/* Mobile: adjust character positioning */
-@media (max-width: 768px) {
-    .char-left {
-        left: 3%;
-    }
-
-    .char-left-2 {
-        left: 30%;
-    }
-
-    .char-right {
-        right: 3%;
-    }
-
-    .char-right-2 {
-        right: 30%;
-    }
 }
 
 /* ===== ITEM LAYER ===== */
