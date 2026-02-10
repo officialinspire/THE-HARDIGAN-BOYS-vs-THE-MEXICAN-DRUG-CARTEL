@@ -167,6 +167,100 @@ const errorLogger = {
     }
 };
 
+
+const Dev = {
+    storageKeys: {
+        enabled: 'DEV_MODE_ENABLED',
+        toolsEnabled: 'DEV_TOOLS_ENABLED'
+    },
+    enabled: false,
+    toolsEnabled: false,
+
+    init() {
+        this.enabled = localStorage.getItem(this.storageKeys.enabled) === 'true';
+        this.toolsEnabled = localStorage.getItem(this.storageKeys.toolsEnabled) === 'true';
+
+        const modal = document.getElementById('devHubModal');
+        const toggle = document.getElementById('dev-tools-enabled-toggle');
+        const closeBtn = document.getElementById('btn-close-dev-hub');
+        const exitBtn = document.getElementById('btn-exit-dev-mode');
+
+        if (!modal || !toggle || !closeBtn || !exitBtn) return;
+
+        toggle.checked = this.toolsEnabled;
+        modal.addEventListener('click', (event) => {
+            if (event.target.dataset.devClose === 'true') {
+                this.closeHub();
+            }
+        });
+
+        toggle.addEventListener('change', (event) => {
+            SFXGenerator.playButtonClick();
+            this.setToolsEnabled(event.target.checked);
+        });
+
+        closeBtn.addEventListener('click', () => {
+            SFXGenerator.playButtonClick();
+            this.closeHub();
+        });
+
+        exitBtn.addEventListener('click', () => {
+            SFXGenerator.playButtonClick();
+            this.setEnabled(false);
+            this.setToolsEnabled(false);
+            this.closeHub();
+        });
+
+        modal.querySelectorAll('[data-dev-action]').forEach(button => {
+            button.addEventListener('click', () => {
+                SFXGenerator.playButtonClick();
+                this.updateStatus();
+            });
+        });
+
+        this.updateStatus();
+    },
+
+    openHub() {
+        const modal = document.getElementById('devHubModal');
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
+        this.setEnabled(true);
+        this.updateStatus();
+    },
+
+    closeHub() {
+        const modal = document.getElementById('devHubModal');
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+    },
+
+    setEnabled(value) {
+        this.enabled = Boolean(value);
+        localStorage.setItem(this.storageKeys.enabled, String(this.enabled));
+        this.updateStatus();
+    },
+
+    setToolsEnabled(value) {
+        this.toolsEnabled = Boolean(value);
+        localStorage.setItem(this.storageKeys.toolsEnabled, String(this.toolsEnabled));
+        const toggle = document.getElementById('dev-tools-enabled-toggle');
+        if (toggle) {
+            toggle.checked = this.toolsEnabled;
+        }
+        this.updateStatus();
+    },
+
+    updateStatus() {
+        const status = document.getElementById('devHubStatus');
+        if (!status) return;
+        const sceneLabel = gameState.currentSceneId === 'S0_MAIN_MENU' ? 'menu' : (gameState.currentSceneId || 'menu');
+        status.innerHTML = `currentSceneId: <strong>${sceneLabel}</strong><br>devEnabled: <strong>${this.enabled}</strong><br>toolsEnabled: <strong>${this.toolsEnabled}</strong>`;
+    }
+};
+
 const spriteTransparencyProcessor = {
     whiteThreshold: 238,
     edgeColorTolerance: 40,
@@ -1293,6 +1387,7 @@ const sceneRenderer = {
 
             this.currentScene = scene;
             gameState.currentSceneId = sceneId;
+            Dev.updateStatus();
             gameState.currentDialogueIndex = 0;
             gameState.objectsClicked.clear();
 
@@ -1914,6 +2009,7 @@ const SCENES = {
                     <button class="menu-btn" id="btn-new-game">NEW GAME</button>
                     <button class="menu-btn" id="btn-continue-game">CONTINUE</button>
                     <button class="menu-btn" id="btn-options">OPTIONS</button>
+                    <button class="menu-btn" id="btn-developer-mode">DEVELOPER MODE</button>
                 </div>
             `;
 
@@ -1947,6 +2043,11 @@ const SCENES = {
             document.getElementById('btn-options').addEventListener('click', () => {
                 SFXGenerator.playButtonClick();
                 document.getElementById('settings-overlay').classList.remove('hidden');
+            });
+
+            document.getElementById('btn-developer-mode').addEventListener('click', () => {
+                SFXGenerator.playButtonClick();
+                Dev.openHub();
             });
 
             // Fade in menu buttons with staggered animation after menu loads
@@ -3158,6 +3259,8 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
 
     // Normalize scene data before the first scene loads.
     sceneIntegrity.validateAndNormalize();
+
+    Dev.init();
 
     // Setup UI handlers
     setupUIHandlers();
