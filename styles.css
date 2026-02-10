@@ -21,6 +21,8 @@ html, body {
     color: #e0e0e0;
     /* iPhone notch support */
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: auto;
 }
 
 button {
@@ -28,6 +30,107 @@ button {
     cursor: pointer;
     border: none;
     background: none;
+}
+
+button,
+[role="button"],
+.hotspot,
+.scene-item,
+.dialogue-choice,
+#dialogue-continue,
+.menu-btn,
+.overlay-close,
+.phone-buttons button,
+.notebook-close-btn,
+.hud-btn {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(255, 215, 0, 0.25);
+    min-width: 44px;
+    min-height: 44px;
+}
+
+button:active,
+.hotspot:active,
+.scene-item:active,
+.dialogue-choice:active,
+#dialogue-continue:active,
+.menu-btn:active,
+.overlay-close:active,
+.phone-buttons button:active,
+.notebook-close-btn:active,
+.hud-btn:active {
+    filter: brightness(1.15);
+}
+
+#loading-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 12000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at center, #171717 0%, #040404 70%);
+    padding: 20px;
+}
+
+#loading-screen.hidden {
+    display: none !important;
+}
+
+.loading-content {
+    width: min(560px, 90vw);
+    text-align: center;
+    border: 2px solid #ffd700;
+    border-radius: 12px;
+    padding: 28px;
+    background: rgba(0, 0, 0, 0.88);
+}
+
+#loading-progress-track {
+    width: 100%;
+    height: 18px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 215, 0, 0.5);
+    overflow: hidden;
+    margin-top: 16px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#loading-progress-bar {
+    width: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #ffd700, #fff3a1);
+    transition: width 0.2s ease;
+}
+
+#loading-progress-text,
+#loading-status {
+    margin-top: 10px;
+    color: #f0f0f0;
+}
+
+#orientation-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 11000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.95);
+}
+
+#orientation-overlay.hidden {
+    display: none !important;
+}
+
+.orientation-message {
+    color: #ffd700;
+    border: 2px solid #ffd700;
+    border-radius: 14px;
+    padding: 24px;
+    font-size: clamp(18px, 5vw, 28px);
+    font-weight: bold;
+    text-align: center;
 }
 
 /* ===== GAME ROOT ===== */
@@ -1167,29 +1270,6 @@ body.main-menu #scene-container {
 .menu-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
-}
-
-/* ===== LANDSCAPE ORIENTATION MESSAGE FOR MOBILE ===== */
-@media (max-width: 768px) and (orientation: portrait) {
-    #game-root::before {
-        content: 'Please rotate your device to landscape mode for the best experience';
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(0, 0, 0, 0.95);
-        color: #ffd700;
-        padding: 30px 40px;
-        border-radius: 15px;
-        border: 3px solid #ffd700;
-        text-align: center;
-        font-size: 18px;
-        font-weight: bold;
-        z-index: 9999;
-        max-width: 80%;
-        line-height: 1.5;
-        box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
-    }
 }
 
 /* ===== COMPREHENSIVE RESPONSIVE MEDIA QUERIES ===== */
