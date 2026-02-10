@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Convert flat sprite backgrounds to transparency.
+"""Convert flat sprite backgrounds to clean transparency.
 
-Targets near-white backgrounds and non-white studio backdrops (e.g. beige)
-by removing edge-connected pixels that match the dominant border color.
+The pipeline intentionally does three passes:
+1) Flood-fill edge-connected background pixels (white or dominant border color).
+2) Remove enclosed "holes" that still match the background color.
+3) Defringe edge pixels so no white/beige halo remains.
 
 Usage:
   python scripts/remove_white_backgrounds.py
@@ -54,6 +56,22 @@ def dominant_edge_color(pixels, width: int, height: int) -> tuple[float, float, 
     return bucket[1] / count, bucket[2] / count, bucket[3] / count
 
 
+def is_background_candidate(
+    rgb: tuple[int, int, int],
+    threshold: int,
+    target: tuple[float, float, float] | None,
+    edge_tolerance: int,
+    brightness_floor: int,
+) -> bool:
+    r, g, b = rgb
+    near_white = r >= threshold and g >= threshold and b >= threshold
+    brightness = (r + g + b) / 3
+    near_edge_color = False
+    if target is not None:
+        near_edge_color = color_distance(rgb, target) <= edge_tolerance and brightness >= brightness_floor
+    return near_white or near_edge_color
+
+
 def remove_edge_connected_background(
     pixels,
     width: int,
@@ -61,8 +79,8 @@ def remove_edge_connected_background(
     threshold: int,
     edge_tolerance: int,
     brightness_floor: int,
+    target: tuple[float, float, float] | None,
 ) -> int:
-    target = dominant_edge_color(pixels, width, height)
     if target is None:
         return 0
 
@@ -91,11 +109,7 @@ def remove_edge_connected_background(
         if a == 0:
             continue
 
-        near_white = r >= threshold and g >= threshold and b >= threshold
-        brightness = (r + g + b) / 3
-        near_edge_color = color_distance((r, g, b), target) <= edge_tolerance and brightness >= brightness_floor
-
-        if near_white or near_edge_color:
+        if is_background_candidate((r, g, b), threshold, target, edge_tolerance, brightness_floor):
             pixels[x, y] = (r, g, b, 0)
             removed += 1
             push(x + 1, y)
@@ -106,19 +120,107 @@ def remove_edge_connected_background(
     return removed
 
 
-def process_image(path: Path, threshold: int, edge_tolerance: int, brightness_floor: int, dry_run: bool) -> tuple[bool, int]:
+def remove_enclosed_background_holes(
+    pixels,
+    width: int,
+    height: int,
+    threshold: int,
+    edge_tolerance: int,
+    brightness_floor: int,
+    target: tuple[float, float, float] | None,
+) -> int:
+    removed = 0
+    for y in range(1, height - 1):
+        for x in range(1, width - 1):
+            r, g, b, a = pixels[x, y]
+            if a == 0:
+                continue
+            if not is_background_candidate((r, g, b), threshold, target, edge_tolerance, brightness_floor):
+                continue
+
+            neighbors = [pixels[x - 1, y][3], pixels[x + 1, y][3], pixels[x, y - 1][3], pixels[x, y + 1][3]]
+            if all(alpha > 0 for alpha in neighbors):
+                pixels[x, y] = (r, g, b, 0)
+                removed += 1
+    return removed
+
+
+def defringe_edges(
+    pixels,
+    width: int,
+    height: int,
+    target: tuple[float, float, float] | None,
+    threshold: int,
+    soft_alpha: int,
+    edge_tolerance: int,
+    brightness_floor: int,
+) -> int:
+    adjusted = 0
+    for y in range(height):
+        for x in range(width):
+            r, g, b, a = pixels[x, y]
+            if a == 0:
+                continue
+
+            near_bg = is_background_candidate((r, g, b), threshold, target, edge_tolerance, brightness_floor)
+            if not near_bg:
+                continue
+
+            if a <= soft_alpha:
+                pixels[x, y] = (r, g, b, 0)
+                adjusted += 1
+            else:
+                pixels[x, y] = (r, g, b, int(a * 0.7))
+                adjusted += 1
+    return adjusted
+
+
+def process_image(
+    path: Path,
+    threshold: int,
+    edge_tolerance: int,
+    brightness_floor: int,
+    soft_alpha: int,
+    dry_run: bool,
+) -> tuple[bool, int]:
     image = Image.open(path).convert("RGBA")
     pixels = image.load()
     width, height = image.size
 
-    changed_pixels = remove_edge_connected_background(
+    target = dominant_edge_color(pixels, width, height)
+
+    edge_removed = remove_edge_connected_background(
         pixels,
         width,
         height,
         threshold,
         edge_tolerance,
         brightness_floor,
+        target,
     )
+
+    hole_removed = remove_enclosed_background_holes(
+        pixels,
+        width,
+        height,
+        threshold,
+        edge_tolerance,
+        brightness_floor,
+        target,
+    )
+
+    fringe_adjusted = defringe_edges(
+        pixels,
+        width,
+        height,
+        target,
+        threshold,
+        soft_alpha,
+        edge_tolerance + 14,
+        brightness_floor,
+    )
+
+    changed_pixels = edge_removed + hole_removed + fringe_adjusted
 
     if changed_pixels and not dry_run:
         image.save(path)
@@ -131,6 +233,7 @@ def main() -> None:
     parser.add_argument("--threshold", type=int, default=238, help="RGB threshold treated as white (default: 238)")
     parser.add_argument("--edge-tolerance", type=int, default=42, help="Color-distance tolerance for non-white edge backgrounds")
     parser.add_argument("--brightness-floor", type=int, default=110, help="Minimum brightness for edge background removal")
+    parser.add_argument("--soft-alpha", type=int, default=135, help="Alpha threshold for aggressive defringe cleanup")
     parser.add_argument("--dry-run", action="store_true", help="Analyze changes but do not modify files")
     parser.add_argument("--assets-dir", default="assets/characters", help="Directory containing character sprites")
     args = parser.parse_args()
@@ -144,7 +247,14 @@ def main() -> None:
 
     for path in sorted(assets_dir.glob("*.png")):
         total += 1
-        changed, pixel_count = process_image(path, args.threshold, args.edge_tolerance, args.brightness_floor, args.dry_run)
+        changed, pixel_count = process_image(
+            path,
+            args.threshold,
+            args.edge_tolerance,
+            args.brightness_floor,
+            args.soft_alpha,
+            args.dry_run,
+        )
         if changed:
             touched += 1
             action = "would update" if args.dry_run else "updated"

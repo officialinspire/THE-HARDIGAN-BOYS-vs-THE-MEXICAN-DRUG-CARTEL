@@ -171,6 +171,7 @@ const spriteTransparencyProcessor = {
     whiteThreshold: 238,
     edgeColorTolerance: 40,
     edgeBrightnessFloor: 110,
+    softAlphaThreshold: 135,
 
     _getDominantEdgeColor(pixels, width, height) {
         const bins = new Map();
@@ -274,6 +275,35 @@ const spriteTransparencyProcessor = {
         return removed;
     },
 
+    _desaturateFringes(pixels, width, height, targetColor) {
+        if (!targetColor) return 0;
+
+        let adjusted = 0;
+        for (let i = 0; i < pixels.length; i += 4) {
+            const alpha = pixels[i + 3];
+            if (alpha === 0) continue;
+
+            const r = pixels[i];
+            const g = pixels[i + 1];
+            const b = pixels[i + 2];
+            const brightness = (r + g + b) / 3;
+            const nearEdgeColor = this._isNearColor(r, g, b, targetColor);
+            const nearWhite = r >= this.whiteThreshold && g >= this.whiteThreshold && b >= this.whiteThreshold;
+
+            if ((nearEdgeColor || nearWhite) && brightness >= this.edgeBrightnessFloor) {
+                if (alpha <= this.softAlphaThreshold) {
+                    pixels[i + 3] = 0;
+                    adjusted += 1;
+                } else {
+                    pixels[i + 3] = Math.max(0, Math.round(alpha * 0.72));
+                    adjusted += 1;
+                }
+            }
+        }
+
+        return adjusted;
+    },
+
     makeWhitePixelsTransparent(imageEl) {
         if (!imageEl || imageEl.dataset.whiteRemoved === 'true') return;
 
@@ -297,6 +327,7 @@ const spriteTransparencyProcessor = {
                 const edgeColor = this._getDominantEdgeColor(pixels, width, height);
 
                 this._removeConnectedEdgeBackground(pixels, width, height, edgeColor);
+                this._desaturateFringes(pixels, width, height, edgeColor);
 
                 for (let i = 0; i < pixels.length; i += 4) {
                     const r = pixels[i];
@@ -1589,7 +1620,7 @@ const sceneRenderer = {
             continueBtn.classList.add('hidden');
 
             // Clear previous position classes and inline overrides from bounds clamping
-            dialogueBox.classList.remove('dialogue-left', 'dialogue-right', 'dialogue-center');
+            dialogueBox.classList.remove('dialogue-left', 'dialogue-right', 'dialogue-center', 'dialogue-offscreen');
             dialogueBox.style.left = '';
             dialogueBox.style.right = '';
             dialogueBox.style.top = '';
@@ -1762,7 +1793,10 @@ const sceneRenderer = {
 
         const characterEl = this._resolveDialogueCharacter(zoneName, dialogueEntry);
 
-        if (!characterEl) return;
+        if (!characterEl) {
+            this._positionDialogueTopCenter(dialogueBox);
+            return;
+        }
 
         requestAnimationFrame(() => {
             const containerRect = container.getBoundingClientRect();
@@ -1785,8 +1819,8 @@ const sceneRenderer = {
                 // Comic-style: bubble floats up and to the right of left-side speaker.
                 leftPx = charLeft + (charRect.width * 0.55);
             } else if (zoneName.startsWith('right')) {
-                // Mirror placement for right-side speaker.
-                leftPx = charRight - boxRect.width - (charRect.width * 0.15);
+                // Right-side speakers need a stronger up-left offset to avoid overlap.
+                leftPx = charRight - boxRect.width - (charRect.width * 0.42);
             } else {
                 leftPx = (charLeft + charRight) / 2 - (boxRect.width / 2);
             }
@@ -1796,6 +1830,27 @@ const sceneRenderer = {
             dialogueBox.style.left = `${leftPx}px`;
             dialogueBox.style.right = 'auto';
             dialogueBox.style.top = `${topPx}px`;
+            dialogueBox.style.bottom = 'auto';
+            dialogueBox.style.transform = 'none';
+        });
+    },
+
+    _positionDialogueTopCenter(dialogueBox) {
+        const container = document.getElementById('scene-container');
+        if (!container || !dialogueBox) return;
+
+        requestAnimationFrame(() => {
+            const containerRect = container.getBoundingClientRect();
+            const boxRect = dialogueBox.getBoundingClientRect();
+            const leftPx = Math.max(
+                containerRect.width * 0.02,
+                (containerRect.width - boxRect.width) / 2,
+            );
+
+            dialogueBox.classList.add('dialogue-offscreen');
+            dialogueBox.style.left = `${leftPx}px`;
+            dialogueBox.style.right = 'auto';
+            dialogueBox.style.top = `${containerRect.height * 0.16}px`;
             dialogueBox.style.bottom = 'auto';
             dialogueBox.style.transform = 'none';
         });
@@ -2920,6 +2975,7 @@ const SCENES = {
 const sceneIntegrity = {
     validateAndNormalize() {
         const validZones = new Set(['left', 'left-2', 'center', 'right-2', 'right']);
+        const sceneIds = new Set(Object.keys(SCENES));
 
         Object.values(SCENES).forEach(scene => {
             if (!scene || typeof scene !== 'object') return;
@@ -2952,6 +3008,31 @@ const sceneIntegrity = {
                 return normalizedEntry;
             });
         });
+
+        const flowWarnings = [];
+        Object.values(SCENES).forEach(scene => {
+            const dialogue = scene?.dialogue || [];
+            dialogue.forEach((entry, idx) => {
+                if (!entry || typeof entry !== 'object') return;
+
+                if (typeof entry.next === 'string' && entry.next !== 'NEXT_DIALOGUE' && !sceneIds.has(entry.next)) {
+                    flowWarnings.push(`${scene.id} dialogue[${idx}] has unknown next scene: ${entry.next}`);
+                }
+
+                if (Array.isArray(entry.choices)) {
+                    entry.choices.forEach((choice, choiceIdx) => {
+                        if (!choice || typeof choice !== 'object') return;
+                        if (typeof choice.next === 'string' && !sceneIds.has(choice.next)) {
+                            flowWarnings.push(`${scene.id} dialogue[${idx}] choice[${choiceIdx}] has unknown next scene: ${choice.next}`);
+                        }
+                    });
+                }
+            });
+        });
+
+        if (flowWarnings.length > 0) {
+            console.warn('Scene flow warnings detected:', flowWarnings);
+        }
     }
 };
 
