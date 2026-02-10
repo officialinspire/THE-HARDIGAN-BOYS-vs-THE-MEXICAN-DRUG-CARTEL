@@ -336,21 +336,87 @@ body.show-hotspots .hotspot {
     text-align: center;
 }
 
-/* ===== DIALOGUE BOX - FULLY RESPONSIVE ===== */
+/* ===== DIALOGUE BOX - DYNAMIC POSITIONING ===== */
 #dialogue-box {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
     width: min(59.5%, 680px);
     transition: opacity 0.3s ease;
     pointer-events: auto;
     z-index: 5;
+    /* Default center position (narration/choices) */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Position variant: left-aligned near left character */
+#dialogue-box.dialogue-left {
+    top: auto;
+    bottom: 25%;
+    left: 15%;
+    right: auto;
+    transform: none;
+    animation: slideFromLeft 0.3s ease-out;
+}
+
+/* Position variant: right-aligned near right character */
+#dialogue-box.dialogue-right {
+    top: auto;
+    bottom: 25%;
+    left: auto;
+    right: 15%;
+    transform: none;
+    animation: slideFromRight 0.3s ease-out;
+}
+
+/* Position variant: centered for narration/system/choices */
+#dialogue-box.dialogue-center {
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+    animation: fadeInCenter 0.3s ease-out;
+}
+
+/* Slide-in animations */
+@keyframes slideFromLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-40px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideFromRight {
+    from {
+        opacity: 0;
+        transform: translateX(40px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes fadeInCenter {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
 }
 
 #dialogue-box.hidden {
     opacity: 0;
     pointer-events: none;
+    animation: none;
 }
 
 #dialogue-container {
@@ -444,6 +510,16 @@ body.show-hotspots .hotspot {
         width: 76.5%;
     }
 
+    #dialogue-box.dialogue-left {
+        left: 5%;
+        bottom: 20%;
+    }
+
+    #dialogue-box.dialogue-right {
+        right: 5%;
+        bottom: 20%;
+    }
+
     #dialogue-content {
         top: 10%;
         left: 6%;
@@ -456,6 +532,16 @@ body.show-hotspots .hotspot {
 @media (max-width: 480px) {
     #dialogue-box {
         width: 80.75%;
+    }
+
+    #dialogue-box.dialogue-left {
+        left: 3%;
+        bottom: 18%;
+    }
+
+    #dialogue-box.dialogue-right {
+        right: 3%;
+        bottom: 18%;
     }
 
     #dialogue-container {
@@ -1213,8 +1299,21 @@ body.main-menu #scene-container {
     }
 
     #dialogue-box {
-        bottom: max(5px, env(safe-area-inset-bottom));
         width: min(55%, 600px);
+    }
+
+    #dialogue-box.dialogue-left {
+        bottom: max(10%, env(safe-area-inset-bottom));
+        left: 5%;
+    }
+
+    #dialogue-box.dialogue-right {
+        bottom: max(10%, env(safe-area-inset-bottom));
+        right: 5%;
+    }
+
+    #dialogue-box.dialogue-center {
+        /* keep centered in landscape */
     }
 
     #dialogue-container {
