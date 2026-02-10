@@ -458,6 +458,243 @@ const notebook = {
 };
 
 
+// ===== RESPONSIVE POSITIONING SYSTEM =====
+const positioningSystem = {
+    // Reference dimensions for the background art (designed at 16:9)
+    REF_WIDTH: 1920,
+    REF_HEIGHT: 1080,
+
+    // Safe zones for UI elements
+    HUD_TOP: 80,       // top 80px reserved for HUD
+    DIALOGUE_BOTTOM: 200, // bottom 200px reserved for dialogue
+
+    // Named character zones: defines horizontal positioning as fraction of usable width
+    // Each zone has a left-anchor fraction and whether it uses left or right CSS property
+    zones: {
+        'left':    { anchor: 0.05, side: 'left' },
+        'left-2':  { anchor: 0.32, side: 'left' },
+        'center':  { anchor: 0.50, side: 'left', centered: true },
+        'right':   { anchor: 0.05, side: 'right' },
+        'right-2': { anchor: 0.32, side: 'right' },
+    },
+
+    /**
+     * Get the actual rendered area of the background image within the container.
+     * Accounts for object-fit: contain vs cover and different screen sizes.
+     */
+    getBackgroundRect() {
+        const container = document.getElementById('scene-container');
+        const bg = document.getElementById('scene-background');
+        if (!container || !bg) return null;
+
+        const containerW = container.clientWidth;
+        const containerH = container.clientHeight;
+
+        // Natural dimensions of loaded background, fallback to reference
+        const natW = bg.naturalWidth || this.REF_WIDTH;
+        const natH = bg.naturalHeight || this.REF_HEIGHT;
+
+        const containerRatio = containerW / containerH;
+        const imageRatio = natW / natH;
+
+        let renderedW, renderedH, offsetX, offsetY;
+
+        // Detect if we are in portrait mobile mode (cover) or normal (contain)
+        const isCover = window.innerWidth <= 768 && window.innerHeight > window.innerWidth;
+
+        if (isCover) {
+            // object-fit: cover — image fills container, may be cropped
+            if (containerRatio > imageRatio) {
+                renderedW = containerW;
+                renderedH = containerW / imageRatio;
+            } else {
+                renderedH = containerH;
+                renderedW = containerH * imageRatio;
+            }
+            offsetX = (containerW - renderedW) / 2;
+            offsetY = (containerH - renderedH) / 2;
+        } else {
+            // object-fit: contain — image fits inside container with letterboxing
+            if (containerRatio > imageRatio) {
+                renderedH = containerH;
+                renderedW = containerH * imageRatio;
+            } else {
+                renderedW = containerW;
+                renderedH = containerW / imageRatio;
+            }
+            offsetX = (containerW - renderedW) / 2;
+            offsetY = (containerH - renderedH) / 2;
+        }
+
+        return {
+            containerW,
+            containerH,
+            renderedW,
+            renderedH,
+            offsetX,
+            offsetY,
+            scaleX: renderedW / natW,
+            scaleY: renderedH / natH,
+        };
+    },
+
+    /**
+     * Calculate pixel position for a character in a named zone.
+     * Returns an object with CSS properties to apply via style.
+     */
+    calculateCharacterPosition(zoneName) {
+        const zone = this.zones[zoneName] || this.zones['center'];
+        const rect = this.getBackgroundRect();
+
+        if (!rect) {
+            // Fallback: return percentage-based positioning
+            return this._fallbackCharacterPosition(zoneName);
+        }
+
+        const { containerW, containerH, renderedW, renderedH, offsetX, offsetY } = rect;
+
+        // Usable vertical area: from HUD safe zone to dialogue safe zone
+        const hudPx = this.HUD_TOP * (renderedH / this.REF_HEIGHT);
+        const dialoguePx = this.DIALOGUE_BOTTOM * (renderedH / this.REF_HEIGHT);
+
+        // Bottom of character: above dialogue zone, anchored to bottom of rendered bg
+        const bottomFromContainer = Math.max(0, containerH - (offsetY + renderedH));
+
+        const result = {
+            bottom: bottomFromContainer + 'px',
+        };
+
+        if (zone.centered) {
+            // Center zone: position at 50% of container, translate to center
+            result.left = (offsetX + renderedW * zone.anchor) + 'px';
+            result.transform = 'translateX(-50%)';
+            result.right = 'auto';
+        } else if (zone.side === 'right') {
+            // Right-side zones: position from right edge of rendered area
+            const rightFromContainer = containerW - (offsetX + renderedW) + (renderedW * zone.anchor);
+            result.right = rightFromContainer + 'px';
+            result.left = 'auto';
+        } else {
+            // Left-side zones: position from left edge of rendered area
+            result.left = (offsetX + renderedW * zone.anchor) + 'px';
+            result.right = 'auto';
+        }
+
+        // Dynamic max dimensions based on rendered background size
+        result.maxWidth = (renderedW * 0.35) + 'px';
+        result.maxHeight = (renderedH * 0.55) + 'px';
+
+        return result;
+    },
+
+    /**
+     * Fallback percentage-based positioning (used when rect calculation fails).
+     */
+    _fallbackCharacterPosition(zoneName) {
+        const fallbacks = {
+            'left':    { left: '5%', right: 'auto', bottom: '0' },
+            'left-2':  { left: '32%', right: 'auto', bottom: '0' },
+            'center':  { left: '50%', right: 'auto', bottom: '0', transform: 'translateX(-50%)' },
+            'right':   { right: '5%', left: 'auto', bottom: '0' },
+            'right-2': { right: '32%', left: 'auto', bottom: '0' },
+        };
+        return fallbacks[zoneName] || fallbacks['center'];
+    },
+
+    /**
+     * Calculate pixel position for an item/hotspot given percentage coordinates.
+     * Converts percentage x/y/width/height relative to the background image
+     * into absolute pixel positions within the container.
+     */
+    calculateItemPosition(x, y, width, height) {
+        const rect = this.getBackgroundRect();
+
+        if (!rect) {
+            // Fallback: return original percentages
+            return {
+                left: x + '%',
+                top: y + '%',
+                width: width + '%',
+                height: height + '%',
+            };
+        }
+
+        const { renderedW, renderedH, offsetX, offsetY } = rect;
+
+        return {
+            left: (offsetX + (x / 100) * renderedW) + 'px',
+            top: (offsetY + (y / 100) * renderedH) + 'px',
+            width: ((width / 100) * renderedW) + 'px',
+            height: ((height / 100) * renderedH) + 'px',
+        };
+    },
+
+    /**
+     * Apply calculated position styles to an element.
+     */
+    applyPosition(element, posStyles) {
+        Object.keys(posStyles).forEach(prop => {
+            element.style[prop] = posStyles[prop];
+        });
+    },
+
+    /**
+     * Recalculate and reapply positions for all characters, items, and hotspots
+     * currently in the scene. Called on window resize.
+     */
+    recalculateAll() {
+        // Recalculate character positions
+        const characters = document.querySelectorAll('.character-sprite');
+        characters.forEach(charEl => {
+            const zoneName = charEl.dataset.zone;
+            if (zoneName) {
+                const pos = this.calculateCharacterPosition(zoneName);
+                // Preserve existing transforms for animations
+                const isVisible = charEl.classList.contains('visible');
+                const isSlideLeft = charEl.classList.contains('slide-in-left');
+                const isSlideRight = charEl.classList.contains('slide-in-right');
+
+                this.applyPosition(charEl, pos);
+
+                // Re-apply animation transforms if needed (CSS classes handle this,
+                // but we need to clear inline transform conflicts for non-centered zones)
+                if (pos.transform && zoneName !== 'center') {
+                    // Non-center zones don't need transform
+                } else if (zoneName === 'center' && isVisible) {
+                    charEl.style.transform = 'translateX(-50%)';
+                }
+            }
+        });
+
+        // Recalculate item positions
+        const items = document.querySelectorAll('.scene-item');
+        items.forEach(itemEl => {
+            const x = parseFloat(itemEl.dataset.origX);
+            const y = parseFloat(itemEl.dataset.origY);
+            const w = parseFloat(itemEl.dataset.origW);
+            const h = parseFloat(itemEl.dataset.origH);
+            if (!isNaN(x) && !isNaN(y)) {
+                const pos = this.calculateItemPosition(x, y, w, h);
+                this.applyPosition(itemEl, pos);
+            }
+        });
+
+        // Recalculate hotspot positions
+        const hotspots = document.querySelectorAll('.hotspot');
+        hotspots.forEach(hotspotEl => {
+            const x = parseFloat(hotspotEl.dataset.origX);
+            const y = parseFloat(hotspotEl.dataset.origY);
+            const w = parseFloat(hotspotEl.dataset.origW);
+            const h = parseFloat(hotspotEl.dataset.origH);
+            if (!isNaN(x) && !isNaN(y)) {
+                const pos = this.calculateItemPosition(x, y, w, h);
+                this.applyPosition(hotspotEl, pos);
+            }
+        });
+    },
+};
+
+
 // ===== SCENE RENDERING =====
 const sceneRenderer = {
     currentScene: null,
@@ -465,7 +702,9 @@ const sceneRenderer = {
     addCharacter(char, slideDelay = 100) {
         const charLayer = document.getElementById('character-layer');
         const img = document.createElement('img');
-        img.className = `character-sprite char-${char.position || 'center'}`;
+        const zoneName = char.position || 'center';
+        img.className = `character-sprite char-${zoneName}`;
+        img.dataset.zone = zoneName;
         img.id = char.id ? `char-${char.id}` : undefined;
 
         let spriteName = char.sprite;
@@ -477,6 +716,10 @@ const sceneRenderer = {
 
         img.src = `./assets/characters/${spriteName}`;
         img.alt = char.name;
+
+        // Apply calculated pixel position
+        const pos = positioningSystem.calculateCharacterPosition(zoneName);
+        positioningSystem.applyPosition(img, pos);
 
         img.onerror = () => {
             if (spriteName !== char.sprite) {
@@ -619,37 +862,43 @@ const sceneRenderer = {
     
     loadCharacters(characters) {
         const charLayer = document.getElementById('character-layer');
-        
+
         characters.forEach((char, index) => {
             const img = document.createElement('img');
-            img.className = `character-sprite char-${char.position || 'center'}`;
-            
+            const zoneName = char.position || 'center';
+            img.className = `character-sprite char-${zoneName}`;
+            img.dataset.zone = zoneName;
+
             let spriteName = char.sprite;
             if (char.position === 'left' && !spriteName.includes('-left') && !spriteName.includes('-right')) {
                 spriteName = spriteName.replace('.png', '-left.png');
             } else if (char.position === 'right' && !spriteName.includes('-left') && !spriteName.includes('-right')) {
                 spriteName = spriteName.replace('.png', '-right.png');
             }
-            
+
             img.src = `./assets/characters/${spriteName}`;
             img.alt = char.name;
             img.style.zIndex = index + 1;
-            
+
+            // Apply calculated pixel position
+            const pos = positioningSystem.calculateCharacterPosition(zoneName);
+            positioningSystem.applyPosition(img, pos);
+
             img.onerror = () => {
                 if (spriteName !== char.sprite) {
                     console.warn(`Directional sprite ${spriteName} not found, using ${char.sprite}`);
                     img.src = `./assets/characters/${char.sprite}`;
                 }
             };
-            
+
             if (char.position === 'left') {
                 img.classList.add('slide-in-left');
             } else if (char.position === 'right') {
                 img.classList.add('slide-in-right');
             }
-            
+
             charLayer.appendChild(img);
-            
+
             setTimeout(() => {
                 img.classList.add('visible');
             }, 100 + (index * 200));
@@ -668,10 +917,17 @@ const sceneRenderer = {
             const div = document.createElement('div');
             div.className = 'scene-item';
             div.id = `scene-item-${item.id}`;
-            div.style.left = item.x + '%';
-            div.style.top = item.y + '%';
-            div.style.width = item.width + '%';
-            div.style.height = item.height + '%';
+
+            // Store original percentage coords for resize recalculation
+            div.dataset.origX = item.x;
+            div.dataset.origY = item.y;
+            div.dataset.origW = item.width;
+            div.dataset.origH = item.height;
+
+            // Apply calculated pixel position
+            const pos = positioningSystem.calculateItemPosition(item.x, item.y, item.width, item.height);
+            positioningSystem.applyPosition(div, pos);
+
             div.title = item.label || '';
 
             const img = document.createElement('img');
@@ -703,10 +959,17 @@ const sceneRenderer = {
         hotspots.forEach(hotspot => {
             const div = document.createElement('div');
             div.className = 'hotspot';
-            div.style.left = hotspot.x + '%';
-            div.style.top = hotspot.y + '%';
-            div.style.width = hotspot.width + '%';
-            div.style.height = hotspot.height + '%';
+
+            // Store original percentage coords for resize recalculation
+            div.dataset.origX = hotspot.x;
+            div.dataset.origY = hotspot.y;
+            div.dataset.origW = hotspot.width;
+            div.dataset.origH = hotspot.height;
+
+            // Apply calculated pixel position
+            const pos = positioningSystem.calculateItemPosition(hotspot.x, hotspot.y, hotspot.width, hotspot.height);
+            positioningSystem.applyPosition(div, pos);
+
             div.title = hotspot.label || '';
 
             div.addEventListener('click', () => {
@@ -2034,20 +2297,36 @@ function setupUIHandlers() {
 // ===== INITIALIZATION =====
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🎮 Initializing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL...');
-    
+
     // Initialize audio
     audioManager.init();
-    
+
     // Setup UI handlers
     setupUIHandlers();
-    
+
     // Apply hotspot setting
     if (gameState.settings.showHotspots) {
         document.body.classList.add('show-hotspots');
     }
-    
+
+    // Responsive positioning: recalculate on resize with debounce
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            positioningSystem.recalculateAll();
+        }, 150);
+    });
+
+    // Also recalculate on orientation change (mobile)
+    window.addEventListener('orientationchange', () => {
+        setTimeout(() => {
+            positioningSystem.recalculateAll();
+        }, 300);
+    });
+
     // Load main menu
     sceneRenderer.loadScene('S0_MAIN_MENU');
-    
+
     console.log('✅ Game initialized successfully!');
 });
