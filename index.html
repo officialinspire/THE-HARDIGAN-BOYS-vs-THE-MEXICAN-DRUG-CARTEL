@@ -139,6 +139,31 @@
         
         <!-- Fade transition overlay -->
         <div id="fade-overlay"></div>
+
+        <!-- Dev Hub modal -->
+        <div id="devHubModal" class="hidden" aria-hidden="true">
+            <div id="devHubBackdrop" data-dev-close="true"></div>
+            <div id="devHubPanel" role="dialog" aria-modal="true" aria-labelledby="devHubTitle">
+                <h2 id="devHubTitle">Developer Mode</h2>
+                <label class="dev-tools-toggle" for="dev-tools-enabled-toggle">
+                    <input type="checkbox" id="dev-tools-enabled-toggle">
+                    Dev Tools Enabled
+                </label>
+                <div class="dev-hub-actions">
+                    <button type="button" class="dev-hub-btn" data-dev-action="hotspot-editor">Hotspot Editor</button>
+                    <button type="button" class="dev-hub-btn" data-dev-action="ui-layout-editor">UI Layout Editor</button>
+                    <button type="button" class="dev-hub-btn" data-dev-action="click-trace">Click Trace</button>
+                    <button type="button" class="dev-hub-btn" data-dev-action="validate">Validate</button>
+                    <button type="button" class="dev-hub-btn" data-dev-action="export">Export</button>
+                    <button type="button" class="dev-hub-btn" data-dev-action="clear-dev-storage">Clear Dev Storage</button>
+                </div>
+                <div id="devHubStatus" aria-live="polite"></div>
+                <div class="dev-hub-footer">
+                    <button type="button" id="btn-exit-dev-mode" class="dev-hub-btn">Exit Dev Mode</button>
+                    <button type="button" id="btn-close-dev-hub" class="dev-hub-btn">Close</button>
+                </div>
+            </div>
+        </div>
     </div>
     
     <!-- Audio elements -->

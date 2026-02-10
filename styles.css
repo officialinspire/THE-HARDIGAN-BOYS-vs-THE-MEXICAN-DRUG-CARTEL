@@ -1196,6 +1196,91 @@ body.show-hotspots .hotspot-debug-label {
     pointer-events: auto;
 }
 
+/* ===== DEV HUB MODAL ===== */
+#devHubModal {
+    position: fixed;
+    inset: 0;
+    z-index: 13000;
+}
+
+#devHubModal.hidden {
+    display: none !important;
+}
+
+#devHubBackdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.78);
+}
+
+#devHubPanel {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(640px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    background: rgba(18, 18, 22, 0.95);
+    border: 2px solid #ffd700;
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+}
+
+#devHubTitle {
+    color: #ffd700;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+}
+
+.dev-tools-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.dev-hub-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.dev-hub-btn {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #666;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.07);
+    color: #f0f0f0;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.dev-hub-btn:hover {
+    border-color: #ffd700;
+    color: #ffd700;
+}
+
+#devHubStatus {
+    font-size: 14px;
+    margin-bottom: 14px;
+    line-height: 1.5;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.dev-hub-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
 /* ===== TRANSITION INTERACTION BLOCKING ===== */
 #scene-container.scene-transitioning #character-layer,
 #scene-container.scene-transitioning #item-layer,
