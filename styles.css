@@ -1265,6 +1265,12 @@ body.show-hotspots .hotspot-debug-label {
     color: #ffd700;
 }
 
+.dev-hub-btn.active {
+    border-color: #ffd700;
+    background: rgba(255, 215, 0, 0.15);
+    color: #ffd700;
+}
+
 #devHubStatus {
     font-size: 14px;
     margin-bottom: 14px;
@@ -1274,11 +1280,65 @@ body.show-hotspots .hotspot-debug-label {
     padding: 10px;
 }
 
+.dev-trace-panel {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 14px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.dev-trace-panel.hidden {
+    display: none;
+}
+
+.dev-trace-panel h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    color: #ffd700;
+}
+
+#devTraceList {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+#devTraceList li {
+    margin-bottom: 4px;
+}
+
 .dev-hub-footer {
     display: flex;
     gap: 10px;
     justify-content: flex-end;
     flex-wrap: wrap;
+}
+
+#dev-hit-highlight {
+    position: absolute;
+    z-index: 12500;
+    border: 2px solid #00ffd0;
+    background: rgba(0, 255, 208, 0.2);
+    box-shadow: 0 0 8px rgba(0, 255, 208, 0.65);
+    pointer-events: none;
+    display: none;
+}
+
+#dev-hit-highlight::after {
+    content: attr(data-label);
+    position: absolute;
+    left: 0;
+    top: -24px;
+    background: rgba(0, 0, 0, 0.9);
+    border: 1px solid #00ffd0;
+    color: #d2fff5;
+    font-size: 11px;
+    white-space: nowrap;
+    border-radius: 4px;
+    padding: 2px 6px;
 }
 
 /* ===== TRANSITION INTERACTION BLOCKING ===== */
