@@ -5332,9 +5332,48 @@ function hideTransitionLoader() {
     loader.innerHTML = '';
 }
 
+// Viewport height fix for iOS/browser UI chrome changes
+function setAppHeight() {
+    const vh = window.innerHeight * 0.01;
+    const actualHeight = window.innerHeight;
+
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+    document.documentElement.style.setProperty('--app-height', `${actualHeight}px`);
+
+    const gameRoot = document.getElementById('game-root');
+    if (gameRoot) {
+        gameRoot.style.height = `${actualHeight}px`;
+    }
+}
+
+let appHeightResizeTimeout;
+let appHeightScrollTimeout;
+
+function setupViewportHeightHandlers() {
+    setAppHeight();
+
+    window.addEventListener('resize', () => {
+        clearTimeout(appHeightResizeTimeout);
+        appHeightResizeTimeout = setTimeout(setAppHeight, 100);
+    });
+
+    window.addEventListener('orientationchange', () => {
+        setTimeout(setAppHeight, 100);
+    });
+
+    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+        window.addEventListener('scroll', () => {
+            clearTimeout(appHeightScrollTimeout);
+            appHeightScrollTimeout = setTimeout(setAppHeight, 200);
+        }, { passive: true });
+    }
+}
+
 // ===== INITIALIZATION =====
 document.addEventListener('DOMContentLoaded', safeAsync(async () => {
     console.log('🎮 Initializing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL...');
+
+    setupViewportHeightHandlers();
 
     // Initialize audio
     audioManager.init();
@@ -5375,6 +5414,7 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
             try {
+                setAppHeight();
                 positioningSystem.recalculateAll();
                 Dev.tools.applyForCurrentScene();
                 sceneRenderer.repositionActiveDialogue();
@@ -5388,6 +5428,7 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
     window.addEventListener('orientationchange', () => {
         setTimeout(() => {
             try {
+                setAppHeight();
                 positioningSystem.recalculateAll();
                 Dev.tools.applyForCurrentScene();
                 sceneRenderer.repositionActiveDialogue();
