@@ -175,10 +175,8 @@ button:active,
 /* ===== GAME ROOT ===== */
 #game-root {
     width: 100%;
-    height: 100%;
     height: var(--app-height, 100vh);
-    min-height: 100vh;
-    min-height: -webkit-fill-available;
+    min-height: var(--app-height, 100vh);
     position: relative;
     display: flex;
     justify-content: center;
@@ -188,12 +186,11 @@ button:active,
 
 /* ===== SCENE CONTAINER ===== */
 #scene-container {
-    position: relative;
     width: 100%;
+    max-width: 1920px;
     height: 100%;
-    max-width: 100vw;
-    max-height: 100vh;
-    max-height: -webkit-fill-available;
+    max-height: var(--app-height, 100vh);
+    position: relative;
     overflow: hidden;
     background: #000;
     box-shadow: 0 0 50px rgba(0, 0, 0, 0.9);
