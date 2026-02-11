@@ -171,14 +171,161 @@ const errorLogger = {
 const Dev = {
     storageKeys: {
         enabled: 'DEV_MODE_ENABLED',
-        toolsEnabled: 'DEV_TOOLS_ENABLED'
+        toolsEnabled: 'DEV_TOOLS_ENABLED',
+        activeTool: 'DEV_ACTIVE_TOOL'
     },
     enabled: false,
     toolsEnabled: false,
+    activeTool: null,
+    trace: {
+        logs: [],
+        maxLogs: 10,
+        highlightEl: null,
+
+        isActive() {
+            return Dev.toolsEnabled && Dev.activeTool === 'trace';
+        },
+
+        ensureHighlightEl() {
+            if (this.highlightEl && this.highlightEl.isConnected) return this.highlightEl;
+            const container = document.getElementById('scene-container');
+            if (!container) return null;
+            const el = document.createElement('div');
+            el.id = 'dev-hit-highlight';
+            container.appendChild(el);
+            this.highlightEl = el;
+            return el;
+        },
+
+        hideHighlight() {
+            const el = this.ensureHighlightEl();
+            if (!el) return;
+            el.style.display = 'none';
+            el.dataset.label = '';
+        },
+
+        hitTest(x, y) {
+            const scene = sceneRenderer.currentScene;
+            const hotspots = scene?.hotspots || [];
+            for (let i = hotspots.length - 1; i >= 0; i -= 1) {
+                const hotspot = hotspots[i];
+                const isNative = hotspot.coordSystem === 'native';
+                const left = isNative ? hotspot.x : (hotspot.x / 100) * positioningSystem.REF_WIDTH;
+                const top = isNative ? hotspot.y : (hotspot.y / 100) * positioningSystem.REF_HEIGHT;
+                const width = isNative ? hotspot.width : (hotspot.width / 100) * positioningSystem.REF_WIDTH;
+                const height = isNative ? hotspot.height : (hotspot.height / 100) * positioningSystem.REF_HEIGHT;
+                const contains = x >= left && x <= left + width && y >= top && y <= top + height;
+                if (contains) {
+                    return {
+                        hotspot,
+                        rect: { left, top, width, height },
+                        orderIndex: i
+                    };
+                }
+            }
+            return null;
+        },
+
+        mapClientToScene(clientX, clientY) {
+            const container = document.getElementById('scene-container');
+            if (!container) return null;
+            const containerRect = container.getBoundingClientRect();
+            const rect = positioningSystem.getBackgroundRect();
+            const localX = clientX - containerRect.left;
+            const localY = clientY - containerRect.top;
+
+            if (rect) {
+                const x = (localX - rect.offsetX) / rect.scaleX;
+                const y = (localY - rect.offsetY) / rect.scaleY;
+                return {
+                    x: Number.isFinite(x) ? x : 0,
+                    y: Number.isFinite(y) ? y : 0,
+                    localX,
+                    localY
+                };
+            }
+
+            const width = containerRect.width || 1;
+            const height = containerRect.height || 1;
+            return {
+                x: (localX / width) * positioningSystem.REF_WIDTH,
+                y: (localY / height) * positioningSystem.REF_HEIGHT,
+                localX,
+                localY
+            };
+        },
+
+        formatTarget(target) {
+            if (!target) return 'unknown';
+            const tag = target.tagName ? target.tagName.toLowerCase() : 'node';
+            const id = target.id ? `#${target.id}` : '';
+            const className = target.classList && target.classList.length ? `.${Array.from(target.classList).slice(0, 2).join('.')}` : '';
+            return `${tag}${id}${className}`;
+        },
+
+        recordClick(event) {
+            if (!this.isActive()) return;
+            const coords = this.mapClientToScene(event.clientX, event.clientY);
+            if (!coords) return;
+            const hit = this.hitTest(coords.x, coords.y);
+            const entry = {
+                sceneId: gameState.currentSceneId,
+                x: Math.round(coords.x),
+                y: Math.round(coords.y),
+                hitId: hit?.hotspot?.id || null,
+                hitType: hit ? 'hotspot' : 'none',
+                target: this.formatTarget(event.target),
+                time: new Date().toISOString()
+            };
+            this.logs.unshift(entry);
+            this.logs = this.logs.slice(0, this.maxLogs);
+            this.renderLogs();
+        },
+
+        renderLogs() {
+            const list = document.getElementById('devTraceList');
+            if (!list) return;
+            list.innerHTML = '';
+            this.logs.forEach(log => {
+                const li = document.createElement('li');
+                const shortTime = log.time.split('T')[1]?.replace('Z', '')?.split('.')[0] || log.time;
+                li.textContent = `[${shortTime}] ${log.sceneId} @ (${log.x}, ${log.y}) hit=${log.hitId || 'null'} type=${log.hitType} target=${log.target}`;
+                list.appendChild(li);
+            });
+            if (!this.logs.length) {
+                const li = document.createElement('li');
+                li.textContent = 'No click events yet.';
+                list.appendChild(li);
+            }
+        },
+
+        updatePointer(clientX, clientY) {
+            if (!this.isActive()) {
+                this.hideHighlight();
+                return;
+            }
+            const coords = this.mapClientToScene(clientX, clientY);
+            if (!coords) return;
+            const hit = this.hitTest(coords.x, coords.y);
+            const el = this.ensureHighlightEl();
+            if (!el || !hit) {
+                this.hideHighlight();
+                return;
+            }
+            const pos = positioningSystem.calculateHotspotPosition(hit.rect.left, hit.rect.top, hit.rect.width, hit.rect.height);
+            el.style.left = pos.left;
+            el.style.top = pos.top;
+            el.style.width = pos.width;
+            el.style.height = pos.height;
+            el.style.display = 'block';
+            el.dataset.label = `${hit.hotspot.id || 'unknown'} → ${hit.hotspot.target || hit.hotspot.label || 'no-target'}`;
+        }
+    },
 
     init() {
         this.enabled = localStorage.getItem(this.storageKeys.enabled) === 'true';
         this.toolsEnabled = localStorage.getItem(this.storageKeys.toolsEnabled) === 'true';
+        this.activeTool = localStorage.getItem(this.storageKeys.activeTool) || null;
 
         const modal = document.getElementById('devHubModal');
         const toggle = document.getElementById('dev-tools-enabled-toggle');
@@ -208,16 +355,30 @@ const Dev = {
             SFXGenerator.playButtonClick();
             this.setEnabled(false);
             this.setToolsEnabled(false);
+            this.setActiveTool(null);
             this.closeHub();
         });
 
         modal.querySelectorAll('[data-dev-action]').forEach(button => {
-            button.addEventListener('click', () => {
+            button.addEventListener('click', (event) => {
                 SFXGenerator.playButtonClick();
+                if (event.currentTarget.dataset.devAction === 'click-trace') {
+                    this.setActiveTool('trace');
+                }
                 this.updateStatus();
             });
         });
 
+        document.addEventListener('keydown', (event) => {
+            const isTyping = event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable);
+            if (isTyping) return;
+            if (event.key.toLowerCase() === 't') {
+                this.setActiveTool('trace');
+                this.updateStatus();
+            }
+        });
+
+        this.trace.renderLogs();
         this.updateStatus();
     },
 
@@ -250,14 +411,44 @@ const Dev = {
         if (toggle) {
             toggle.checked = this.toolsEnabled;
         }
+        if (!this.toolsEnabled) {
+            this.trace.hideHighlight();
+        }
+        this.updateStatus();
+    },
+
+    setActiveTool(tool) {
+        this.activeTool = tool || null;
+        if (this.activeTool) {
+            localStorage.setItem(this.storageKeys.activeTool, this.activeTool);
+        } else {
+            localStorage.removeItem(this.storageKeys.activeTool);
+        }
+        if (!this.trace.isActive()) {
+            this.trace.hideHighlight();
+        }
         this.updateStatus();
     },
 
     updateStatus() {
         const status = document.getElementById('devHubStatus');
+        const tracePanel = document.getElementById('devTracePanel');
         if (!status) return;
         const sceneLabel = gameState.currentSceneId === 'S0_MAIN_MENU' ? 'menu' : (gameState.currentSceneId || 'menu');
-        status.innerHTML = `currentSceneId: <strong>${sceneLabel}</strong><br>devEnabled: <strong>${this.enabled}</strong><br>toolsEnabled: <strong>${this.toolsEnabled}</strong>`;
+        status.innerHTML = `currentSceneId: <strong>${sceneLabel}</strong><br>devEnabled: <strong>${this.enabled}</strong><br>toolsEnabled: <strong>${this.toolsEnabled}</strong><br>activeTool: <strong>${this.activeTool || 'none'}</strong>`;
+
+        document.querySelectorAll('[data-dev-action]').forEach(button => {
+            const isTraceButton = button.dataset.devAction === 'click-trace';
+            button.classList.toggle('active', isTraceButton && this.activeTool === 'trace');
+        });
+
+        if (tracePanel) {
+            const showTracePanel = this.toolsEnabled && this.activeTool === 'trace';
+            tracePanel.classList.toggle('hidden', !showTracePanel);
+            if (showTracePanel) {
+                this.trace.renderLogs();
+            }
+        }
     }
 };
 
@@ -1654,6 +1845,8 @@ const sceneRenderer = {
             div.appendChild(debugLabel);
 
             div.addEventListener('click', (e) => {
+                Dev.trace.recordClick(e);
+
                 // Debug: log click position in native image coordinates
                 if (gameState.settings.showHotspots) {
                     const rect = positioningSystem.getBackgroundRect();
@@ -3272,8 +3465,13 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
 
     await assetLoader.preloadAssets();
 
-    // Debug: log click position in native image coordinates when debug mode is on
-    document.getElementById('scene-container').addEventListener('click', (e) => {
+    const sceneContainer = document.getElementById('scene-container');
+    sceneContainer.addEventListener('click', (e) => {
+        if (!e.target.closest('.hotspot')) {
+            Dev.trace.recordClick(e);
+        }
+
+        // Legacy debug logging for hotspot calibration
         if (!gameState.settings.showHotspots) return;
         const rect = positioningSystem.getBackgroundRect();
         if (!rect) return;
@@ -3285,6 +3483,20 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
         const pctX = ((clickX - rect.offsetX) / rect.renderedW * 100).toFixed(1);
         const pctY = ((clickY - rect.offsetY) / rect.renderedH * 100).toFixed(1);
         console.log(`[Debug] Click → native: (${imgX}, ${imgY}) | percent: (${pctX}%, ${pctY}%) | screen: (${Math.round(clickX)}, ${Math.round(clickY)})`);
+    });
+
+    sceneContainer.addEventListener('mousemove', (e) => {
+        Dev.trace.updatePointer(e.clientX, e.clientY);
+    });
+
+    sceneContainer.addEventListener('touchmove', (e) => {
+        const touch = e.touches && e.touches[0];
+        if (!touch) return;
+        Dev.trace.updatePointer(touch.clientX, touch.clientY);
+    }, { passive: true });
+
+    sceneContainer.addEventListener('mouseleave', () => {
+        Dev.trace.hideHighlight();
     });
 
     // Responsive positioning: recalculate on resize with debounce
