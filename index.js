@@ -2812,6 +2812,93 @@ const sceneRenderer = {
     onTransitionComplete: null,
     validZones: new Set(['left', 'left-2', 'center', 'right-2', 'right']),
 
+    getZoneSide(zoneName = '') {
+        if (String(zoneName).startsWith('left')) return 'left';
+        if (String(zoneName).startsWith('right')) return 'right';
+        return null;
+    },
+
+    buildSpriteCandidates(spriteName, zoneName) {
+        if (!spriteName) return [];
+
+        const candidates = [];
+        const seen = new Set();
+        const add = (value) => {
+            if (!value || seen.has(value)) return;
+            seen.add(value);
+            candidates.push(value);
+        };
+
+        const side = this.getZoneSide(zoneName);
+        const sideSuffix = side ? `-${side}` : '';
+        const sideUnderscore = side ? `_${side}` : '';
+        const hasDirectionalSuffix = /(?:-|_)(left|right)\.png$/i.test(spriteName);
+        const baseName = spriteName.replace(/(?:-|_)(left|right)\.png$/i, '.png');
+
+        add(spriteName);
+
+        if (spriteName.endsWith('.png')) {
+            add(`${spriteName}.png`);
+        }
+
+        if (side && !hasDirectionalSuffix) {
+            add(baseName.replace(/\.png$/i, `${sideSuffix}.png`));
+            add(baseName.replace(/\.png$/i, `${sideUnderscore}.png`));
+        }
+
+        if (hasDirectionalSuffix) {
+            add(spriteName.replace(/-left\.png$/i, '_left.png'));
+            add(spriteName.replace(/-right\.png$/i, '_right.png'));
+            add(spriteName.replace(/_left\.png$/i, '-left.png'));
+            add(spriteName.replace(/_right\.png$/i, '-right.png'));
+        }
+
+        add(baseName);
+
+        if (side) {
+            // Last resort: use opposite-side art if that's all we have.
+            const opposite = side === 'left' ? 'right' : 'left';
+            add(baseName.replace(/\.png$/i, `-${opposite}.png`));
+            add(baseName.replace(/\.png$/i, `_${opposite}.png`));
+        }
+
+        return candidates;
+    },
+
+    attachSpriteFallback(img, spriteCandidates) {
+        if (!img || !Array.isArray(spriteCandidates) || spriteCandidates.length === 0) return;
+
+        let candidateIndex = 0;
+
+        const applyCandidate = () => {
+            if (candidateIndex >= spriteCandidates.length) return;
+            const spriteName = spriteCandidates[candidateIndex];
+            const spriteSrc = `./assets/characters/${spriteName}`;
+            img.dataset.spriteCandidate = spriteName;
+            img.src = spriteSrc;
+            spriteTransparencyProcessor.makeWhitePixelsTransparent(img);
+        };
+
+        img.onerror = () => {
+            candidateIndex += 1;
+            if (candidateIndex < spriteCandidates.length) {
+                const failedSprite = img.dataset.spriteCandidate;
+                const nextSprite = spriteCandidates[candidateIndex];
+                console.warn(`Character sprite ${failedSprite} missing, retrying with ${nextSprite}`);
+                applyCandidate();
+                return;
+            }
+
+            const failedSprite = img.dataset.spriteCandidate || spriteCandidates[spriteCandidates.length - 1];
+            const failedSrc = `./assets/characters/${failedSprite}`;
+            errorLogger.log('character-sprite-fallback', new Error(`Missing asset: ${failedSrc}`), { spriteCandidates });
+            img.alt = `Missing asset: ${failedSprite}`;
+            img.src = getMissingAssetPlaceholder(failedSrc, img.width || 240, img.height || 320);
+        };
+
+        applyCandidate();
+    },
+
     normalizeZoneName(zoneName) {
         return this.validZones.has(zoneName) ? zoneName : 'center';
     },
@@ -2851,33 +2938,17 @@ const sceneRenderer = {
         img.dataset.characterName = (char.name || '').toUpperCase();
         img.id = char.id ? `char-${char.id}` : undefined;
 
-        let spriteName = char.sprite;
-        if (char.position === 'left' && !spriteName.includes('-left') && !spriteName.includes('-right')) {
-            spriteName = spriteName.replace('.png', '-left.png');
-        } else if (char.position === 'right' && !spriteName.includes('-left') && !spriteName.includes('-right')) {
-            spriteName = spriteName.replace('.png', '-right.png');
-        }
-
-        const spriteSrc = `./assets/characters/${spriteName}`;
-        img.src = spriteSrc;
+        const spriteCandidates = this.buildSpriteCandidates(char.sprite, zoneName);
         img.alt = char.name;
-        assetLoader.registerImageFallback(img, spriteSrc);
-        spriteTransparencyProcessor.makeWhitePixelsTransparent(img);
+        this.attachSpriteFallback(img, spriteCandidates);
 
         // Apply calculated pixel position
         const pos = positioningSystem.calculateCharacterPosition(zoneName);
         positioningSystem.applyPosition(img, pos);
 
-        img.onerror = () => {
-            if (spriteName !== char.sprite) {
-                console.warn(`Directional sprite ${spriteName} not found, using ${char.sprite}`);
-                img.src = `./assets/characters/${char.sprite}`;
-            }
-        };
-
-        if (char.position === 'left') {
+        if (this.getZoneSide(zoneName) === 'left') {
             img.classList.add('slide-in-left');
-        } else if (char.position === 'right') {
+        } else if (this.getZoneSide(zoneName) === 'right') {
             img.classList.add('slide-in-right');
         }
 
@@ -3118,34 +3189,18 @@ const sceneRenderer = {
             img.dataset.characterId = char.id || '';
             img.dataset.characterName = (char.name || '').toUpperCase();
 
-            let spriteName = char.sprite;
-            if (char.position === 'left' && !spriteName.includes('-left') && !spriteName.includes('-right')) {
-                spriteName = spriteName.replace('.png', '-left.png');
-            } else if (char.position === 'right' && !spriteName.includes('-left') && !spriteName.includes('-right')) {
-                spriteName = spriteName.replace('.png', '-right.png');
-            }
-
-            const spriteSrc = `./assets/characters/${spriteName}`;
-            img.src = spriteSrc;
+            const spriteCandidates = this.buildSpriteCandidates(char.sprite, zoneName);
             img.alt = char.name;
-            assetLoader.registerImageFallback(img, spriteSrc);
-            spriteTransparencyProcessor.makeWhitePixelsTransparent(img);
+            this.attachSpriteFallback(img, spriteCandidates);
             img.style.zIndex = index + 1;
 
             // Apply calculated pixel position
             const pos = positioningSystem.calculateCharacterPosition(zoneName);
             positioningSystem.applyPosition(img, pos);
 
-            img.onerror = () => {
-                if (spriteName !== char.sprite) {
-                    console.warn(`Directional sprite ${spriteName} not found, using ${char.sprite}`);
-                    img.src = `./assets/characters/${char.sprite}`;
-                }
-            };
-
-            if (char.position === 'left') {
+            if (this.getZoneSide(zoneName) === 'left') {
                 img.classList.add('slide-in-left');
-            } else if (char.position === 'right') {
+            } else if (this.getZoneSide(zoneName) === 'right') {
                 img.classList.add('slide-in-right');
             }
 
