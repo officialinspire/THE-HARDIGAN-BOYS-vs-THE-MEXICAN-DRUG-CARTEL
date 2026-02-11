@@ -1250,6 +1250,72 @@ const Dev = {
             this.moveRaf = null;
         },
 
+        exportPatchJSON() {
+            const layouts = this.loadLayouts();
+            const sceneId = gameState.currentSceneId || 'global';
+            const payload = {
+                sceneId,
+                generatedAt: new Date().toISOString(),
+                layouts
+            };
+            const json = JSON.stringify(payload, null, 2);
+            navigator.clipboard.writeText(json).then(() => {
+                const status = document.getElementById('devHubStatus');
+                if (status) status.textContent = `Layout JSON copied to clipboard (${json.length} chars)`;
+            }).catch(() => {
+                console.log('Layout export:\n' + json);
+                const status = document.getElementById('devHubStatus');
+                if (status) status.textContent = 'Layout JSON logged to console (clipboard failed)';
+            });
+            return json;
+        },
+
+        generateFixReport() {
+            const layouts = this.loadLayouts();
+            const container = document.getElementById('scene-container');
+            const containerRect = container ? container.getBoundingClientRect() : { width: 1920, height: 1080 };
+            const lines = [
+                '=== Dialogue Layout Fix Report ===',
+                `sceneId: ${gameState.currentSceneId || 'global'}`,
+                `generatedAt: ${new Date().toISOString()}`,
+                `viewport: ${Math.round(containerRect.width)}x${Math.round(containerRect.height)}`,
+                ''
+            ];
+
+            ['desktop', 'mobile'].forEach(bp => {
+                const bpLayouts = layouts[bp] || {};
+                const keys = Object.keys(bpLayouts);
+                lines.push(`[${bp}] ${keys.length} panel(s) with overrides:`);
+                keys.forEach(key => {
+                    const l = bpLayouts[key];
+                    const outOfBounds = (l.left < 0 || l.top < 0 ||
+                        (l.left + (l.width || 0)) > containerRect.width ||
+                        (l.top + (l.height || 0)) > containerRect.height);
+                    lines.push(`  ${key}: left=${Math.round(l.left)} top=${Math.round(l.top)}` +
+                        (l.width ? ` w=${Math.round(l.width)}` : '') +
+                        (l.height ? ` h=${Math.round(l.height)}` : '') +
+                        (outOfBounds ? ' ⚠️ OUT OF BOUNDS' : ' ✓'));
+                });
+                if (!keys.length) lines.push('  (no overrides)');
+                lines.push('');
+            });
+
+            lines.push('Actionable CSS to hardcode these positions:');
+            ['desktop', 'mobile'].forEach(bp => {
+                const bpLayouts = layouts[bp] || {};
+                Object.entries(bpLayouts).forEach(([key, l]) => {
+                    const selector = this.panelConfigs.find(c => c.key === key)?.selector || `[data-layout-panel="${key}"]`;
+                    const mediaWrap = bp === 'mobile' ? '@media (max-width: 768px) ' : '';
+                    lines.push(`${mediaWrap}${selector} { left: ${Math.round(l.left)}px; top: ${Math.round(l.top)}px;` +
+                        (l.width ? ` width: ${Math.round(l.width)}px;` : '') +
+                        (l.height ? ` height: ${Math.round(l.height)}px;` : '') +
+                        ' }');
+                });
+            });
+
+            return lines.join('\n');
+        },
+
         clampSize(panel, width, height, baseLeft = null, baseTop = null) {
             const container = document.getElementById('scene-container');
             if (!container || !panel) return { width, height };
@@ -1328,6 +1394,12 @@ const Dev = {
                     const moveX = next.left - baseLeft;
                     const moveY = next.top - baseTop;
                     panel.style.transform = `translate3d(${Math.round(moveX)}px, ${Math.round(moveY)}px, 0px)`;
+                    const status = document.getElementById('devHubStatus');
+                    if (status && this.dragging) {
+                        const r = this.dragging.panel.getBoundingClientRect();
+                        const c = document.getElementById('scene-container').getBoundingClientRect();
+                        status.textContent = `${this.dragging.panelKey}: x=${Math.round(r.left - c.left)} y=${Math.round(r.top - c.top)} w=${Math.round(r.width)} h=${Math.round(r.height)}`;
+                    }
                     return;
                 }
 
@@ -1340,6 +1412,12 @@ const Dev = {
                 this.dragging.previewHeight = clamped.height;
                 panel.style.width = `${Math.round(clamped.width)}px`;
                 panel.style.height = `${Math.round(clamped.height)}px`;
+                const status = document.getElementById('devHubStatus');
+                if (status && this.dragging) {
+                    const r = this.dragging.panel.getBoundingClientRect();
+                    const c = document.getElementById('scene-container').getBoundingClientRect();
+                    status.textContent = `${this.dragging.panelKey}: x=${Math.round(r.left - c.left)} y=${Math.round(r.top - c.top)} w=${Math.round(r.width)} h=${Math.round(r.height)}`;
+                }
             });
             event.preventDefault();
         },
@@ -1418,30 +1496,6 @@ const Dev = {
             });
         },
 
-        async exportJSON() {
-            const text = JSON.stringify(this.loadLayouts(), null, 2);
-            let copied = false;
-            try {
-                if (navigator.clipboard?.writeText) {
-                    await navigator.clipboard.writeText(text);
-                    copied = true;
-                }
-            } catch (error) {
-                errorLogger.log('dev-layout-copy', error);
-            }
-            if (!copied) {
-                const blob = new Blob([text], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `ui-layouts-${Date.now()}.json`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                URL.revokeObjectURL(url);
-            }
-        },
-
         ensurePanel() {
             const hubPanel = document.getElementById('devHubPanel');
             if (!hubPanel || document.getElementById('devLayoutPanel')) return;
@@ -1452,6 +1506,7 @@ const Dev = {
                 <h3>UI Layout Editor</h3>
                 <div class="dev-hotspot-actions">
                     <button type="button" id="dev-export-layout" class="dev-hub-btn">Export Layout JSON</button>
+                    <button type="button" id="dev-layout-report" class="dev-hub-btn">Layout Fix Report</button>
                     <button type="button" id="dev-reset-layout" class="dev-hub-btn">Reset Layout</button>
                     <button type="button" id="dev-snap-safe-margins" class="dev-hub-btn">Snap To Safe Margins</button>
                     <button type="button" id="dev-reset-current-panel" class="dev-hub-btn">Reset Current Panel</button>
@@ -1460,7 +1515,13 @@ const Dev = {
             `;
             const footer = hubPanel.querySelector('.dev-hub-footer');
             hubPanel.insertBefore(panel, footer);
-            panel.querySelector('#dev-export-layout').addEventListener('click', () => this.exportJSON());
+            document.getElementById('dev-export-layout')?.addEventListener('click', () => Dev.layout.exportPatchJSON());
+            document.getElementById('dev-layout-report')?.addEventListener('click', () => {
+                const report = Dev.layout.generateFixReport();
+                const output = document.getElementById('dev-validation-output');
+                if (output) output.textContent = report;
+                navigator.clipboard.writeText(report).catch(() => {});
+            });
             panel.querySelector('#dev-reset-layout').addEventListener('click', () => this.resetLayouts());
             panel.querySelector('#dev-snap-safe-margins').addEventListener('click', () => this.snapPanelsToSafeMargins());
             panel.querySelector('#dev-reset-current-panel').addEventListener('click', () => this.resetCurrentPanel());
