@@ -3228,6 +3228,9 @@ const sceneRenderer = {
             return;
         }
 
+        // Show loading indicator for transition lifecycle
+        showTransitionLoader();
+
         try {
             // Set transitioning state
             this.isTransitioning = true;
@@ -3324,7 +3327,12 @@ const sceneRenderer = {
         } catch (error) {
             errorLogger.log('scene-transition', error, { sceneId });
             document.getElementById('dialogue-box').classList.add('hidden');
+            throw error;
         } finally {
+            // Keep visual continuity as the last scene elements settle.
+            await new Promise(resolve => setTimeout(resolve, 100));
+            hideTransitionLoader();
+
             // Clear transitioning state
             this.isTransitioning = false;
             gameState.sceneTransitioning = false;
@@ -5302,6 +5310,26 @@ function setupUIHandlers() {
             document.body.classList.remove('show-hotspots');
         }
     });
+}
+
+function showTransitionLoader() {
+    const loader = document.getElementById('fade-overlay');
+    if (!loader) return;
+
+    loader.classList.add('loading');
+    loader.style.opacity = '0.85';
+    loader.style.pointerEvents = 'all';
+    loader.innerHTML = '<div class="loading-spinner"></div>';
+}
+
+function hideTransitionLoader() {
+    const loader = document.getElementById('fade-overlay');
+    if (!loader) return;
+
+    loader.classList.remove('loading');
+    loader.style.opacity = '0';
+    loader.style.pointerEvents = 'none';
+    loader.innerHTML = '';
 }
 
 // ===== INITIALIZATION =====
