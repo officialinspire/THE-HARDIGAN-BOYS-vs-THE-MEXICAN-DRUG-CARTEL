@@ -4039,7 +4039,7 @@ const SCENES = {
                 id: 'window',
                 label: 'Window',
                 coordSystem: 'native',
-                x: 858, y: 89, width: 1008, height: 559,
+                x: 858, y: 89, width: 1008, height: 380,
                 onClick() {
                     if (!gameState.objectsClicked.has('window')) {
                         gameState.objectsClicked.add('window');
@@ -4089,7 +4089,7 @@ const SCENES = {
                 id: 'notebook',
                 label: "Hank's Conspiracy Notebook",
                 coordSystem: 'native',
-                x: 1172, y: 1199, width: 119, height: 76,
+                x: 1172, y: 1050, width: 119, height: 76,
                 onClick() {
                     if (!inventory.has('conspiracy_notebook')) {
                         gameState.objectsClicked.add('notebook');
