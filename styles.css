@@ -413,6 +413,14 @@ body.show-hotspots .hotspot-debug-label {
     z-index: 1;
 }
 
+body.main-menu #hud::before,
+body.main-menu #hud-buttons,
+body.main-menu #scene-title {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
 /* HUD Buttons - TOP RIGHT within container */
 #hud-buttons {
     top: max(22px, calc(env(safe-area-inset-top) + 12px));
@@ -471,13 +479,25 @@ body.show-hotspots .hotspot-debug-label {
 #dialogue-box {
     position: absolute;
     width: min(59.5%, 680px);
-    transition: opacity 0.3s ease;
+    transition: opacity 0.24s ease, transform 0.24s ease;
     pointer-events: auto;
     z-index: 5;
     /* Default center position (narration/choices) */
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+}
+
+#dialogue-box.dialogue-enter {
+    animation: dialogueFadeInPop 0.25s cubic-bezier(0.2, 0.9, 0.24, 1) both;
+}
+
+#dialogue-box.dialogue-enter #dialogue-container {
+    animation: dialogueContainerPop 0.25s cubic-bezier(0.2, 0.9, 0.24, 1) both;
+}
+
+#dialogue-box.dialogue-exit {
+    animation: dialogueFadeOutWhoosh 0.22s ease-in both;
 }
 
 /* Position variant: left-aligned near left character */
@@ -550,6 +570,40 @@ body.show-hotspots .hotspot-debug-label {
     to {
         opacity: 1;
         transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+@keyframes dialogueFadeInPop {
+    0% {
+        opacity: 0;
+        filter: blur(2px);
+    }
+    100% {
+        opacity: 1;
+        filter: blur(0);
+    }
+}
+
+@keyframes dialogueContainerPop {
+    0% {
+        transform: scale(0.93);
+    }
+    70% {
+        transform: scale(1.02);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes dialogueFadeOutWhoosh {
+    0% {
+        opacity: 1;
+        filter: blur(0);
+    }
+    100% {
+        opacity: 0;
+        filter: blur(4px);
     }
 }
 
