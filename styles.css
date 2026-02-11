@@ -1440,6 +1440,7 @@ body.show-hotspots .hotspot-debug-label {
 
 .dev-layout-target.dev-layout-dragging {
     opacity: 0.88;
+    will-change: transform;
 }
 
 .dev-layout-handle {
