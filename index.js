@@ -172,7 +172,8 @@ const Dev = {
     storageKeys: {
         enabled: 'DEV_MODE_ENABLED',
         toolsEnabled: 'DEV_TOOLS_ENABLED',
-        activeTool: 'DEV_ACTIVE_TOOL'
+        activeTool: 'DEV_ACTIVE_TOOL',
+        patches: 'DEV_PATCHES'
     },
     enabled: false,
     toolsEnabled: false,
@@ -206,7 +207,7 @@ const Dev = {
 
         hitTest(x, y) {
             const scene = sceneRenderer.currentScene;
-            const hotspots = scene?.hotspots || [];
+            const hotspots = sceneRenderer.currentHotspots || scene?.hotspots || [];
             for (let i = hotspots.length - 1; i >= 0; i -= 1) {
                 const hotspot = hotspots[i];
                 const isNative = hotspot.coordSystem === 'native';
@@ -322,6 +323,421 @@ const Dev = {
         }
     },
 
+    hotspots: {
+        selectedId: null,
+        snapEnabled: true,
+        snapSize: 8,
+        overlayEl: null,
+        panelEl: null,
+        validationWarnings: [],
+        interaction: null,
+
+        isActive() {
+            return Dev.toolsEnabled && Dev.activeTool === 'hotspots';
+        },
+
+        loadAllPatches() {
+            try {
+                const raw = localStorage.getItem(Dev.storageKeys.patches);
+                return raw ? JSON.parse(raw) : {};
+            } catch (error) {
+                errorLogger.log('dev-hotspot-load-patches', error);
+                return {};
+            }
+        },
+
+        saveAllPatches(patches) {
+            localStorage.setItem(Dev.storageKeys.patches, JSON.stringify(patches));
+        },
+
+        getScenePatch(sceneId) {
+            const patches = this.loadAllPatches();
+            return patches[sceneId] || { ops: [] };
+        },
+
+        setScenePatch(sceneId, patch) {
+            const patches = this.loadAllPatches();
+            patches[sceneId] = { ops: Array.isArray(patch.ops) ? patch.ops : [] };
+            this.saveAllPatches(patches);
+        },
+
+        getRuntimeHotspots(sceneId, baseHotspots = []) {
+            const patch = this.getScenePatch(sceneId);
+            return this.applyOps(baseHotspots, patch.ops || []);
+        },
+
+        applyOps(baseHotspots = [], ops = []) {
+            const byId = new Map((baseHotspots || []).map(h => [h.id, { ...h }]));
+
+            (ops || []).forEach(op => {
+                if (!op || !op.op) return;
+                if (op.op === 'delete' && op.id) {
+                    byId.delete(op.id);
+                }
+                if (op.op === 'upsert' && op.hotspot?.id) {
+                    const incoming = op.hotspot;
+                    const prev = byId.get(incoming.id) || { id: incoming.id, coordSystem: 'native' };
+                    byId.set(incoming.id, {
+                        ...prev,
+                        id: incoming.id,
+                        x: Number.isFinite(incoming.x) ? incoming.x : prev.x,
+                        y: Number.isFinite(incoming.y) ? incoming.y : prev.y,
+                        width: Number.isFinite(incoming.w) ? incoming.w : prev.width,
+                        height: Number.isFinite(incoming.h) ? incoming.h : prev.height,
+                        type: incoming.type ?? prev.type,
+                        target: incoming.target ?? prev.target,
+                        z: Number.isFinite(incoming.z) ? incoming.z : prev.z,
+                        coordSystem: 'native'
+                    });
+                }
+            });
+
+            return Array.from(byId.values()).sort((a, b) => (a.z || 0) - (b.z || 0));
+        },
+
+        upsertHotspot(sceneId, hotspotData) {
+            if (!sceneId || !hotspotData?.id) return;
+            const patch = this.getScenePatch(sceneId);
+            const ops = (patch.ops || []).filter(op => !(op.op === 'upsert' && op.hotspot?.id === hotspotData.id) && !(op.op === 'delete' && op.id === hotspotData.id));
+            ops.push({ op: 'upsert', hotspot: hotspotData });
+            this.setScenePatch(sceneId, { ops });
+        },
+
+        deleteHotspot(sceneId, id) {
+            if (!sceneId || !id) return;
+            const patch = this.getScenePatch(sceneId);
+            const ops = (patch.ops || []).filter(op => !(op.op === 'upsert' && op.hotspot?.id === id) && !(op.op === 'delete' && op.id === id));
+            ops.push({ op: 'delete', id });
+            this.setScenePatch(sceneId, { ops });
+        },
+
+        ensureOverlayEl() {
+            if (this.overlayEl && this.overlayEl.isConnected) return this.overlayEl;
+            const container = document.getElementById('scene-container');
+            if (!container) return null;
+            const el = document.createElement('div');
+            el.id = 'dev-hotspot-editor-layer';
+            container.appendChild(el);
+            this.overlayEl = el;
+            this.bindOverlayEvents();
+            return el;
+        },
+
+        ensurePanel() {
+            if (this.panelEl && this.panelEl.isConnected) return this.panelEl;
+            const hubPanel = document.getElementById('devHubPanel');
+            if (!hubPanel) return null;
+            const panel = document.createElement('div');
+            panel.id = 'devHotspotPanel';
+            panel.className = 'dev-trace-panel hidden';
+            panel.innerHTML = `
+                <h3>Hotspot Editor</h3>
+                <div class="dev-hotspot-actions">
+                    <button type="button" id="dev-export-patch" class="dev-hub-btn">Export Patch JSON</button>
+                    <button type="button" id="dev-export-report" class="dev-hub-btn">Export Fix Report</button>
+                </div>
+                <div id="devHotspotMeta"></div>
+                <ul id="devHotspotWarnings"></ul>
+            `;
+            const footer = hubPanel.querySelector('.dev-hub-footer');
+            hubPanel.insertBefore(panel, footer);
+            this.panelEl = panel;
+            panel.querySelector('#dev-export-patch').addEventListener('click', () => this.exportPatchJSON());
+            panel.querySelector('#dev-export-report').addEventListener('click', () => this.exportFixReport());
+            return panel;
+        },
+
+        mapClientToScene(clientX, clientY) {
+            return Dev.trace.mapClientToScene(clientX, clientY);
+        },
+
+        snap(value) {
+            if (!this.snapEnabled) return value;
+            return Math.round(value / this.snapSize) * this.snapSize;
+        },
+
+        clampRect(rect) {
+            const x1 = Math.max(0, Math.min(positioningSystem.REF_WIDTH, rect.x));
+            const y1 = Math.max(0, Math.min(positioningSystem.REF_HEIGHT, rect.y));
+            const x2 = Math.max(0, Math.min(positioningSystem.REF_WIDTH, rect.x + rect.w));
+            const y2 = Math.max(0, Math.min(positioningSystem.REF_HEIGHT, rect.y + rect.h));
+            return {
+                x: Math.round(Math.min(x1, x2)),
+                y: Math.round(Math.min(y1, y2)),
+                w: Math.round(Math.abs(x2 - x1)),
+                h: Math.round(Math.abs(y2 - y1))
+            };
+        },
+
+        toPatchShape(hotspot) {
+            return {
+                id: hotspot.id,
+                x: Math.round(hotspot.x || 0),
+                y: Math.round(hotspot.y || 0),
+                w: Math.round(hotspot.width || 0),
+                h: Math.round(hotspot.height || 0),
+                type: hotspot.type || 'scene',
+                target: hotspot.target || '',
+                z: Number.isFinite(hotspot.z) ? hotspot.z : 0
+            };
+        },
+
+        getCurrentHotspots() {
+            return sceneRenderer.currentHotspots || [];
+        },
+
+        getById(id) {
+            return this.getCurrentHotspots().find(h => h.id === id);
+        },
+
+        bindOverlayEvents() {
+            const overlay = this.ensureOverlayEl();
+            if (!overlay || overlay.dataset.bound === 'true') return;
+            overlay.dataset.bound = 'true';
+
+            overlay.addEventListener('pointerdown', (event) => {
+                if (!this.isActive()) return;
+                const point = this.mapClientToScene(event.clientX, event.clientY);
+                if (!point) return;
+                overlay.setPointerCapture(event.pointerId);
+                const handle = event.target.closest('.dev-hotspot-handle');
+                const box = event.target.closest('.dev-hotspot-box');
+
+                if (handle && box) {
+                    this.selectedId = box.dataset.hotspotId;
+                    this.interaction = { mode: 'resize', corner: handle.dataset.corner, start: point, original: this.toPatchShape(this.getById(this.selectedId) || {}) };
+                    this.render();
+                    return;
+                }
+
+                if (box) {
+                    this.selectedId = box.dataset.hotspotId;
+                    this.interaction = { mode: 'move', start: point, original: this.toPatchShape(this.getById(this.selectedId) || {}) };
+                    this.render();
+                    return;
+                }
+
+                if (event.shiftKey) {
+                    const newId = `dev_hs_${Date.now()}`;
+                    this.selectedId = newId;
+                    this.interaction = { mode: 'create', start: point, newId };
+                } else {
+                    this.selectedId = null;
+                    this.interaction = null;
+                }
+                this.render();
+            });
+
+            overlay.addEventListener('pointermove', (event) => {
+                if (!this.isActive() || !this.interaction) return;
+                const point = this.mapClientToScene(event.clientX, event.clientY);
+                if (!point) return;
+                const sceneId = gameState.currentSceneId;
+                const interaction = this.interaction;
+                let rect;
+
+                if (interaction.mode === 'create') {
+                    rect = this.clampRect({
+                        x: this.snap(interaction.start.x),
+                        y: this.snap(interaction.start.y),
+                        w: this.snap(point.x) - this.snap(interaction.start.x),
+                        h: this.snap(point.y) - this.snap(interaction.start.y)
+                    });
+                    this.upsertHotspot(sceneId, { id: interaction.newId, ...rect, type: 'scene', target: '', z: 0 });
+                }
+
+                if (interaction.mode === 'move') {
+                    const dx = this.snap(point.x - interaction.start.x);
+                    const dy = this.snap(point.y - interaction.start.y);
+                    rect = this.clampRect({ x: interaction.original.x + dx, y: interaction.original.y + dy, w: interaction.original.w, h: interaction.original.h });
+                    this.upsertHotspot(sceneId, { ...interaction.original, ...rect });
+                }
+
+                if (interaction.mode === 'resize') {
+                    const orig = interaction.original;
+                    let x = orig.x;
+                    let y = orig.y;
+                    let w = orig.w;
+                    let h = orig.h;
+                    const px = this.snap(point.x);
+                    const py = this.snap(point.y);
+                    if (interaction.corner.includes('n')) {
+                        h = (orig.y + orig.h) - py;
+                        y = py;
+                    }
+                    if (interaction.corner.includes('s')) {
+                        h = py - orig.y;
+                    }
+                    if (interaction.corner.includes('w')) {
+                        w = (orig.x + orig.w) - px;
+                        x = px;
+                    }
+                    if (interaction.corner.includes('e')) {
+                        w = px - orig.x;
+                    }
+                    rect = this.clampRect({ x, y, w, h });
+                    this.upsertHotspot(sceneId, { ...orig, ...rect });
+                }
+
+                sceneRenderer.refreshCurrentHotspots();
+                this.render();
+            });
+
+            overlay.addEventListener('pointerup', () => {
+                this.interaction = null;
+            });
+        },
+
+        render() {
+            const overlay = this.ensureOverlayEl();
+            const panel = this.ensurePanel();
+            if (!overlay || !panel) return;
+
+            const active = this.isActive();
+            overlay.classList.toggle('active', active);
+            panel.classList.toggle('hidden', !active);
+            if (!active) return;
+
+            const hotspots = this.getCurrentHotspots();
+            overlay.innerHTML = '';
+            hotspots.forEach(hotspot => {
+                const pos = positioningSystem.calculateHotspotPosition(hotspot.x, hotspot.y, hotspot.width, hotspot.height);
+                const box = document.createElement('div');
+                box.className = 'dev-hotspot-box';
+                if (hotspot.id === this.selectedId) box.classList.add('selected');
+                box.style.left = pos.left;
+                box.style.top = pos.top;
+                box.style.width = pos.width;
+                box.style.height = pos.height;
+                box.dataset.hotspotId = hotspot.id;
+                box.innerHTML = `<span class="dev-hotspot-label">${hotspot.id}</span>
+                    <span class="dev-hotspot-handle" data-corner="nw"></span>
+                    <span class="dev-hotspot-handle" data-corner="ne"></span>
+                    <span class="dev-hotspot-handle" data-corner="sw"></span>
+                    <span class="dev-hotspot-handle" data-corner="se"></span>`;
+                overlay.appendChild(box);
+            });
+
+            const validation = this.validateScene(gameState.currentSceneId, hotspots);
+            this.validationWarnings = validation.warnings;
+            const meta = panel.querySelector('#devHotspotMeta');
+            meta.textContent = `Scene: ${gameState.currentSceneId} | Hotspots: ${hotspots.length} | Snap: ${this.snapEnabled ? `ON (${this.snapSize}px)` : 'OFF'}`;
+            const warningsEl = panel.querySelector('#devHotspotWarnings');
+            warningsEl.innerHTML = '';
+            validation.warnings.forEach(w => {
+                const li = document.createElement('li');
+                li.textContent = w;
+                warningsEl.appendChild(li);
+            });
+            if (!validation.warnings.length) {
+                const li = document.createElement('li');
+                li.textContent = 'No validation warnings.';
+                warningsEl.appendChild(li);
+            }
+        },
+
+        validateScene(sceneId, hotspots) {
+            const warnings = [];
+            const overlaps = [];
+            const outOfBounds = [];
+            let zeroSize = 0;
+            let invalidTargets = 0;
+
+            const nativeRects = hotspots.map(h => {
+                const rect = { id: h.id, x: h.x || 0, y: h.y || 0, w: h.width || 0, h: h.height || 0, target: h.target };
+                if (rect.w <= 0 || rect.h <= 0) zeroSize += 1;
+                if (rect.x < 0 || rect.y < 0 || rect.x + rect.w > positioningSystem.REF_WIDTH || rect.y + rect.h > positioningSystem.REF_HEIGHT) {
+                    outOfBounds.push(rect.id);
+                }
+                if (rect.target && !SCENES[rect.target]) {
+                    invalidTargets += 1;
+                    warnings.push(`Invalid target sceneId on ${rect.id}: ${rect.target}`);
+                }
+                return rect;
+            });
+
+            for (let i = 0; i < nativeRects.length; i += 1) {
+                for (let j = i + 1; j < nativeRects.length; j += 1) {
+                    const a = nativeRects[i];
+                    const b = nativeRects[j];
+                    const intersects = a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+                    if (intersects) overlaps.push(`${a.id} ↔ ${b.id}`);
+                }
+            }
+
+            if (zeroSize) warnings.push(`Zero-size hotspots: ${zeroSize}`);
+            if (outOfBounds.length) warnings.push(`Out-of-bounds hotspots: ${outOfBounds.join(', ')}`);
+            if (overlaps.length) warnings.push(`Overlaps: ${overlaps.join(', ')}`);
+
+            return { sceneId, warnings, overlaps, outOfBounds, zeroSize, invalidTargets };
+        },
+
+        async copyText(value) {
+            try {
+                await navigator.clipboard.writeText(value);
+                return true;
+            } catch (_error) {
+                return false;
+            }
+        },
+
+        downloadText(filename, text, type = 'text/plain') {
+            const blob = new Blob([text], { type });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(a.href);
+        },
+
+        async exportPatchJSON() {
+            const sceneId = gameState.currentSceneId;
+            const patch = this.getScenePatch(sceneId);
+            const text = JSON.stringify({ [sceneId]: patch }, null, 2);
+            const copied = await this.copyText(text);
+            if (!copied) this.downloadText(`${sceneId}.patch.json`, text, 'application/json');
+        },
+
+        async exportFixReport() {
+            const sceneId = gameState.currentSceneId;
+            const base = SCENES[sceneId]?.hotspots || [];
+            const patched = this.getCurrentHotspots();
+            const baseMap = new Map(base.map(h => [h.id, h]));
+            let added = 0;
+            let edited = 0;
+            let deleted = 0;
+
+            patched.forEach(h => {
+                const prev = baseMap.get(h.id);
+                if (!prev) {
+                    added += 1;
+                    return;
+                }
+                if (prev.x !== h.x || prev.y !== h.y || prev.width !== h.width || prev.height !== h.height || (prev.target || '') !== (h.target || '')) {
+                    edited += 1;
+                }
+                baseMap.delete(h.id);
+            });
+            deleted = baseMap.size;
+
+            const check = this.validateScene(sceneId, patched);
+            const report = [
+                `sceneId: ${sceneId}`,
+                `added: ${added}`,
+                `edited: ${edited}`,
+                `deleted: ${deleted}`,
+                `invalid targets: ${check.invalidTargets}`,
+                `overlaps: ${check.overlaps.length}`,
+                `out-of-bounds: ${check.outOfBounds.length}`,
+                `zero-size: ${check.zeroSize}`
+            ].join('\n');
+            const copied = await this.copyText(report);
+            if (!copied) this.downloadText(`${sceneId}.fix-report.txt`, report, 'text/plain');
+        }
+    },
+
     init() {
         this.enabled = localStorage.getItem(this.storageKeys.enabled) === 'true';
         this.toolsEnabled = localStorage.getItem(this.storageKeys.toolsEnabled) === 'true';
@@ -365,6 +781,9 @@ const Dev = {
                 if (event.currentTarget.dataset.devAction === 'click-trace') {
                     this.setActiveTool('trace');
                 }
+                if (event.currentTarget.dataset.devAction === 'hotspot-editor') {
+                    this.setActiveTool('hotspots');
+                }
                 this.updateStatus();
             });
         });
@@ -376,9 +795,36 @@ const Dev = {
                 this.setActiveTool('trace');
                 this.updateStatus();
             }
+            if (event.key.toLowerCase() === 'g' && this.hotspots.isActive()) {
+                event.preventDefault();
+                this.hotspots.snapEnabled = !this.hotspots.snapEnabled;
+                this.hotspots.render();
+            }
+            if (event.key.toLowerCase() === 'd' && event.ctrlKey && this.hotspots.isActive() && this.hotspots.selectedId) {
+                event.preventDefault();
+                const source = this.hotspots.getById(this.hotspots.selectedId);
+                if (source) {
+                    const clone = this.hotspots.toPatchShape(source);
+                    clone.id = `${clone.id}_copy_${Date.now()}`;
+                    clone.x += this.hotspots.snapSize;
+                    clone.y += this.hotspots.snapSize;
+                    this.hotspots.upsertHotspot(gameState.currentSceneId, clone);
+                    this.hotspots.selectedId = clone.id;
+                    sceneRenderer.refreshCurrentHotspots();
+                    this.hotspots.render();
+                }
+            }
+            if (event.key === 'Delete' && this.hotspots.isActive() && this.hotspots.selectedId) {
+                event.preventDefault();
+                this.hotspots.deleteHotspot(gameState.currentSceneId, this.hotspots.selectedId);
+                this.hotspots.selectedId = null;
+                sceneRenderer.refreshCurrentHotspots();
+                this.hotspots.render();
+            }
         });
 
         this.trace.renderLogs();
+        this.hotspots.ensurePanel();
         this.updateStatus();
     },
 
@@ -427,6 +873,7 @@ const Dev = {
         if (!this.trace.isActive()) {
             this.trace.hideHighlight();
         }
+        this.hotspots.render();
         this.updateStatus();
     },
 
@@ -439,7 +886,8 @@ const Dev = {
 
         document.querySelectorAll('[data-dev-action]').forEach(button => {
             const isTraceButton = button.dataset.devAction === 'click-trace';
-            button.classList.toggle('active', isTraceButton && this.activeTool === 'trace');
+            const isHotspotButton = button.dataset.devAction === 'hotspot-editor';
+            button.classList.toggle('active', (isTraceButton && this.activeTool === 'trace') || (isHotspotButton && this.activeTool === 'hotspots'));
         });
 
         if (tracePanel) {
@@ -449,6 +897,8 @@ const Dev = {
                 this.trace.renderLogs();
             }
         }
+
+        this.hotspots.render();
     }
 };
 
@@ -1424,6 +1874,7 @@ const positioningSystem = {
 // ===== SCENE RENDERING =====
 const sceneRenderer = {
     currentScene: null,
+    currentHotspots: [],
 
     // Transition queue system
     transitionQueue: [],
@@ -1613,7 +2064,9 @@ const sceneRenderer = {
             }
 
             if (scene.hotspots) {
-                this.loadHotspots(scene.hotspots);
+                const runtimeHotspots = Dev.hotspots.getRuntimeHotspots(sceneId, scene.hotspots);
+                this.currentHotspots = runtimeHotspots;
+                this.loadHotspots(runtimeHotspots);
             }
 
             // Lazy-load non-critical assets for future interactions
@@ -1650,6 +2103,7 @@ const sceneRenderer = {
             }
 
             saveSystem.save();
+            Dev.hotspots.render();
         } catch (error) {
             errorLogger.log('scene-transition', error, { sceneId });
             document.getElementById('dialogue-box').classList.add('hidden');
@@ -1661,6 +2115,18 @@ const sceneRenderer = {
             // Unblock interactions
             this._setInteractionBlocking(false);
         }
+    },
+
+    refreshCurrentHotspots() {
+        const sceneId = gameState.currentSceneId;
+        const scene = SCENES[sceneId];
+        if (!scene) return;
+        const hotspotLayer = document.getElementById('hotspot-layer');
+        if (!hotspotLayer) return;
+        hotspotLayer.replaceChildren();
+        this.currentHotspots = Dev.hotspots.getRuntimeHotspots(sceneId, scene.hotspots || []);
+        this.loadHotspots(this.currentHotspots);
+        Dev.hotspots.render();
     },
 
     _setInteractionBlocking(block) {
@@ -1692,6 +2158,7 @@ const sceneRenderer = {
                 document.getElementById('character-layer').replaceChildren();
                 document.getElementById('item-layer').replaceChildren();
                 document.getElementById('hotspot-layer').replaceChildren();
+                this.currentHotspots = [];
                 document.getElementById('dialogue-box').classList.add('hidden');
 
                 // Remove police light effect if present
@@ -1865,6 +2332,8 @@ const sceneRenderer = {
                 SFXGenerator.playButtonClick();
                 if (hotspot.onClick) {
                     hotspot.onClick();
+                } else if (hotspot.target && SCENES[hotspot.target]) {
+                    sceneRenderer.loadScene(hotspot.target);
                 }
                 setTimeout(() => {
                     gameState.actionLock = false;
@@ -3506,6 +3975,7 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
         resizeTimer = setTimeout(() => {
             try {
                 positioningSystem.recalculateAll();
+                Dev.hotspots.render();
             } catch (error) {
                 errorLogger.log('resize-recalculate', error);
             }
@@ -3517,6 +3987,7 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
         setTimeout(() => {
             try {
                 positioningSystem.recalculateAll();
+                Dev.hotspots.render();
             } catch (error) {
                 errorLogger.log('orientation-recalculate', error);
             }
