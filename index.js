@@ -2203,7 +2203,7 @@ const assetLoader = {
         (scene.characters || []).forEach(char => {
             if (char?.sprite) {
                 const zoneName = char.position || 'center';
-                const spriteCandidates = renderManager.buildSpriteCandidates(char.sprite, zoneName);
+                const spriteCandidates = sceneRenderer.buildSpriteCandidates(char.sprite, zoneName);
                 spriteCandidates.forEach(candidate => lazyAssets.push(`./assets/characters/${candidate}`));
             }
         });
