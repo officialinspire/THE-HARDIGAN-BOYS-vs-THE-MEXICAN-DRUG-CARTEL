@@ -2116,7 +2116,8 @@ const assetLoader = {
         ];
     },
 
-    async preloadSingleAsset(src) {
+    async preloadSingleAsset(src, options = {}) {
+        const { logErrors = true } = options;
         if (!src || this.loadedAssets.has(src)) return;
 
         await new Promise((resolve) => {
@@ -2127,7 +2128,9 @@ const assetLoader = {
             };
             img.onerror = () => {
                 this.errors.push(src);
-                errorLogger.log('preload-assets', new Error(`Failed to preload image`), { src });
+                if (logErrors) {
+                    errorLogger.log('preload-assets', new Error(`Failed to preload image`), { src });
+                }
                 resolve();
             };
             img.src = src;
@@ -2158,13 +2161,16 @@ const assetLoader = {
         const lazyAssets = [];
         (scene.characters || []).forEach(char => {
             if (char?.sprite) {
-                lazyAssets.push(`./assets/characters/${char.sprite}`);
+                const zoneName = char.position || 'center';
+                const spriteCandidates = renderManager.buildSpriteCandidates(char.sprite, zoneName);
+                spriteCandidates.forEach(candidate => lazyAssets.push(`./assets/characters/${candidate}`));
             }
         });
         (scene.items || []).forEach(item => {
             if (item?.id) lazyAssets.push(`./assets/items/item_${item.id}.png`);
         });
-        safeAsync(() => Promise.all(lazyAssets.map(src => this.preloadSingleAsset(src))), 'lazy-load-scene-assets')();
+        const uniqueAssets = [...new Set(lazyAssets)];
+        safeAsync(() => Promise.all(uniqueAssets.map(src => this.preloadSingleAsset(src, { logErrors: false }))), 'lazy-load-scene-assets')();
     }
 };
 
@@ -2214,7 +2220,11 @@ const audioManager = {
 
                 // Always fade in music for smooth transitions
                 this.musicPlayer.volume = 0;
-                this.musicPlayer.play().catch(err => errorLogger.log('audio-play-music', err, { filename }));
+                this.musicPlayer.play().catch(err => {
+                    // Browser autoplay/user-interruption can abort pending play() promises.
+                    if (err?.name === 'AbortError') return;
+                    errorLogger.log('audio-play-music', err, { filename });
+                });
 
                 if (fadeIn) {
                     let vol = 0;
@@ -2909,6 +2919,8 @@ const sceneRenderer = {
         if (side && !hasDirectionalSuffix) {
             add(baseName.replace(/\.png$/i, `${sideSuffix}.png`));
             add(baseName.replace(/\.png$/i, `${sideUnderscore}.png`));
+            add(baseName.replace(/\.png$/i, `${sideSuffix}.png.png`));
+            add(baseName.replace(/\.png$/i, `${sideUnderscore}.png.png`));
         }
 
         if (hasDirectionalSuffix) {
@@ -4224,7 +4236,7 @@ const SCENES = {
                     sceneRenderer.addCharacter({
                         id: 'mom',
                         name: 'MOM',
-                        sprite: 'char_mom_annoyed.png',
+                        sprite: 'char_mom_angry.png',
                         position: 'right-2'
                     }, 100);
                 }
@@ -4351,7 +4363,7 @@ const SCENES = {
                         sceneRenderer.addCharacter({
                             id: 'mr_rivera',
                             name: 'MR. RIVERA',
-                            sprite: 'char_carlos_detained.png',
+                            sprite: 'char_carlos_normal.png',
                             position: 'right-2'
                         }, 100);
                     }, 500);
