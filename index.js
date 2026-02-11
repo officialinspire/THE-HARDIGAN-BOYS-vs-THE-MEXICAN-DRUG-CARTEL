@@ -3344,19 +3344,10 @@ const sceneRenderer = {
             debugLabel.textContent = `${hotspot.id || ''} [${Math.round(parseFloat(pos.left))}，${Math.round(parseFloat(pos.top))} ${Math.round(parseFloat(pos.width))}×${Math.round(parseFloat(pos.height))}]`;
             div.appendChild(debugLabel);
 
-            div.addEventListener('click', (e) => {
-                Dev.trace.recordClick(e);
+            let touchStartTime = 0;
+            let touchStartPos = null;
 
-                // Debug: log click position in native image coordinates
-                if (gameState.settings.showHotspots) {
-                    const nativePoint = positioningSystem.clientToNative(e.clientX, e.clientY);
-                    if (nativePoint) {
-                        const imgX = Math.round(nativePoint.x);
-                        const imgY = Math.round(nativePoint.y);
-                        console.log(`[Hotspot Debug] Click on "${hotspot.id || hotspot.label}" → native image coords: (${imgX}, ${imgY}) | screen: (${Math.round(nativePoint.localX)}, ${Math.round(nativePoint.localY)})`);
-                    }
-                }
-
+            const handleHotspotClick = () => {
                 if (Dev.hotspots.shouldBlockGameplay() || gameState.actionLock || gameState.sceneTransitioning) return;
                 gameState.actionLock = true;
                 SFXGenerator.playButtonClick();
@@ -3368,7 +3359,64 @@ const sceneRenderer = {
                 setTimeout(() => {
                     gameState.actionLock = false;
                 }, 300);
-            });
+            };
+
+            const handleInteraction = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (e.type === 'click') {
+                    Dev.trace.recordClick(e);
+                }
+
+                // Prevent double-firing on devices that support both touch and click
+                if (e.type === 'click' && touchStartTime > Date.now() - 500) {
+                    return;
+                }
+
+                // For touch events, check if this was a tap (not a scroll)
+                if (e.type === 'touchend' && touchStartPos) {
+                    const touch = e.changedTouches[0];
+                    const deltaX = Math.abs(touch.clientX - touchStartPos.x);
+                    const deltaY = Math.abs(touch.clientY - touchStartPos.y);
+
+                    // If moved more than 10px, treat as scroll not tap
+                    if (deltaX > 10 || deltaY > 10) {
+                        return;
+                    }
+
+                    // Debug: log tap position in native image coordinates
+                    if (gameState.settings.showHotspots) {
+                        const nativePoint = positioningSystem.clientToNative(touch.clientX, touch.clientY);
+                        if (nativePoint) {
+                            const imgX = Math.round(nativePoint.x);
+                            const imgY = Math.round(nativePoint.y);
+                            console.log(`[Hotspot Debug] Tap on "${hotspot.id || hotspot.label}" → native image coords: (${imgX}, ${imgY}) | screen: (${Math.round(nativePoint.localX)}, ${Math.round(nativePoint.localY)})`);
+                        }
+                    }
+                }
+
+                // Debug: log click position in native image coordinates
+                if (e.type === 'click' && gameState.settings.showHotspots) {
+                    const nativePoint = positioningSystem.clientToNative(e.clientX, e.clientY);
+                    if (nativePoint) {
+                        const imgX = Math.round(nativePoint.x);
+                        const imgY = Math.round(nativePoint.y);
+                        console.log(`[Hotspot Debug] Click on "${hotspot.id || hotspot.label}" → native image coords: (${imgX}, ${imgY}) | screen: (${Math.round(nativePoint.localX)}, ${Math.round(nativePoint.localY)})`);
+                    }
+                }
+
+                handleHotspotClick();
+            };
+
+            div.addEventListener('touchstart', (e) => {
+                touchStartTime = Date.now();
+                const touch = e.touches[0];
+                touchStartPos = { x: touch.clientX, y: touch.clientY };
+            }, { passive: true });
+
+            div.addEventListener('touchend', handleInteraction, { passive: false });
+            div.addEventListener('click', handleInteraction);
 
             hotspotLayer.appendChild(div);
         });
@@ -3469,7 +3517,10 @@ const sceneRenderer = {
                     const btn = document.createElement('button');
                     btn.className = 'dialogue-choice';
                     btn.textContent = choice.text;
-                    btn.addEventListener('click', () => {
+                    let touchStartTime = 0;
+                    let touchStartPos = null;
+
+                    const handleChoiceClick = () => {
                         if (gameState.actionLock || this.isTransitioning) return;
                         gameState.actionLock = true;
                         gameState.dialogueLock = false;
@@ -3478,7 +3529,40 @@ const sceneRenderer = {
                             choice.action();
                         }
                         gameState.actionLock = false;
-                    });
+                    };
+
+                    const handleInteraction = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+
+                        // Prevent double-firing on devices that support both touch and click
+                        if (e.type === 'click' && touchStartTime > Date.now() - 500) {
+                            return;
+                        }
+
+                        // For touch events, check if this was a tap (not a scroll)
+                        if (e.type === 'touchend' && touchStartPos) {
+                            const touch = e.changedTouches[0];
+                            const deltaX = Math.abs(touch.clientX - touchStartPos.x);
+                            const deltaY = Math.abs(touch.clientY - touchStartPos.y);
+
+                            // If moved more than 10px, treat as scroll not tap
+                            if (deltaX > 10 || deltaY > 10) {
+                                return;
+                            }
+                        }
+
+                        handleChoiceClick();
+                    };
+
+                    btn.addEventListener('touchstart', (e) => {
+                        touchStartTime = Date.now();
+                        const touch = e.touches[0];
+                        touchStartPos = { x: touch.clientX, y: touch.clientY };
+                    }, { passive: true });
+
+                    btn.addEventListener('touchend', handleInteraction, { passive: false });
+                    btn.addEventListener('click', handleInteraction);
                     choicesDiv.appendChild(btn);
                 });
             } else if (dialogueEntry.next) {
