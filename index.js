@@ -3562,9 +3562,9 @@ const sceneRenderer = {
             const charRect = characterEl.getBoundingClientRect();
             const boxRect = dialogueBox.getBoundingClientRect();
 
-            const margin = 20;
+            const margin = Math.max(14, containerRect.height * 0.02);
             const topPx = Math.max(
-                containerRect.height * 0.14,
+                containerRect.height * 0.1,
                 (charRect.top - containerRect.top) - boxRect.height - margin
             );
 
@@ -3575,11 +3575,11 @@ const sceneRenderer = {
             let leftPx;
 
             if (zoneName.startsWith('left')) {
-                // Comic-style: bubble floats up and to the right of left-side speaker.
-                leftPx = charLeft + (charRect.width * 0.55);
+                // Comic-style: left speaker bubble should sit above-left shoulder.
+                leftPx = charLeft - (boxRect.width * 0.12);
             } else if (zoneName.startsWith('right')) {
-                // Right-side speakers need a stronger up-left offset to avoid overlap.
-                leftPx = charRight - boxRect.width - (charRect.width * 0.42);
+                // Right speaker bubble should sit above-right shoulder.
+                leftPx = charRight - (boxRect.width * 0.88);
             } else {
                 leftPx = (charLeft + charRight) / 2 - (boxRect.width / 2);
             }
@@ -3782,7 +3782,7 @@ const SCENES = {
                 id: 'tv_remote',
                 label: 'TV Remote',
                 coordSystem: 'native',
-                x: 851,
+                x: 996,
                 y: 1026,
                 width: 138,
                 height: 54,
@@ -3803,7 +3803,7 @@ const SCENES = {
                 id: 'television',
                 label: 'Television',
                 coordSystem: 'native',
-                x: 243, y: 478, width: 467, height: 365,
+                x: 388, y: 478, width: 467, height: 365,
                 onClick() {
                     gameState.objectsClicked.add('television');
                     lightingEffects.toggleTV();
@@ -3821,7 +3821,7 @@ const SCENES = {
                 id: 'window',
                 label: 'Window',
                 coordSystem: 'native',
-                x: 712, y: 89, width: 724, height: 559,
+                x: 858, y: 89, width: 1008, height: 559,
                 onClick() {
                     if (!gameState.objectsClicked.has('window')) {
                         gameState.objectsClicked.add('window');
