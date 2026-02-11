@@ -3561,10 +3561,10 @@ const SCENES = {
                 id: 'tv_remote',
                 label: 'TV Remote',
                 coordSystem: 'native',
-                x: 922,
-                y: 756,
-                width: 96,
-                height: 43,
+                x: 851,
+                y: 1026,
+                width: 138,
+                height: 54,
                 onClick() {
                     gameState.objectsClicked.add('remote');
                     lightingEffects.toggleTV();
@@ -3582,7 +3582,7 @@ const SCENES = {
                 id: 'television',
                 label: 'Television',
                 coordSystem: 'native',
-                x: 192, y: 410, width: 346, height: 270,
+                x: 243, y: 478, width: 467, height: 365,
                 onClick() {
                     gameState.objectsClicked.add('television');
                     lightingEffects.toggleTV();
@@ -3600,7 +3600,7 @@ const SCENES = {
                 id: 'window',
                 label: 'Window',
                 coordSystem: 'native',
-                x: 576, y: 130, width: 384, height: 346,
+                x: 712, y: 89, width: 724, height: 559,
                 onClick() {
                     if (!gameState.objectsClicked.has('window')) {
                         gameState.objectsClicked.add('window');
@@ -3632,7 +3632,7 @@ const SCENES = {
                 id: 'lamp',
                 label: 'Lamp',
                 coordSystem: 'native',
-                x: 1574, y: 270, width: 192, height: 378,
+                x: 1904, y: 602, width: 259, height: 511,
                 onClick() {
                     gameState.objectsClicked.add('lamp');
                     lightingEffects.toggleLamp();
@@ -3650,7 +3650,7 @@ const SCENES = {
                 id: 'notebook',
                 label: "Hank's Conspiracy Notebook",
                 coordSystem: 'native',
-                x: 730, y: 670, width: 192, height: 86,
+                x: 1172, y: 1199, width: 119, height: 76,
                 onClick() {
                     if (!inventory.has('conspiracy_notebook')) {
                         gameState.objectsClicked.add('notebook');
