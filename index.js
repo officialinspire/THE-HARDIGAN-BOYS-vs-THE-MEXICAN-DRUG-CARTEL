@@ -1781,189 +1781,41 @@ const Dev = {
 };
 
 const spriteTransparencyProcessor = {
-    whiteThreshold: 238,
-    edgeColorTolerance: 40,
-    edgeBrightnessFloor: 110,
-    softAlphaThreshold: 135,
-
-    _getDominantEdgeColor(pixels, width, height) {
-        const bins = new Map();
-        const pushPixel = (x, y) => {
-            const i = (y * width + x) * 4;
-            const a = pixels[i + 3];
-            if (a < 8) return;
-            const r = pixels[i];
-            const g = pixels[i + 1];
-            const b = pixels[i + 2];
-            const key = `${Math.round(r / 16)}-${Math.round(g / 16)}-${Math.round(b / 16)}`;
-            const bucket = bins.get(key) || { count: 0, r: 0, g: 0, b: 0 };
-            bucket.count += 1;
-            bucket.r += r;
-            bucket.g += g;
-            bucket.b += b;
-            bins.set(key, bucket);
-        };
-
-        for (let x = 0; x < width; x++) {
-            pushPixel(x, 0);
-            pushPixel(x, height - 1);
-        }
-        for (let y = 1; y < height - 1; y++) {
-            pushPixel(0, y);
-            pushPixel(width - 1, y);
-        }
-
-        let winner = null;
-        bins.forEach(bucket => {
-            if (!winner || bucket.count > winner.count) {
-                winner = bucket;
-            }
-        });
-
-        if (!winner || winner.count === 0) return null;
-
-        return {
-            r: winner.r / winner.count,
-            g: winner.g / winner.count,
-            b: winner.b / winner.count,
-        };
-    },
-
-    _isNearColor(r, g, b, target) {
-        if (!target) return false;
-        const dr = r - target.r;
-        const dg = g - target.g;
-        const db = b - target.b;
-        const distance = Math.sqrt(dr * dr + dg * dg + db * db);
-        const brightness = (r + g + b) / 3;
-        return distance <= this.edgeColorTolerance && brightness >= this.edgeBrightnessFloor;
-    },
-
-    _removeConnectedEdgeBackground(pixels, width, height, targetColor) {
-        if (!targetColor) return 0;
-
-        const visited = new Uint8Array(width * height);
-        const queue = [];
-        const push = (x, y) => {
-            if (x < 0 || y < 0 || x >= width || y >= height) return;
-            const idx = y * width + x;
-            if (visited[idx]) return;
-            visited[idx] = 1;
-            queue.push(idx);
-        };
-
-        for (let x = 0; x < width; x++) {
-            push(x, 0);
-            push(x, height - 1);
-        }
-        for (let y = 1; y < height - 1; y++) {
-            push(0, y);
-            push(width - 1, y);
-        }
-
-        let removed = 0;
-        while (queue.length > 0) {
-            const idx = queue.pop();
-            const x = idx % width;
-            const y = Math.floor(idx / width);
-            const i = idx * 4;
-
-            if (pixels[i + 3] === 0) continue;
-
-            const r = pixels[i];
-            const g = pixels[i + 1];
-            const b = pixels[i + 2];
-            const nearWhite = r >= this.whiteThreshold && g >= this.whiteThreshold && b >= this.whiteThreshold;
-
-            if (nearWhite || this._isNearColor(r, g, b, targetColor)) {
-                pixels[i + 3] = 0;
-                removed += 1;
-                push(x + 1, y);
-                push(x - 1, y);
-                push(x, y + 1);
-                push(x, y - 1);
-            }
-        }
-
-        return removed;
-    },
-
-    _desaturateFringes(pixels, width, height, targetColor) {
-        if (!targetColor) return 0;
-
-        let adjusted = 0;
-        for (let i = 0; i < pixels.length; i += 4) {
-            const alpha = pixels[i + 3];
-            if (alpha === 0) continue;
-
-            const r = pixels[i];
-            const g = pixels[i + 1];
-            const b = pixels[i + 2];
-            const brightness = (r + g + b) / 3;
-            const nearEdgeColor = this._isNearColor(r, g, b, targetColor);
-            const nearWhite = r >= this.whiteThreshold && g >= this.whiteThreshold && b >= this.whiteThreshold;
-
-            if ((nearEdgeColor || nearWhite) && brightness >= this.edgeBrightnessFloor) {
-                if (alpha <= this.softAlphaThreshold) {
-                    pixels[i + 3] = 0;
-                    adjusted += 1;
-                } else {
-                    pixels[i + 3] = Math.max(0, Math.round(alpha * 0.72));
-                    adjusted += 1;
-                }
-            }
-        }
-
-        return adjusted;
-    },
+    whiteThreshold: 250,
 
     makeWhitePixelsTransparent(imageEl) {
         if (!imageEl || imageEl.dataset.whiteRemoved === 'true') return;
+        try {
+            const canvas = document.createElement('canvas');
+            const width = imageEl.naturalWidth || imageEl.width;
+            const height = imageEl.naturalHeight || imageEl.height;
+            if (!width || !height) return;
 
-        const process = () => {
-            try {
-                const canvas = document.createElement('canvas');
-                const width = imageEl.naturalWidth || imageEl.width;
-                const height = imageEl.naturalHeight || imageEl.height;
-                if (!width || !height) return;
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            if (!ctx) return;
 
-                canvas.width = width;
-                canvas.height = height;
+            ctx.drawImage(imageEl, 0, 0, width, height);
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const pixels = imageData.data;
+            const threshold = this.whiteThreshold;
+            let changed = 0;
 
-                const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                if (!ctx) return;
-
-                ctx.drawImage(imageEl, 0, 0, width, height);
-                const imageData = ctx.getImageData(0, 0, width, height);
-                const pixels = imageData.data;
-                const threshold = this.whiteThreshold;
-                const edgeColor = this._getDominantEdgeColor(pixels, width, height);
-
-                this._removeConnectedEdgeBackground(pixels, width, height, edgeColor);
-                this._desaturateFringes(pixels, width, height, edgeColor);
-
-                for (let i = 0; i < pixels.length; i += 4) {
-                    const r = pixels[i];
-                    const g = pixels[i + 1];
-                    const b = pixels[i + 2];
-
-                    if (r >= threshold && g >= threshold && b >= threshold) {
-                        pixels[i + 3] = 0;
-                    }
+            for (let i = 0; i < pixels.length; i += 4) {
+                if (pixels[i] >= threshold && pixels[i + 1] >= threshold && pixels[i + 2] >= threshold) {
+                    pixels[i + 3] = 0;
+                    changed++;
                 }
-
-                ctx.putImageData(imageData, 0, 0);
-                imageEl.dataset.whiteRemoved = 'true';
-                imageEl.src = canvas.toDataURL('image/png');
-            } catch (error) {
-                errorLogger.log('sprite-transparency', error, { src: imageEl.src });
             }
-        };
 
-        if (imageEl.complete && imageEl.naturalWidth > 0) {
-            process();
-        } else {
-            imageEl.addEventListener('load', process, { once: true });
+            if (changed > 0) {
+                ctx.putImageData(imageData, 0, 0);
+                imageEl.src = canvas.toDataURL('image/png');
+            }
+            imageEl.dataset.whiteRemoved = 'true';
+        } catch (error) {
+            console.warn('sprite-transparency safety net failed:', error);
         }
     }
 };
