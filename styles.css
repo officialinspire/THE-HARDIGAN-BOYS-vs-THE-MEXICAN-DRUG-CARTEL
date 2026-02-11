@@ -2525,3 +2525,134 @@ body.main-menu #scene-container {
         padding: 6px 7px;
     }
 }
+
+/* ===== DIALOGUE VIEWPORT PLACEMENT FIX (desktop + mobile parity) ===== */
+#dialogue-box {
+    width: clamp(320px, 38vw, 560px);
+    min-width: min(320px, 90vw);
+    max-width: calc(100% - 28px);
+}
+
+#dialogue-box.dialogue-left,
+#dialogue-box.dialogue-right {
+    bottom: auto;
+}
+
+#dialogue-box.dialogue-center {
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, -50%);
+    width: clamp(420px, 56vw, 860px);
+    min-width: min(420px, 92vw);
+}
+
+#dialogue-container.narrative-mode {
+    max-height: min(62vh, 520px);
+}
+
+#dialogue-container.narrative-mode #dialogue-content {
+    max-height: min(56vh, 470px);
+    overflow: hidden;
+}
+
+#dialogue-container.narrative-mode #dialogue-text,
+#dialogue-text.choice-text {
+    max-height: min(34vh, 280px);
+    overflow-y: auto;
+}
+
+#dialogue-choices {
+    width: min(100%, 720px);
+    max-height: min(24vh, 220px);
+    overflow-y: auto;
+    margin-inline: auto;
+}
+
+.dialogue-choice,
+#dialogue-continue {
+    width: min(100%, 92%);
+    max-width: 680px;
+}
+
+@media (max-width: 1024px) {
+    #dialogue-box {
+        width: min(78vw, 460px);
+        min-width: min(280px, 90vw);
+        max-width: 90vw;
+    }
+
+    #dialogue-box.dialogue-left,
+    #dialogue-box.dialogue-right {
+        width: clamp(220px, 42vw, 360px);
+        min-width: min(220px, 64vw);
+        max-width: 46vw;
+    }
+
+    #dialogue-box.dialogue-center {
+        width: min(84vw, 520px);
+        min-width: min(260px, 84vw);
+        max-width: 88vw;
+        top: 56%;
+    }
+
+    #dialogue-content {
+        top: 11%;
+        left: 9%;
+        right: 9%;
+        bottom: 10%;
+    }
+
+    #dialogue-speaker {
+        font-size: clamp(16px, 3.2vw, 24px);
+    }
+
+    #dialogue-text {
+        font-size: clamp(13px, 2.4vw, 18px);
+        line-height: 1.34;
+        max-height: min(16vh, 130px);
+    }
+
+    #dialogue-container.narrative-mode {
+        max-height: min(58vh, 420px);
+        padding: clamp(12px, 2.5vw, 20px);
+    }
+
+    #dialogue-container.narrative-mode #dialogue-content {
+        max-height: min(50vh, 360px);
+    }
+
+    #dialogue-container.narrative-mode #dialogue-text,
+    #dialogue-text.choice-text {
+        max-height: min(28vh, 220px);
+        font-size: clamp(14px, 2.8vw, 20px);
+        line-height: 1.38;
+    }
+
+    #dialogue-choices {
+        max-height: min(18vh, 150px);
+        gap: 7px;
+    }
+
+    .dialogue-choice,
+    #dialogue-continue {
+        font-size: clamp(13px, 2.8vw, 17px);
+        padding: clamp(8px, 1.4vh, 11px) clamp(12px, 2.4vw, 18px);
+        width: min(100%, 96%);
+    }
+}
+
+@media (max-width: 640px) {
+    #dialogue-box.dialogue-left,
+    #dialogue-box.dialogue-right {
+        width: clamp(190px, 44vw, 280px);
+        min-width: min(180px, 62vw);
+        max-width: 50vw;
+    }
+
+    #dialogue-box.dialogue-center {
+        width: min(88vw, 420px);
+        min-width: min(240px, 86vw);
+        max-width: 92vw;
+        top: 58%;
+    }
+}

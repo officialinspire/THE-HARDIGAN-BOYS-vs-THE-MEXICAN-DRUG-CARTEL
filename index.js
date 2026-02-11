@@ -3618,6 +3618,32 @@ const sceneRenderer = {
         });
     },
 
+    repositionActiveDialogue() {
+        const dialogueBox = document.getElementById('dialogue-box');
+        if (!dialogueBox || dialogueBox.classList.contains('hidden')) return;
+
+        const scene = this.currentScene;
+        const dialogueEntry = scene?.dialogue?.[gameState.currentDialogueIndex];
+        if (!dialogueEntry) return;
+
+        const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
+        const isChoice = dialogueEntry.speaker === 'CHOICE' || dialogueEntry.speaker === 'FINAL CHOICE';
+
+        if (isNarration || isChoice) {
+            dialogueBox.style.left = '';
+            dialogueBox.style.right = '';
+            dialogueBox.style.top = '';
+            dialogueBox.style.bottom = '';
+            dialogueBox.style.transform = '';
+            this._clampDialogueToViewport(dialogueBox);
+            return;
+        }
+
+        const zoneName = this.normalizeZoneName(dialogueEntry.position || 'left');
+        this._positionDialogueNearCharacter(dialogueBox, zoneName, dialogueEntry);
+        this._clampDialogueToViewport(dialogueBox);
+    },
+
     nextDialogue() {
         // Block dialogue advancement during transitions
         if (this.isTransitioning) return;
@@ -4998,6 +5024,7 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
             try {
                 positioningSystem.recalculateAll();
                 Dev.tools.applyForCurrentScene();
+                sceneRenderer.repositionActiveDialogue();
             } catch (error) {
                 errorLogger.log('resize-recalculate', error);
             }
@@ -5010,6 +5037,7 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
             try {
                 positioningSystem.recalculateAll();
                 Dev.tools.applyForCurrentScene();
+                sceneRenderer.repositionActiveDialogue();
             } catch (error) {
                 errorLogger.log('orientation-recalculate', error);
             }
