@@ -2410,6 +2410,57 @@ body.main-menu #scene-container {
     }
 }
 
+/* ===== SMALL SCREEN ADJUSTMENTS ===== */
+@media (max-width: 480px) {
+    /* Compact HUD buttons */
+    #hud-buttons {
+        top: max(12px, calc(env(safe-area-inset-top) + 2px));
+        right: max(10px, calc(env(safe-area-inset-right) + 5px));
+        gap: 8px;
+        z-index: 15;
+    }
+
+    .hud-btn {
+        width: 42px;
+        height: 42px;
+        font-size: 20px;
+        border-width: 1.5px;
+    }
+
+    /* Adjust scene title to avoid overlap */
+    #scene-title {
+        top: max(20px, calc(env(safe-area-inset-top) + 10px));
+        font-size: 11px;
+        max-width: 35%;
+        letter-spacing: 1px;
+        padding: 6px 10px;
+    }
+
+    /* Smaller HUD background */
+    #hud::before {
+        height: 60px;
+        width: min(98%, 1920px);
+    }
+}
+
+/* Extra small screens (iPhone SE, etc) */
+@media (max-width: 375px) {
+    #hud-buttons {
+        gap: 6px;
+    }
+
+    .hud-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+    }
+
+    #scene-title {
+        font-size: 10px;
+        max-width: 30%;
+    }
+}
+
 /* ===== MOBILE COMIC LAYOUT TUNING (2026-02) ===== */
 @media (max-width: 1024px) {
     /* Smaller speech bubbles near character shoulders */
