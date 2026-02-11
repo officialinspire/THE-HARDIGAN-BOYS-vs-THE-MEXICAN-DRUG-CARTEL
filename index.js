@@ -232,9 +232,7 @@ const Dev = {
             if (!this.traceHandlers) {
                 this.traceHandlers = {
                     click: (event) => {
-                        if (!event.target.closest('.hotspot')) {
-                            Dev.trace.recordClick(event);
-                        }
+                        Dev.trace.recordClick(event);
                     },
                     mousemove: (event) => {
                         Dev.trace.updatePointer(event.clientX, event.clientY);
@@ -261,6 +259,8 @@ const Dev = {
         applyForCurrentScene() {
             const sceneRoot = this.getSceneRoot();
             this.detachCurrent();
+            Dev.hotspots.cancelInteraction();
+            Dev.layout.cancelDrag();
 
             if (Dev.toolsEnabled && Dev.activeTool === 'trace') {
                 this.attachTrace(sceneRoot);
@@ -275,6 +275,9 @@ const Dev = {
         logs: [],
         maxLogs: 10,
         highlightEl: null,
+        pendingPointer: null,
+        hoverRaf: null,
+        lastHoverKey: null,
 
         isActive() {
             return Dev.toolsEnabled && Dev.activeTool === 'trace';
@@ -296,6 +299,7 @@ const Dev = {
             if (!el) return;
             el.style.display = 'none';
             el.dataset.label = '';
+            this.lastHoverKey = null;
         },
 
         hitTest(x, y) {
@@ -394,6 +398,18 @@ const Dev = {
         },
 
         updatePointer(clientX, clientY) {
+            this.pendingPointer = { clientX, clientY };
+            if (this.hoverRaf) return;
+            this.hoverRaf = requestAnimationFrame(() => {
+                this.hoverRaf = null;
+                const point = this.pendingPointer;
+                this.pendingPointer = null;
+                if (!point) return;
+                this.flushPointer(point.clientX, point.clientY);
+            });
+        },
+
+        flushPointer(clientX, clientY) {
             if (!this.isActive()) {
                 this.hideHighlight();
                 return;
@@ -401,11 +417,16 @@ const Dev = {
             const coords = this.mapClientToScene(clientX, clientY);
             if (!coords) return;
             const hit = this.hitTest(coords.x, coords.y);
+            const hoverKey = hit?.hotspot?.id ? `hotspot:${hit.hotspot.id}` : 'none';
             const el = this.ensureHighlightEl();
             if (!el || !hit) {
-                this.hideHighlight();
+                if (this.lastHoverKey !== 'none') {
+                    this.hideHighlight();
+                    this.lastHoverKey = 'none';
+                }
                 return;
             }
+            if (this.lastHoverKey === hoverKey) return;
             const pos = positioningSystem.calculateHotspotPosition(hit.rect.left, hit.rect.top, hit.rect.width, hit.rect.height);
             el.style.left = pos.left;
             el.style.top = pos.top;
@@ -413,6 +434,7 @@ const Dev = {
             el.style.height = pos.height;
             el.style.display = 'block';
             el.dataset.label = `${hit.hotspot.id || 'unknown'} → ${hit.hotspot.target || hit.hotspot.label || 'no-target'}`;
+            this.lastHoverKey = hoverKey;
         }
     },
 
@@ -424,9 +446,14 @@ const Dev = {
         panelEl: null,
         validationWarnings: [],
         interaction: null,
+        boxById: new Map(),
 
         isActive() {
             return Dev.toolsEnabled && Dev.activeTool === 'hotspots';
+        },
+
+        cancelInteraction() {
+            this.interaction = null;
         },
 
         loadAllPatches() {
@@ -514,6 +541,40 @@ const Dev = {
             this.overlayEl = el;
             this.bindOverlayEvents();
             return el;
+        },
+
+        ensureBox(hotspotId) {
+            let box = this.boxById.get(hotspotId);
+            if (box && box.isConnected) return box;
+            const overlay = this.ensureOverlayEl();
+            if (!overlay) return null;
+
+            box = document.createElement('div');
+            box.className = 'dev-hotspot-box';
+            box.dataset.hotspotId = hotspotId;
+
+            const label = document.createElement('span');
+            label.className = 'dev-hotspot-label';
+            box.appendChild(label);
+
+            ['nw', 'ne', 'sw', 'se'].forEach((corner) => {
+                const handle = document.createElement('span');
+                handle.className = 'dev-hotspot-handle';
+                handle.dataset.corner = corner;
+                box.appendChild(handle);
+            });
+
+            overlay.appendChild(box);
+            this.boxById.set(hotspotId, box);
+            return box;
+        },
+
+        removeStaleBoxes(activeIds) {
+            this.boxById.forEach((box, hotspotId) => {
+                if (activeIds.has(hotspotId)) return;
+                box.remove();
+                this.boxById.delete(hotspotId);
+            });
         },
 
         ensurePanel() {
@@ -618,6 +679,7 @@ const Dev = {
                     this.selectedId = null;
                     this.interaction = null;
                 }
+                event.preventDefault();
                 this.render();
             });
 
@@ -672,16 +734,26 @@ const Dev = {
                     this.upsertHotspot(sceneId, { ...orig, ...rect });
                 }
 
-                sceneRenderer.refreshCurrentHotspots();
-                this.render();
+                sceneRenderer.refreshCurrentHotspots({ reapplyTools: false });
+                this.render(true);
             });
 
-            overlay.addEventListener('pointerup', () => {
+            overlay.addEventListener('pointerup', (event) => {
                 this.interaction = null;
+                if (overlay.hasPointerCapture(event.pointerId)) {
+                    overlay.releasePointerCapture(event.pointerId);
+                }
+            });
+
+            overlay.addEventListener('pointercancel', (event) => {
+                this.interaction = null;
+                if (overlay.hasPointerCapture(event.pointerId)) {
+                    overlay.releasePointerCapture(event.pointerId);
+                }
             });
         },
 
-        render() {
+        render(skipPanelUpdate = false) {
             const overlay = this.ensureOverlayEl();
             const panel = this.ensurePanel();
             if (!overlay || !panel) return;
@@ -689,27 +761,31 @@ const Dev = {
             const active = this.isActive();
             overlay.classList.toggle('active', active);
             panel.classList.toggle('hidden', !active);
-            if (!active) return;
+            if (!active) {
+                this.removeStaleBoxes(new Set());
+                return;
+            }
 
             const hotspots = this.getCurrentHotspots();
-            overlay.innerHTML = '';
+            const activeIds = new Set();
             hotspots.forEach(hotspot => {
+                activeIds.add(hotspot.id);
                 const pos = positioningSystem.calculateHotspotPosition(hotspot.x, hotspot.y, hotspot.width, hotspot.height);
-                const box = document.createElement('div');
-                box.className = 'dev-hotspot-box';
+                const box = this.ensureBox(hotspot.id);
+                if (!box) return;
                 if (hotspot.id === this.selectedId) box.classList.add('selected');
+                else box.classList.remove('selected');
                 box.style.left = pos.left;
                 box.style.top = pos.top;
                 box.style.width = pos.width;
                 box.style.height = pos.height;
                 box.dataset.hotspotId = hotspot.id;
-                box.innerHTML = `<span class="dev-hotspot-label">${hotspot.id}</span>
-                    <span class="dev-hotspot-handle" data-corner="nw"></span>
-                    <span class="dev-hotspot-handle" data-corner="ne"></span>
-                    <span class="dev-hotspot-handle" data-corner="sw"></span>
-                    <span class="dev-hotspot-handle" data-corner="se"></span>`;
-                overlay.appendChild(box);
+                const label = box.querySelector('.dev-hotspot-label');
+                if (label) label.textContent = hotspot.id;
             });
+            this.removeStaleBoxes(activeIds);
+
+            if (skipPanelUpdate) return;
 
             const validation = this.validateScene(gameState.currentSceneId, hotspots);
             this.validationWarnings = validation.warnings;
@@ -964,6 +1040,14 @@ const Dev = {
             });
         },
 
+        cancelDrag() {
+            if (!this.dragging) return;
+            const { panel } = this.dragging;
+            panel.classList.remove('dev-layout-dragging');
+            panel.style.transform = 'none';
+            this.dragging = null;
+        },
+
         handlePointerDown(event) {
             if (!this.isActive() || event.button !== 0) return;
             const panel = event.target.closest('[data-layout-panel]');
@@ -984,9 +1068,12 @@ const Dev = {
                 startX: event.clientX,
                 startY: event.clientY,
                 baseLeft: start.left,
-                baseTop: start.top
+                baseTop: start.top,
+                previewLeft: start.left,
+                previewTop: start.top
             };
             panel.classList.add('dev-layout-dragging');
+            panel.style.transform = 'translate3d(0px, 0px, 0px)';
             event.preventDefault();
         },
 
@@ -996,15 +1083,21 @@ const Dev = {
             const deltaX = event.clientX - startX;
             const deltaY = event.clientY - startY;
             const next = this.clampPosition(panel, baseLeft + deltaX, baseTop + deltaY);
-            this.applyLayoutToPanel(panel, { left: next.left, top: next.top });
-            this.ensureHandle(panel);
+            this.dragging.previewLeft = next.left;
+            this.dragging.previewTop = next.top;
+            const moveX = next.left - baseLeft;
+            const moveY = next.top - baseTop;
+            panel.style.transform = `translate3d(${Math.round(moveX)}px, ${Math.round(moveY)}px, 0px)`;
             event.preventDefault();
         },
 
         handlePointerUp() {
             if (!this.dragging) return;
-            const { panel } = this.dragging;
+            const { panel, previewLeft, previewTop } = this.dragging;
             panel.classList.remove('dev-layout-dragging');
+            panel.style.transform = 'none';
+            this.applyLayoutToPanel(panel, { left: previewLeft, top: previewTop });
+            this.ensureHandle(panel);
             this.savePanelFromElement(panel);
             this.dragging = null;
         },
@@ -1068,6 +1161,7 @@ const Dev = {
             if (this.isActive()) {
                 this.applySavedLayouts();
             } else {
+                this.cancelDrag();
                 this.clearAllPanelLayouts();
             }
         },
@@ -1165,6 +1259,13 @@ const Dev = {
                     } else {
                         this.closeHub();
                     }
+                    return;
+                }
+                if (event.key === 'Escape' && event.shiftKey) {
+                    event.preventDefault();
+                    this.setToolsEnabled(false);
+                    this.setActiveTool(null);
+                    this.updateStatus();
                     return;
                 }
                 if (event.key.toLowerCase() === 't') {
@@ -2508,7 +2609,8 @@ const sceneRenderer = {
         }
     },
 
-    refreshCurrentHotspots() {
+    refreshCurrentHotspots(options = {}) {
+        const shouldReapplyTools = options.reapplyTools !== false;
         const sceneId = gameState.currentSceneId;
         const scene = SCENES[sceneId];
         if (!scene) return;
@@ -2517,7 +2619,9 @@ const sceneRenderer = {
         hotspotLayer.replaceChildren();
         this.currentHotspots = Dev.hotspots.getRuntimeHotspots(sceneId, scene.hotspots || []);
         this.loadHotspots(this.currentHotspots);
-        Dev.tools.applyForCurrentScene();
+        if (shouldReapplyTools) {
+            Dev.tools.applyForCurrentScene();
+        }
     },
 
     _setInteractionBlocking(block) {
