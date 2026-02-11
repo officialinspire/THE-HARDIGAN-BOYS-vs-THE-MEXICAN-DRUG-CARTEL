@@ -2248,3 +2248,139 @@ body.main-menu #scene-container {
         padding: clamp(9px, 1.7vh, 12px) clamp(14px, 2.5vw, 22px);
     }
 }
+
+/* ===== PHONE PRECISION HOTFIX: SPEECH + CHOICE + PAUSE MENU ===== */
+#dialogue-box {
+    width: clamp(320px, 40vw, 560px);
+}
+
+#dialogue-box.dialogue-left,
+#dialogue-box.dialogue-right {
+    width: clamp(300px, 36vw, 500px);
+}
+
+#dialogue-container {
+    min-height: clamp(100px, 16vh, 210px);
+}
+
+#dialogue-bubble {
+    min-height: clamp(100px, 16vh, 210px);
+}
+
+#dialogue-content {
+    top: 10%;
+    left: 8%;
+    right: 8%;
+    bottom: 9%;
+}
+
+#dialogue-speaker {
+    font-size: clamp(32px, 4.4vw, 50px);
+}
+
+#dialogue-text {
+    font-size: clamp(17px, 2vw, 30px);
+    max-height: clamp(95px, 22vh, 270px);
+}
+
+@media (max-width: 768px) {
+    #dialogue-box {
+        width: min(80vw, 420px);
+        min-width: min(300px, 90vw);
+    }
+
+    #dialogue-box.dialogue-left,
+    #dialogue-box.dialogue-right {
+        width: min(76vw, 400px);
+        min-width: min(280px, 86vw);
+    }
+
+    #dialogue-container {
+        min-height: clamp(90px, 15vh, 180px);
+    }
+
+    #dialogue-bubble {
+        min-height: clamp(90px, 15vh, 180px);
+    }
+
+    #dialogue-speaker {
+        font-size: clamp(25px, 5vw, 34px);
+    }
+
+    #dialogue-text {
+        font-size: clamp(15px, 3.1vw, 20px);
+        line-height: 1.35;
+        max-height: clamp(74px, 17vh, 160px);
+    }
+
+    #dialogue-choices {
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    .dialogue-choice {
+        font-size: clamp(14px, 3.2vw, 17px);
+        padding: clamp(8px, 2vh, 11px) clamp(12px, 3vw, 18px);
+    }
+
+    #dialogue-continue {
+        margin-top: 8px;
+        font-size: clamp(14px, 3.1vw, 17px);
+        padding: clamp(8px, 2vh, 11px) clamp(14px, 3.5vw, 20px);
+    }
+}
+
+.phone-ui {
+    width: min(78vw, 560px);
+    height: min(94vh, 900px);
+}
+
+.phone-buttons {
+    top: 34%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 52%;
+    height: 46%;
+    max-width: 280px;
+    margin-top: 0;
+    justify-content: space-between;
+    gap: 0;
+}
+
+.phone-buttons button {
+    min-height: 0;
+    padding: clamp(10px, 1.5vh, 15px) clamp(12px, 1.8vw, 20px);
+    font-size: clamp(14px, 1.8vw, 19px);
+    border-radius: 10px;
+}
+
+@media (max-width: 768px) {
+    .phone-ui {
+        width: min(90vw, 370px);
+        height: min(88vh, 620px);
+    }
+
+    .phone-buttons {
+        top: 34.5%;
+        width: 54%;
+        height: 45%;
+    }
+
+    .phone-buttons button {
+        font-size: clamp(13px, 3.1vw, 16px);
+        padding: clamp(8px, 1.6vh, 12px) clamp(10px, 2.6vw, 16px);
+    }
+}
+
+@media (max-width: 480px) {
+    .phone-ui {
+        width: min(94vw, 330px);
+        height: min(86vh, 560px);
+    }
+
+    .phone-buttons {
+        top: 34.5%;
+        width: 56%;
+        height: 45%;
+    }
+}
