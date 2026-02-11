@@ -2011,16 +2011,35 @@ const mobileOptimizer = {
         }
 
         const applyOrientationState = () => {
-            const isPortrait = window.matchMedia('(orientation: portrait)').matches;
+            const orientationQuery = window.matchMedia('(orientation: portrait)');
+            const isPortrait = orientationQuery.matches || window.innerHeight > window.innerWidth;
             const overlay = document.getElementById('orientation-overlay');
             if (!overlay) return;
             overlay.classList.toggle('hidden', !isPortrait || !this.isMobile());
             overlay.setAttribute('aria-hidden', (!isPortrait || !this.isMobile()).toString());
         };
 
+        const orientationQuery = window.matchMedia('(orientation: portrait)');
+        const queryListener = () => applyOrientationState();
+
+        if (typeof orientationQuery.addEventListener === 'function') {
+            orientationQuery.addEventListener('change', queryListener);
+        } else if (typeof orientationQuery.addListener === 'function') {
+            orientationQuery.addListener(queryListener);
+        }
+
+        if (window.screen?.orientation?.addEventListener) {
+            window.screen.orientation.addEventListener('change', applyOrientationState);
+        }
+
         window.addEventListener('orientationchange', applyOrientationState);
         window.addEventListener('resize', applyOrientationState);
+        window.addEventListener('pageshow', applyOrientationState);
+        document.addEventListener('visibilitychange', applyOrientationState);
         applyOrientationState();
+
+        // Some mobile browsers (notably iOS Safari) can skip orientation events.
+        setTimeout(applyOrientationState, 250);
     }
 };
 
