@@ -958,50 +958,64 @@ const Dev = {
 
         async exportFixReport() {
             const sceneId = gameState.currentSceneId;
+            const report = this.buildFixReport(sceneId);
+            const copied = await this.copyText(report);
+            if (!copied) this.downloadText(`${sceneId}.fix-report.txt`, report, 'text/plain');
+        },
+
+        buildFixReport(sceneId) {
             const base = SCENES[sceneId]?.hotspots || [];
             const patched = this.getCurrentHotspots();
             const baseMap = new Map(base.map(h => [h.id, h]));
-            let added = 0;
-            let edited = 0;
-            let deleted = 0;
+            const addedIds = [];
+            const editedIds = [];
 
             patched.forEach(h => {
                 const prev = baseMap.get(h.id);
                 if (!prev) {
-                    added += 1;
+                    addedIds.push(h.id);
                     return;
                 }
                 if (prev.x !== h.x || prev.y !== h.y || prev.width !== h.width || prev.height !== h.height || (prev.target || '') !== (h.target || '')) {
-                    edited += 1;
+                    editedIds.push(h.id);
                 }
                 baseMap.delete(h.id);
             });
-            deleted = baseMap.size;
 
+            const deletedIds = Array.from(baseMap.keys());
             const check = this.validateScene(sceneId, patched);
             const layoutSnapshot = Dev.layout.loadLayouts();
-            const report = [
+
+            const actions = [];
+            if (check.invalidTargets > 0) actions.push('- Fix invalid target sceneIds (they break navigation).');
+            if (check.zeroSize > 0) actions.push('- Resize zero-size hotspots to clickable sizes.');
+            if (check.outOfBounds.length > 0) actions.push('- Move out-of-bounds hotspots back inside the reference frame.');
+            if (check.overlaps.length > 0) actions.push('- Resolve overlapping hotspots or set clear z-order ownership.');
+            if (!actions.length) actions.push('- No blocking issues detected. You can ship this patch.');
+
+            return [
                 `=== Hotspot Fix Report ===`,
                 `sceneId: ${sceneId}`,
                 `generatedAt: ${new Date().toISOString()}`,
                 '',
                 'Summary:',
-                `- added hotspots: ${added}`,
-                `- edited hotspots: ${edited}`,
-                `- deleted hotspots: ${deleted}`,
+                `- added hotspots: ${addedIds.length}${addedIds.length ? ` (${addedIds.join(', ')})` : ''}`,
+                `- edited hotspots: ${editedIds.length}${editedIds.length ? ` (${editedIds.join(', ')})` : ''}`,
+                `- deleted hotspots: ${deletedIds.length}${deletedIds.length ? ` (${deletedIds.join(', ')})` : ''}`,
                 '',
                 'Validation:',
                 `- invalid targets: ${check.invalidTargets}`,
                 `- overlaps: ${check.overlaps.length}`,
                 `- out-of-bounds: ${check.outOfBounds.length}`,
                 `- zero-size: ${check.zeroSize}`,
-                ...check.warnings.map(w => `  * ${w}`),
+                ...(check.warnings.length ? check.warnings.map(w => `  * ${w}`) : ['  * No validation warnings.']),
+                '',
+                'Actionable next steps:',
+                ...actions,
                 '',
                 'Layout JSON:',
                 JSON.stringify(layoutSnapshot, null, 2)
             ].join('\n');
-            const copied = await this.copyText(report);
-            if (!copied) this.downloadText(`${sceneId}.fix-report.txt`, report, 'text/plain');
         }
     },
 
@@ -1386,8 +1400,7 @@ const Dev = {
             if (runValidateBtn) {
                 runValidateBtn.addEventListener('click', () => {
                     SFXGenerator.playButtonClick();
-                    this.setActiveTool('hotspots');
-                    this.hotspots.render();
+                    this.runValidationNow();
                 });
             }
 
@@ -1424,8 +1437,7 @@ const Dev = {
                         this.setActiveTool('layout');
                     }
                     if (event.currentTarget.dataset.devAction === 'validate') {
-                        this.setActiveTool('hotspots');
-                        this.hotspots.render();
+                        this.runValidationNow();
                     }
                     if (event.currentTarget.dataset.devAction === 'export') {
                         this.hotspots.exportFixReport();
@@ -1589,6 +1601,30 @@ const Dev = {
         this.ui.updateFloatingButton();
         this.hotspots.render();
         this.layout.render();
+    },
+
+    runValidationNow() {
+        this.setActiveTool('hotspots');
+        this.hotspots.render();
+        const output = document.getElementById('dev-validation-output');
+        if (!output) return;
+        const sceneId = gameState.currentSceneId;
+        const hotspots = this.hotspots.getCurrentHotspots();
+        const check = this.hotspots.validateScene(sceneId, hotspots);
+        const actions = [];
+        if (check.invalidTargets > 0) actions.push('Fix invalid target sceneIds.');
+        if (check.zeroSize > 0) actions.push('Resize zero-size hotspots.');
+        if (check.outOfBounds.length > 0) actions.push(`Move out-of-bounds hotspots: ${check.outOfBounds.join(', ')}`);
+        if (check.overlaps.length > 0) actions.push(`Review overlapping pairs: ${check.overlaps.join('; ')}`);
+        if (!actions.length) actions.push('No blocking issues found.');
+        output.textContent = [
+            `sceneId=${sceneId}`,
+            `hotspots=${hotspots.length}`,
+            `invalidTargets=${check.invalidTargets} overlaps=${check.overlaps.length} outOfBounds=${check.outOfBounds.length} zeroSize=${check.zeroSize}`,
+            '',
+            'nextSteps:',
+            ...actions.map(action => `- ${action}`)
+        ].join('\n');
     }
 };
 
