@@ -578,6 +578,11 @@ body.show-hotspots .hotspot-debug-label {
 #dialogue-container.narrative-mode #dialogue-content {
     position: static;
     padding: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: clamp(8px, 1.2vw, 14px);
+    min-height: 100%;
 }
 
 #dialogue-bubble {
@@ -636,6 +641,16 @@ body.show-hotspots .hotspot-debug-label {
     padding: clamp(6px, 1.2vw, 10px);
     width: 100%;
     text-align: center;
+    text-wrap: pretty;
+}
+
+#dialogue-container.narrative-mode #dialogue-text {
+    text-align: left;
+    line-height: 1.7;
+    margin-bottom: 0;
+    max-height: none;
+    overflow-y: auto;
+    padding-inline: clamp(6px, 1vw, 14px);
 }
 
 /* Mobile: adjust dialogue box positioning and spacing */
@@ -1504,6 +1519,11 @@ body.show-hotspots .hotspot-debug-label {
     will-change: transform;
 }
 
+.dev-layout-target.dev-layout-resizing {
+    opacity: 0.96;
+    will-change: width, height;
+}
+
 .dev-layout-handle {
     position: absolute;
     top: 0;
@@ -1527,6 +1547,36 @@ body.show-hotspots .hotspot-debug-label {
 
 .dev-layout-target .dev-layout-handle {
     touch-action: none;
+}
+
+.dev-layout-resize-handle {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: rgba(0, 255, 208, 0.92);
+    border: 1px solid rgba(0, 0, 0, 0.85);
+    border-radius: 2px;
+    z-index: 3;
+}
+
+.dev-layout-resize-handle[data-resize="e"] {
+    right: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: ew-resize;
+}
+
+.dev-layout-resize-handle[data-resize="s"] {
+    left: 50%;
+    bottom: -8px;
+    transform: translateX(-50%);
+    cursor: ns-resize;
+}
+
+.dev-layout-resize-handle[data-resize="se"] {
+    right: -8px;
+    bottom: -8px;
+    cursor: nwse-resize;
 }
 
 /* ===== TRANSITION INTERACTION BLOCKING ===== */

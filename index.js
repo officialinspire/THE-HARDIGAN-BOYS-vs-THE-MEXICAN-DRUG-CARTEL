@@ -363,6 +363,8 @@ const Dev = {
 
         recordClick(event) {
             if (!this.isActive()) return;
+            const targetEl = event.target instanceof Element ? event.target : null;
+            if (targetEl?.closest('#dev-hotspot-editor-layer') || targetEl?.closest('.dev-layout-resize-handle') || targetEl?.closest('.dev-layout-handle')) return;
             const coords = this.mapClientToScene(event.clientX, event.clientY);
             if (!coords) return;
             const hit = this.hitTest(coords.x, coords.y);
@@ -448,15 +450,17 @@ const Dev = {
         panelEl: null,
         validationWarnings: [],
         interaction: null,
+        interactionRaf: null,
         boxById: new Map(),
         undoByScene: new Map(),
 
         isActive() {
-            return Dev.toolsEnabled && Dev.activeTool === 'hotspots';
+            return Dev.toolsEnabled && (Dev.activeTool === 'hotspots' || Dev.activeTool === 'trace');
         },
 
         cancelInteraction() {
             this.interaction = null;
+            this.interactionRaf = null;
         },
 
         shouldBlockGameplay() {
@@ -716,6 +720,7 @@ const Dev = {
 
             overlay.addEventListener('pointerdown', (event) => {
                 if (!this.isActive()) return;
+                if (event.button !== 0) return;
                 const point = this.mapClientToScene(event.clientX, event.clientY);
                 if (!point) return;
                 overlay.setPointerCapture(event.pointerId);
@@ -750,60 +755,72 @@ const Dev = {
 
             overlay.addEventListener('pointermove', (event) => {
                 if (!this.isActive() || !this.interaction) return;
-                const point = this.mapClientToScene(event.clientX, event.clientY);
-                if (!point) return;
-                const sceneId = gameState.currentSceneId;
-                const interaction = this.interaction;
-                if (!interaction.initialPatch) {
-                    interaction.initialPatch = this.getScenePatch(sceneId);
-                }
-                let rect;
-
-                if (interaction.mode === 'create') {
-                    rect = this.clampRect({
-                        x: this.snap(interaction.start.x),
-                        y: this.snap(interaction.start.y),
-                        w: this.snap(point.x) - this.snap(interaction.start.x),
-                        h: this.snap(point.y) - this.snap(interaction.start.y)
-                    });
-                    this.upsertHotspot(sceneId, { id: interaction.newId, ...rect, type: 'scene', target: '', z: 0 });
+                this.interaction.latestClientX = event.clientX;
+                this.interaction.latestClientY = event.clientY;
+                if (this.interactionRaf) {
+                    event.preventDefault();
+                    return;
                 }
 
-                if (interaction.mode === 'move') {
-                    const dx = this.snap(point.x - interaction.start.x);
-                    const dy = this.snap(point.y - interaction.start.y);
-                    rect = this.clampRect({ x: interaction.original.x + dx, y: interaction.original.y + dy, w: interaction.original.w, h: interaction.original.h });
-                    this.upsertHotspot(sceneId, { ...interaction.original, ...rect });
-                }
+                this.interactionRaf = requestAnimationFrame(() => {
+                    this.interactionRaf = null;
+                    if (!this.isActive() || !this.interaction) return;
+                    const point = this.mapClientToScene(this.interaction.latestClientX, this.interaction.latestClientY);
+                    if (!point) return;
+                    const sceneId = gameState.currentSceneId;
+                    const interaction = this.interaction;
+                    if (!interaction.initialPatch) {
+                        interaction.initialPatch = this.getScenePatch(sceneId);
+                    }
+                    let rect;
 
-                if (interaction.mode === 'resize') {
-                    const orig = interaction.original;
-                    let x = orig.x;
-                    let y = orig.y;
-                    let w = orig.w;
-                    let h = orig.h;
-                    const px = this.snap(point.x);
-                    const py = this.snap(point.y);
-                    if (interaction.corner.includes('n')) {
-                        h = (orig.y + orig.h) - py;
-                        y = py;
+                    if (interaction.mode === 'create') {
+                        rect = this.clampRect({
+                            x: this.snap(interaction.start.x),
+                            y: this.snap(interaction.start.y),
+                            w: this.snap(point.x) - this.snap(interaction.start.x),
+                            h: this.snap(point.y) - this.snap(interaction.start.y)
+                        });
+                        this.upsertHotspot(sceneId, { id: interaction.newId, ...rect, type: 'scene', target: '', z: 0 });
                     }
-                    if (interaction.corner.includes('s')) {
-                        h = py - orig.y;
-                    }
-                    if (interaction.corner.includes('w')) {
-                        w = (orig.x + orig.w) - px;
-                        x = px;
-                    }
-                    if (interaction.corner.includes('e')) {
-                        w = px - orig.x;
-                    }
-                    rect = this.clampRect({ x, y, w, h });
-                    this.upsertHotspot(sceneId, { ...orig, ...rect });
-                }
 
-                sceneRenderer.refreshCurrentHotspots({ reapplyTools: false });
-                this.render(true);
+                    if (interaction.mode === 'move') {
+                        const dx = this.snap(point.x - interaction.start.x);
+                        const dy = this.snap(point.y - interaction.start.y);
+                        rect = this.clampRect({ x: interaction.original.x + dx, y: interaction.original.y + dy, w: interaction.original.w, h: interaction.original.h });
+                        this.upsertHotspot(sceneId, { ...interaction.original, ...rect });
+                    }
+
+                    if (interaction.mode === 'resize') {
+                        const orig = interaction.original;
+                        let x = orig.x;
+                        let y = orig.y;
+                        let w = orig.w;
+                        let h = orig.h;
+                        const px = this.snap(point.x);
+                        const py = this.snap(point.y);
+                        if (interaction.corner.includes('n')) {
+                            h = (orig.y + orig.h) - py;
+                            y = py;
+                        }
+                        if (interaction.corner.includes('s')) {
+                            h = py - orig.y;
+                        }
+                        if (interaction.corner.includes('w')) {
+                            w = (orig.x + orig.w) - px;
+                            x = px;
+                        }
+                        if (interaction.corner.includes('e')) {
+                            w = px - orig.x;
+                        }
+                        rect = this.clampRect({ x, y, w, h });
+                        this.upsertHotspot(sceneId, { ...orig, ...rect });
+                    }
+
+                    sceneRenderer.refreshCurrentHotspots({ reapplyTools: false });
+                    this.render(true);
+                });
+                event.preventDefault();
             });
 
             overlay.addEventListener('pointerup', (event) => {
@@ -816,6 +833,7 @@ const Dev = {
                     }
                 }
                 this.interaction = null;
+                this.interactionRaf = null;
                 if (overlay.hasPointerCapture(event.pointerId)) {
                     overlay.releasePointerCapture(event.pointerId);
                 }
@@ -823,6 +841,7 @@ const Dev = {
 
             overlay.addEventListener('pointercancel', (event) => {
                 this.interaction = null;
+                this.interactionRaf = null;
                 if (overlay.hasPointerCapture(event.pointerId)) {
                     overlay.releasePointerCapture(event.pointerId);
                 }
@@ -1023,6 +1042,7 @@ const Dev = {
         dragging: null,
         selectedPanelKey: null,
         listenersBound: false,
+        moveRaf: null,
 
         panelConfigs: [
             { key: 'speech-bubble', selector: '[data-layout-panel="speech-bubble"]' },
@@ -1123,6 +1143,13 @@ const Dev = {
             handle.className = 'dev-layout-handle';
             handle.textContent = 'Drag';
             panel.prepend(handle);
+
+            ['e', 's', 'se'].forEach((direction) => {
+                const resizeHandle = document.createElement('span');
+                resizeHandle.className = 'dev-layout-resize-handle';
+                resizeHandle.dataset.resize = direction;
+                panel.appendChild(resizeHandle);
+            });
         },
 
         clampPosition(panel, left, top) {
@@ -1153,16 +1180,34 @@ const Dev = {
             if (!this.dragging) return;
             const { panel } = this.dragging;
             panel.classList.remove('dev-layout-dragging');
+            panel.classList.remove('dev-layout-resizing');
             panel.style.transform = 'none';
             this.dragging = null;
+            this.moveRaf = null;
+        },
+
+        clampSize(panel, width, height, baseLeft = null, baseTop = null) {
+            const container = document.getElementById('scene-container');
+            if (!container || !panel) return { width, height };
+            const minWidth = Math.max(120, Math.round(container.clientWidth * 0.12));
+            const minHeight = Math.max(60, Math.round(container.clientHeight * 0.1));
+            const left = Number.isFinite(baseLeft) ? baseLeft : (parseFloat(panel.style.left) || 0);
+            const top = Number.isFinite(baseTop) ? baseTop : (parseFloat(panel.style.top) || 0);
+            const maxWidth = Math.max(minWidth, container.clientWidth - left);
+            const maxHeight = Math.max(minHeight, container.clientHeight - top);
+            return {
+                width: Math.min(maxWidth, Math.max(minWidth, width)),
+                height: Math.min(maxHeight, Math.max(minHeight, height))
+            };
         },
 
         handlePointerDown(event) {
             if (!this.isActive() || event.button !== 0) return;
             const panel = event.target.closest('[data-layout-panel]');
             if (!panel) return;
+            const resizeDirection = event.target.closest('.dev-layout-resize-handle')?.dataset?.resize || null;
             const fromHandle = Boolean(event.target.closest('.dev-layout-handle'));
-            if (!fromHandle && !event.altKey) return;
+            if (!resizeDirection && !fromHandle && !event.altKey) return;
             const container = document.getElementById('scene-container');
             if (!container) return;
             const panelRect = panel.getBoundingClientRect();
@@ -1170,47 +1215,90 @@ const Dev = {
             const currentLeft = panelRect.left - containerRect.left;
             const currentTop = panelRect.top - containerRect.top;
             const start = this.clampPosition(panel, currentLeft, currentTop);
-            this.applyLayoutToPanel(panel, { left: start.left, top: start.top });
+            const startSize = this.clampSize(panel, panelRect.width, panelRect.height, start.left, start.top);
+            this.applyLayoutToPanel(panel, { left: start.left, top: start.top, width: startSize.width, height: startSize.height });
             this.ensureHandle(panel);
+            panel.setPointerCapture?.(event.pointerId);
             this.dragging = {
                 panel,
                 panelKey: panel?.dataset?.layoutPanel || null,
+                pointerId: event.pointerId,
+                mode: resizeDirection ? 'resize' : 'move',
+                resizeDirection,
                 startX: event.clientX,
                 startY: event.clientY,
                 baseLeft: start.left,
                 baseTop: start.top,
+                baseWidth: startSize.width,
+                baseHeight: startSize.height,
                 previewLeft: start.left,
-                previewTop: start.top
+                previewTop: start.top,
+                previewWidth: startSize.width,
+                previewHeight: startSize.height
             };
             this.selectedPanelKey = this.dragging.panelKey;
-            panel.classList.add('dev-layout-dragging');
+            panel.classList.add(this.dragging.mode === 'resize' ? 'dev-layout-resizing' : 'dev-layout-dragging');
             panel.style.transform = 'translate3d(0px, 0px, 0px)';
             event.preventDefault();
         },
 
         handlePointerMove(event) {
             if (!this.dragging || !this.isActive()) return;
-            const { panel, startX, startY, baseLeft, baseTop } = this.dragging;
-            const deltaX = event.clientX - startX;
-            const deltaY = event.clientY - startY;
-            const next = this.clampPosition(panel, baseLeft + deltaX, baseTop + deltaY);
-            this.dragging.previewLeft = next.left;
-            this.dragging.previewTop = next.top;
-            const moveX = next.left - baseLeft;
-            const moveY = next.top - baseTop;
-            panel.style.transform = `translate3d(${Math.round(moveX)}px, ${Math.round(moveY)}px, 0px)`;
+            this.dragging.latestClientX = event.clientX;
+            this.dragging.latestClientY = event.clientY;
+            if (this.moveRaf) {
+                event.preventDefault();
+                return;
+            }
+            this.moveRaf = requestAnimationFrame(() => {
+                this.moveRaf = null;
+                if (!this.dragging || !this.isActive()) return;
+                const { panel, startX, startY, baseLeft, baseTop, baseWidth, baseHeight, mode, resizeDirection, latestClientX, latestClientY } = this.dragging;
+                const deltaX = latestClientX - startX;
+                const deltaY = latestClientY - startY;
+
+                if (mode === 'move') {
+                    const next = this.clampPosition(panel, baseLeft + deltaX, baseTop + deltaY);
+                    this.dragging.previewLeft = next.left;
+                    this.dragging.previewTop = next.top;
+                    const moveX = next.left - baseLeft;
+                    const moveY = next.top - baseTop;
+                    panel.style.transform = `translate3d(${Math.round(moveX)}px, ${Math.round(moveY)}px, 0px)`;
+                    return;
+                }
+
+                let width = baseWidth;
+                let height = baseHeight;
+                if (resizeDirection?.includes('e')) width = baseWidth + deltaX;
+                if (resizeDirection?.includes('s')) height = baseHeight + deltaY;
+                const clamped = this.clampSize(panel, width, height, baseLeft, baseTop);
+                this.dragging.previewWidth = clamped.width;
+                this.dragging.previewHeight = clamped.height;
+                panel.style.width = `${Math.round(clamped.width)}px`;
+                panel.style.height = `${Math.round(clamped.height)}px`;
+            });
             event.preventDefault();
         },
 
-        handlePointerUp() {
+        handlePointerUp(event) {
             if (!this.dragging) return;
-            const { panel, previewLeft, previewTop } = this.dragging;
+            const { panel, previewLeft, previewTop, previewWidth, previewHeight, mode, pointerId } = this.dragging;
             panel.classList.remove('dev-layout-dragging');
+            panel.classList.remove('dev-layout-resizing');
             panel.style.transform = 'none';
-            this.applyLayoutToPanel(panel, { left: previewLeft, top: previewTop });
+            if (event && Number.isFinite(pointerId) && panel.hasPointerCapture?.(pointerId)) {
+                panel.releasePointerCapture(pointerId);
+            }
+            this.applyLayoutToPanel(panel, {
+                left: previewLeft,
+                top: previewTop,
+                width: previewWidth,
+                height: previewHeight
+            });
             this.ensureHandle(panel);
             this.savePanelFromElement(panel);
             this.dragging = null;
+            this.moveRaf = null;
         },
 
         resetLayouts() {
@@ -1304,7 +1392,7 @@ const Dev = {
                     <button type="button" id="dev-snap-safe-margins" class="dev-hub-btn">Snap To Safe Margins</button>
                     <button type="button" id="dev-reset-current-panel" class="dev-hub-btn">Reset Current Panel</button>
                 </div>
-                <p>Drag with the top strip, or hold <strong>Alt</strong> and drag any panel area.</p>
+                <p>Drag with the top strip (or hold <strong>Alt</strong> and drag any panel area). Resize with the cyan edge/corner grips.</p>
             `;
             const footer = hubPanel.querySelector('.dev-hub-footer');
             hubPanel.insertBefore(panel, footer);
@@ -1332,8 +1420,8 @@ const Dev = {
             this.listenersBound = true;
             document.addEventListener('pointerdown', (event) => this.handlePointerDown(event));
             document.addEventListener('pointermove', (event) => this.handlePointerMove(event));
-            document.addEventListener('pointerup', () => this.handlePointerUp());
-            document.addEventListener('pointercancel', () => this.handlePointerUp());
+            document.addEventListener('pointerup', (event) => this.handlePointerUp(event));
+            document.addEventListener('pointercancel', (event) => this.handlePointerUp(event));
         }
     },
 
