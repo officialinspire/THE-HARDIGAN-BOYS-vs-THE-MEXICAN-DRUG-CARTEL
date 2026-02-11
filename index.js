@@ -2870,36 +2870,68 @@ const sceneRenderer = {
     },
 
     attachSpriteFallback(img, spriteCandidates) {
-        if (!img || !Array.isArray(spriteCandidates) || spriteCandidates.length === 0) return;
+        // Validate inputs
+        if (!img) {
+            console.error('attachSpriteFallback: no img element provided');
+            return;
+        }
+
+        if (!Array.isArray(spriteCandidates) || spriteCandidates.length === 0) {
+            console.error('attachSpriteFallback: invalid sprite candidates', { spriteCandidates });
+            // Show placeholder immediately
+            const placeholderSrc = getMissingAssetPlaceholder('unknown-character.png', 240, 320);
+            img.src = placeholderSrc;
+            img.alt = 'Missing character sprite';
+            return;
+        }
 
         let candidateIndex = 0;
 
         const applyCandidate = () => {
-            if (candidateIndex >= spriteCandidates.length) return;
-            const spriteName = spriteCandidates[candidateIndex];
-            const spriteSrc = `./assets/characters/${spriteName}`;
-            img.dataset.spriteCandidate = spriteName;
-            img.src = spriteSrc;
-            spriteTransparencyProcessor.makeWhitePixelsTransparent(img);
-        };
+            if (candidateIndex >= spriteCandidates.length) {
+                // All candidates failed - show placeholder
+                const lastTried = spriteCandidates[spriteCandidates.length - 1] || 'unknown';
+                console.error(`All character sprite candidates failed for ${lastTried}`, {
+                    candidates: spriteCandidates
+                });
 
-        img.onerror = () => {
-            candidateIndex += 1;
-            if (candidateIndex < spriteCandidates.length) {
-                const failedSprite = img.dataset.spriteCandidate;
-                const nextSprite = spriteCandidates[candidateIndex];
-                console.warn(`Character sprite ${failedSprite} missing, retrying with ${nextSprite}`);
-                applyCandidate();
+                const placeholderSrc = getMissingAssetPlaceholder(lastTried, 240, 320);
+                img.src = placeholderSrc;
+                img.alt = `Missing: ${lastTried}`;
                 return;
             }
 
-            const failedSprite = img.dataset.spriteCandidate || spriteCandidates[spriteCandidates.length - 1];
-            const failedSrc = `./assets/characters/${failedSprite}`;
-            errorLogger.log('character-sprite-fallback', new Error(`Missing asset: ${failedSrc}`), { spriteCandidates });
-            img.alt = `Missing asset: ${failedSprite}`;
-            img.src = getMissingAssetPlaceholder(failedSrc, img.width || 240, img.height || 320);
+            const spriteName = spriteCandidates[candidateIndex];
+            const spriteSrc = `./assets/characters/${spriteName}`;
+            img.dataset.spriteCandidate = spriteName;
+            img.dataset.candidateIndex = candidateIndex;
+            img.src = spriteSrc;
         };
 
+        // Success handler - only process transparency after successful load
+        img.onload = () => {
+            // Only process if this is an actual sprite (not placeholder)
+            if (!img.src.includes('data:image/svg')) {
+                spriteTransparencyProcessor.makeWhitePixelsTransparent(img);
+            }
+        };
+
+        // Error handler - try next candidate
+        img.onerror = () => {
+            const failedSprite = img.dataset.spriteCandidate || 'unknown';
+            candidateIndex += 1;
+
+            if (candidateIndex < spriteCandidates.length) {
+                const nextSprite = spriteCandidates[candidateIndex];
+                console.warn(`Character sprite ${failedSprite} missing, trying ${nextSprite} (${candidateIndex + 1}/${spriteCandidates.length})`);
+                applyCandidate();
+            } else {
+                // All failed, apply placeholder
+                applyCandidate();
+            }
+        };
+
+        // Start the fallback chain
         applyCandidate();
     },
 
