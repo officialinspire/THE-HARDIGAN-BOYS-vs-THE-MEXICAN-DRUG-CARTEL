@@ -3080,6 +3080,11 @@ const sceneRenderer = {
             return;
         }
 
+        document.body.classList.toggle('main-menu', sceneId === 'S0_MAIN_MENU');
+        if (sceneId === 'S0_MAIN_MENU') {
+            document.getElementById('scene-title').textContent = '';
+        }
+
         // Show loading indicator for transition lifecycle
         showTransitionLoader();
 
@@ -3100,7 +3105,6 @@ const sceneRenderer = {
 
             this.currentScene = scene;
             gameState.currentSceneId = sceneId;
-            document.body.classList.toggle('main-menu', sceneId === 'S0_MAIN_MENU');
             Dev.updateStatus();
             gameState.currentDialogueIndex = 0;
             gameState.objectsClicked.clear();

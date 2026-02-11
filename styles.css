@@ -448,9 +448,7 @@ body.show-hotspots .hotspot-debug-label {
 body.main-menu #hud::before,
 body.main-menu #hud-buttons,
 body.main-menu #scene-title {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
+    display: none !important;
 }
 
 /* HUD Buttons - TOP RIGHT within container */
