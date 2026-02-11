@@ -2927,8 +2927,25 @@ const sceneRenderer = {
         });
     },
 
-    addCharacter(char, slideDelay = 100) {
+    async addCharacter(char, slideDelay = 100) {
         const charLayer = document.getElementById('character-layer');
+
+        // CRITICAL FIX: Wait for background to fully load before positioning
+        const bg = document.getElementById('scene-background');
+        if (bg && !bg.complete) {
+            await new Promise(resolve => {
+                const onLoad = () => {
+                    bg.removeEventListener('load', onLoad);
+                    bg.removeEventListener('error', onLoad);
+                    resolve();
+                };
+                bg.addEventListener('load', onLoad, { once: true });
+                bg.addEventListener('error', onLoad, { once: true });
+                // Timeout fallback - position anyway after 1 second
+                setTimeout(resolve, 1000);
+            });
+        }
+
         const existingZones = new Set(Array.from(charLayer.querySelectorAll('.character-sprite')).map(el => el.dataset.zone));
         let resolvedZone = char.position || 'center';
         if (resolvedZone === 'left' && existingZones.has('left')) resolvedZone = 'left-2';
@@ -2941,6 +2958,7 @@ const sceneRenderer = {
         img.dataset.characterId = char.id || '';
         img.dataset.characterName = (char.name || '').toUpperCase();
         img.id = char.id ? `char-${char.id}` : undefined;
+        img.style.zIndex = charLayer.querySelectorAll('.character-sprite').length + 1;
 
         const spriteCandidates = this.buildSpriteCandidates(char.sprite, zoneName);
         img.alt = char.name;
@@ -3059,7 +3077,7 @@ const sceneRenderer = {
             document.getElementById('scene-title').textContent = scene.title || '';
 
             if (scene.characters) {
-                this.loadCharacters(scene.characters);
+                await this.loadCharacters(scene.characters);
             }
 
             if (scene.items) {
@@ -3181,39 +3199,14 @@ const sceneRenderer = {
         });
     },
     
-    loadCharacters(characters) {
-        const charLayer = document.getElementById('character-layer');
+    async loadCharacters(characters) {
         const normalizedCharacters = this.normalizeCharacterZones(characters);
 
-        normalizedCharacters.forEach((char, index) => {
-            const img = document.createElement('img');
-            const zoneName = this.normalizeZoneName(char.position || 'center');
-            img.className = `character-sprite char-${zoneName}`;
-            img.dataset.zone = zoneName;
-            img.dataset.characterId = char.id || '';
-            img.dataset.characterName = (char.name || '').toUpperCase();
-
-            const spriteCandidates = this.buildSpriteCandidates(char.sprite, zoneName);
-            img.alt = char.name;
-            this.attachSpriteFallback(img, spriteCandidates);
-            img.style.zIndex = index + 1;
-
-            // Apply calculated pixel position
-            const pos = positioningSystem.calculateCharacterPosition(zoneName);
-            positioningSystem.applyPosition(img, pos);
-
-            if (this.getZoneSide(zoneName) === 'left') {
-                img.classList.add('slide-in-left');
-            } else if (this.getZoneSide(zoneName) === 'right') {
-                img.classList.add('slide-in-right');
+        if (normalizedCharacters.length > 0) {
+            for (let i = 0; i < normalizedCharacters.length; i++) {
+                await this.addCharacter(normalizedCharacters[i], 100 + (i * 200));
             }
-
-            charLayer.appendChild(img);
-
-            setTimeout(() => {
-                img.classList.add('visible');
-            }, 100 + (index * 200));
-        });
+        }
     },
     
     loadItems(items) {
