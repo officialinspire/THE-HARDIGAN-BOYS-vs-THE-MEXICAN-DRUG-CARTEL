@@ -1924,8 +1924,10 @@ function safeAsync(handler, context) {
 const mobileOptimizer = {
     resizeDebounceMs: 300,
     init() {
+        this.syncViewportHeight();
         this.setupTouchGuards();
         this.setupIOSBouncePrevention();
+        this.setupImmersiveMode();
         this.setupOrientationLock();
     },
 
@@ -1954,6 +1956,48 @@ const mobileOptimizer = {
                 event.preventDefault();
             }
         }, { passive: false });
+    },
+
+    syncViewportHeight() {
+        const updateViewportHeight = () => {
+            const viewportHeight = window.visualViewport?.height || window.innerHeight;
+            document.documentElement.style.setProperty('--app-height', `${Math.round(viewportHeight)}px`);
+        };
+
+        updateViewportHeight();
+        window.visualViewport?.addEventListener('resize', updateViewportHeight);
+        window.addEventListener('resize', updateViewportHeight);
+        window.addEventListener('orientationchange', () => {
+            setTimeout(updateViewportHeight, 80);
+        });
+    },
+
+    setupImmersiveMode() {
+        if (!this.isMobile()) return;
+
+        const requestFullscreen = async () => {
+            const root = document.documentElement;
+            if (document.fullscreenElement || !root) return;
+
+            const fn = root.requestFullscreen
+                || root.webkitRequestFullscreen
+                || root.msRequestFullscreen;
+
+            if (typeof fn === 'function') {
+                try {
+                    await fn.call(root);
+                } catch (error) {
+                    errorLogger.log('fullscreen-request', error);
+                }
+            }
+
+            // Fallback for browsers that ignore fullscreen request (mobile Safari).
+            window.scrollTo(0, 1);
+        };
+
+        const onceOptions = { passive: true, once: true };
+        document.addEventListener('pointerup', requestFullscreen, onceOptions);
+        document.addEventListener('touchend', requestFullscreen, onceOptions);
     },
 
     async setupOrientationLock() {
