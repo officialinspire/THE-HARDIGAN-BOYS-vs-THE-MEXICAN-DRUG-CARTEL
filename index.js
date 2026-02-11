@@ -10,13 +10,54 @@ const SFXGenerator = {
     init() {
         try {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Audio context often starts suspended - need user interaction to resume
+            if (this.audioContext.state === 'suspended') {
+                console.log('AudioContext suspended, waiting for user interaction...');
+            }
+            
+            // Resume audio context on any user interaction
+            const resumeAudio = () => {
+                if (this.audioContext && this.audioContext.state === 'suspended') {
+                    this.audioContext.resume().then(() => {
+                        console.log('AudioContext resumed successfully');
+                    }).catch(err => {
+                        console.warn('Failed to resume AudioContext:', err);
+                    });
+                }
+            };
+            
+            // Attach to multiple event types for better compatibility
+            ['touchstart', 'touchend', 'mousedown', 'click', 'keydown'].forEach(eventType => {
+                document.addEventListener(eventType, resumeAudio, {
+                    once: true,
+                    passive: true,
+                    capture: true
+                });
+            });
+            
+            // Also try to resume when playing any sound
+            this._originalPlay = this.playButtonClick.bind(this);
         } catch(e) {
-            console.warn('Web Audio API not supported');
+            console.warn('Web Audio API not supported:', e);
+            this.audioContext = null;
         }
+    },
+
+    _ensureAudioContext() {
+        if (!this.audioContext) return false;
+        
+        if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume().catch(err => {
+                console.warn('Failed to resume audio:', err);
+            });
+        }
+        
+        return true;
     },
     
     playButtonClick() {
-        if (!this.audioContext) return;
+        if (!this._ensureAudioContext()) return;
         const osc = this.audioContext.createOscillator();
         const gain = this.audioContext.createGain();
         
@@ -33,7 +74,7 @@ const SFXGenerator = {
     },
     
     playDialogueAdvance() {
-        if (!this.audioContext) return;
+        if (!this._ensureAudioContext()) return;
         const osc = this.audioContext.createOscillator();
         const gain = this.audioContext.createGain();
 
@@ -49,7 +90,7 @@ const SFXGenerator = {
     },
 
     playContinueButton() {
-        if (!this.audioContext) return;
+        if (!this._ensureAudioContext()) return;
         const osc = this.audioContext.createOscillator();
         const gain = this.audioContext.createGain();
 
@@ -67,7 +108,7 @@ const SFXGenerator = {
     },
 
     playDialoguePop() {
-        if (!this.audioContext) return;
+        if (!this._ensureAudioContext()) return;
         const now = this.audioContext.currentTime;
         const masterGain = this.audioContext.createGain();
         masterGain.gain.setValueAtTime(0.22 * (gameState.settings.sfxVolume / 100), now);
@@ -84,7 +125,7 @@ const SFXGenerator = {
     },
 
     playDialogueWhooshClose() {
-        if (!this.audioContext) return;
+        if (!this._ensureAudioContext()) return;
         const now = this.audioContext.currentTime;
         const bufferSize = this.audioContext.sampleRate * 0.22;
         const noiseBuffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
@@ -115,7 +156,7 @@ const SFXGenerator = {
     },
     
     playMenuOpen() {
-        if (!this.audioContext) return;
+        if (!this._ensureAudioContext()) return;
         const osc = this.audioContext.createOscillator();
         const gain = this.audioContext.createGain();
 
@@ -132,7 +173,7 @@ const SFXGenerator = {
     },
 
     playLampClick() {
-        if (!this.audioContext) return;
+        if (!this._ensureAudioContext()) return;
         const osc = this.audioContext.createOscillator();
         const gain = this.audioContext.createGain();
 
@@ -150,7 +191,7 @@ const SFXGenerator = {
     },
 
     playTVClick() {
-        if (!this.audioContext) return;
+        if (!this._ensureAudioContext()) return;
         const osc = this.audioContext.createOscillator();
         const gain = this.audioContext.createGain();
 
