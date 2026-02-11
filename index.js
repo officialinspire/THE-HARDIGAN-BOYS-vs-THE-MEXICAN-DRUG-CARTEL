@@ -65,6 +65,54 @@ const SFXGenerator = {
         osc.start(this.audioContext.currentTime);
         osc.stop(this.audioContext.currentTime + 0.08);
     },
+
+    playDialoguePop() {
+        if (!this.audioContext) return;
+        const now = this.audioContext.currentTime;
+        const masterGain = this.audioContext.createGain();
+        masterGain.gain.setValueAtTime(0.22 * (gameState.settings.sfxVolume / 100), now);
+        masterGain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+        masterGain.connect(this.audioContext.destination);
+
+        const osc = this.audioContext.createOscillator();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(420, now);
+        osc.frequency.exponentialRampToValueAtTime(760, now + 0.09);
+        osc.connect(masterGain);
+        osc.start(now);
+        osc.stop(now + 0.14);
+    },
+
+    playDialogueWhooshClose() {
+        if (!this.audioContext) return;
+        const now = this.audioContext.currentTime;
+        const bufferSize = this.audioContext.sampleRate * 0.22;
+        const noiseBuffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+        const data = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i += 1) {
+            data[i] = (Math.random() * 2 - 1) * 0.4;
+        }
+
+        const source = this.audioContext.createBufferSource();
+        source.buffer = noiseBuffer;
+
+        const filter = this.audioContext.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(1800, now);
+        filter.frequency.exponentialRampToValueAtTime(380, now + 0.2);
+        filter.Q.setValueAtTime(0.9, now);
+
+        const gain = this.audioContext.createGain();
+        gain.gain.setValueAtTime(0.2 * (gameState.settings.sfxVolume / 100), now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.audioContext.destination);
+
+        source.start(now);
+        source.stop(now + 0.22);
+    },
     
     playMenuOpen() {
         if (!this.audioContext) return;
@@ -2756,6 +2804,8 @@ const sceneRenderer = {
     // Transition queue system
     transitionQueue: [],
     isTransitioning: false,
+    dialogueExitDurationMs: 220,
+    dialogueEnterDurationMs: 250,
 
     // Transition state callbacks
     onTransitionStart: null,
@@ -2906,6 +2956,7 @@ const sceneRenderer = {
 
             this.currentScene = scene;
             gameState.currentSceneId = sceneId;
+            document.body.classList.toggle('main-menu', sceneId === 'S0_MAIN_MENU');
             Dev.updateStatus();
             gameState.currentDialogueIndex = 0;
             gameState.objectsClicked.clear();
@@ -3255,6 +3306,7 @@ const sceneRenderer = {
 
             choicesDiv.innerHTML = '';
             continueBtn.classList.add('hidden');
+            dialogueBox.classList.remove('dialogue-enter', 'dialogue-exit');
 
             // Clear previous position classes and inline overrides from bounds clamping
             dialogueBox.classList.remove('dialogue-left', 'dialogue-right', 'dialogue-center', 'dialogue-offscreen');
@@ -3308,7 +3360,7 @@ const sceneRenderer = {
             Dev.layout.applySavedLayouts();
             text.textContent = dialogueEntry.text || '';
 
-            SFXGenerator.playDialogueAdvance();
+            this._animateDialogueEntry();
 
             if (dialogueEntry.choices && dialogueEntry.choices.length > 0) {
                 dialogueEntry.choices.forEach(choice => {
@@ -3334,19 +3386,21 @@ const sceneRenderer = {
                     gameState.actionLock = true;
                     gameState.dialogueLock = false;
                     SFXGenerator.playContinueButton();
-                    if (dialogueEntry.next === 'NEXT_DIALOGUE') {
-                        this.nextDialogue();
-                    } else if (typeof dialogueEntry.next === 'function') {
-                        dialogueEntry.next();
-                    } else {
-                        this.loadScene(dialogueEntry.next);
-                    }
-                    gameState.actionLock = false;
+                    this._closeDialogueThen(() => {
+                        if (dialogueEntry.next === 'NEXT_DIALOGUE') {
+                            this.nextDialogue();
+                        } else if (typeof dialogueEntry.next === 'function') {
+                            dialogueEntry.next();
+                        } else {
+                            this.loadScene(dialogueEntry.next);
+                        }
+                        gameState.actionLock = false;
+                    });
                 };
             } else {
                 setTimeout(() => {
                     gameState.dialogueLock = false;
-                    this.nextDialogue();
+                    this._closeDialogueThen(() => this.nextDialogue());
                 }, 3000);
             }
         } catch (error) {
@@ -3502,10 +3556,47 @@ const sceneRenderer = {
         const scene = this.currentScene;
 
         if (scene.dialogue && gameState.currentDialogueIndex < scene.dialogue.length) {
-            this.showDialogue(scene.dialogue[gameState.currentDialogueIndex]);
+            this._closeDialogueThen(() => {
+                this.showDialogue(scene.dialogue[gameState.currentDialogueIndex]);
+            });
         } else {
-            document.getElementById('dialogue-box').classList.add('hidden');
+            this._closeDialogueThen(() => {
+                document.getElementById('dialogue-box').classList.add('hidden');
+            });
         }
+    },
+
+    _animateDialogueEntry() {
+        const dialogueBox = document.getElementById('dialogue-box');
+        if (!dialogueBox) return;
+
+        dialogueBox.classList.remove('dialogue-exit', 'hidden');
+        dialogueBox.classList.add('dialogue-enter');
+        void dialogueBox.offsetWidth;
+        SFXGenerator.playDialogueAdvance();
+        SFXGenerator.playDialoguePop();
+
+        window.setTimeout(() => {
+            dialogueBox.classList.remove('dialogue-enter');
+        }, this.dialogueEnterDurationMs);
+    },
+
+    _closeDialogueThen(nextAction) {
+        const dialogueBox = document.getElementById('dialogue-box');
+        if (!dialogueBox || dialogueBox.classList.contains('hidden')) {
+            if (typeof nextAction === 'function') nextAction();
+            return;
+        }
+
+        dialogueBox.classList.remove('dialogue-enter');
+        dialogueBox.classList.add('dialogue-exit');
+        SFXGenerator.playDialogueWhooshClose();
+
+        window.setTimeout(() => {
+            dialogueBox.classList.add('hidden');
+            dialogueBox.classList.remove('dialogue-exit');
+            if (typeof nextAction === 'function') nextAction();
+        }, this.dialogueExitDurationMs);
     },
     
     fadeTransition(fadeIn) {
