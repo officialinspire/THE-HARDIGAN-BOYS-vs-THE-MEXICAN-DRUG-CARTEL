@@ -1406,6 +1406,47 @@ body.show-hotspots .hotspot-debug-label {
     font-size: 12px;
 }
 
+
+#action-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.dev-layout-target {
+    outline: 2px dashed rgba(0, 255, 208, 0.8);
+    outline-offset: 1px;
+}
+
+.dev-layout-target.dev-layout-dragging {
+    opacity: 0.88;
+}
+
+.dev-layout-handle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    z-index: 2;
+    cursor: grab;
+    user-select: none;
+    color: #d7fff8;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 2px 6px;
+    background: linear-gradient(180deg, rgba(0, 40, 60, 0.85), rgba(0, 25, 40, 0.65));
+    border-bottom: 1px solid rgba(0, 255, 208, 0.75);
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+
+.dev-layout-target .dev-layout-handle {
+    touch-action: none;
+}
+
 /* ===== TRANSITION INTERACTION BLOCKING ===== */
 #scene-container.scene-transitioning #character-layer,
 #scene-container.scene-transitioning #item-layer,

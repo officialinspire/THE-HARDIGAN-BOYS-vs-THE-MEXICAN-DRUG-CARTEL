@@ -173,7 +173,8 @@ const Dev = {
         enabled: 'DEV_MODE_ENABLED',
         toolsEnabled: 'DEV_TOOLS_ENABLED',
         activeTool: 'DEV_ACTIVE_TOOL',
-        patches: 'DEV_PATCHES'
+        patches: 'DEV_PATCHES',
+        layouts: 'DEV_LAYOUTS'
     },
     enabled: false,
     toolsEnabled: false,
@@ -723,6 +724,7 @@ const Dev = {
             deleted = baseMap.size;
 
             const check = this.validateScene(sceneId, patched);
+            const layoutSnapshot = Dev.layout.loadLayouts();
             const report = [
                 `sceneId: ${sceneId}`,
                 `added: ${added}`,
@@ -731,10 +733,257 @@ const Dev = {
                 `invalid targets: ${check.invalidTargets}`,
                 `overlaps: ${check.overlaps.length}`,
                 `out-of-bounds: ${check.outOfBounds.length}`,
-                `zero-size: ${check.zeroSize}`
+                `zero-size: ${check.zeroSize}`,
+                '',
+                'layout-json:',
+                JSON.stringify(layoutSnapshot, null, 2)
             ].join('\n');
             const copied = await this.copyText(report);
             if (!copied) this.downloadText(`${sceneId}.fix-report.txt`, report, 'text/plain');
+        }
+    },
+
+    layout: {
+        dragging: null,
+
+        panelConfigs: [
+            { key: 'speech-bubble', selector: '[data-layout-panel="speech-bubble"]' },
+            { key: 'narrative-box', selector: '[data-layout-panel="narrative-box"]' },
+            { key: 'action-prompts', selector: '[data-layout-panel="action-prompts"]' },
+            { key: 'menu-prompts', selector: '[data-layout-panel="menu-prompts"]' }
+        ],
+
+        isActive() {
+            return Dev.toolsEnabled && Dev.activeTool === 'layout';
+        },
+
+        breakpointKey() {
+            return window.matchMedia('(max-width: 768px)').matches ? 'mobile' : 'desktop';
+        },
+
+        loadLayouts() {
+            try {
+                const raw = localStorage.getItem(Dev.storageKeys.layouts);
+                const parsed = raw ? JSON.parse(raw) : {};
+                return { desktop: parsed.desktop || {}, mobile: parsed.mobile || {} };
+            } catch (error) {
+                errorLogger.log('dev-layout-load', error);
+                return { desktop: {}, mobile: {} };
+            }
+        },
+
+        saveLayouts(layouts) {
+            localStorage.setItem(Dev.storageKeys.layouts, JSON.stringify(layouts));
+        },
+
+        getCurrentLayouts() {
+            const all = this.loadLayouts();
+            return all[this.breakpointKey()] || {};
+        },
+
+        setPanelLayout(panelKey, layout) {
+            const all = this.loadLayouts();
+            const bp = this.breakpointKey();
+            all[bp] = all[bp] || {};
+            all[bp][panelKey] = layout;
+            this.saveLayouts(all);
+        },
+
+        applyLayoutToPanel(panel, layout) {
+            const container = document.getElementById('scene-container');
+            if (!container || !panel || !layout) return;
+            panel.classList.add('dev-layout-target');
+            panel.style.position = 'absolute';
+            panel.style.left = `${Math.round(layout.left || 0)}px`;
+            panel.style.top = `${Math.round(layout.top || 0)}px`;
+            panel.style.right = 'auto';
+            panel.style.bottom = 'auto';
+            panel.style.transform = 'none';
+            panel.style.margin = '0';
+            if (layout.width) panel.style.width = `${Math.round(layout.width)}px`;
+            if (layout.height) panel.style.height = `${Math.round(layout.height)}px`;
+        },
+
+        clearPanelLayout(panel) {
+            if (!panel) return;
+            panel.classList.remove('dev-layout-target');
+            panel.style.position = '';
+            panel.style.left = '';
+            panel.style.top = '';
+            panel.style.right = '';
+            panel.style.bottom = '';
+            panel.style.transform = '';
+            panel.style.margin = '';
+            panel.style.width = '';
+            panel.style.height = '';
+            const handle = panel.querySelector(':scope > .dev-layout-handle');
+            if (handle) handle.remove();
+        },
+
+        applySavedLayouts() {
+            if (!this.isActive()) return;
+            const layouts = this.getCurrentLayouts();
+            this.panelConfigs.forEach(config => {
+                const panel = document.querySelector(config.selector);
+                if (!panel) return;
+                const saved = layouts[config.key];
+                if (saved) this.applyLayoutToPanel(panel, saved);
+                this.ensureHandle(panel);
+            });
+        },
+
+        clearAllPanelLayouts() {
+            this.panelConfigs.forEach(config => {
+                const panel = document.querySelector(config.selector);
+                if (panel) this.clearPanelLayout(panel);
+            });
+        },
+
+        ensureHandle(panel) {
+            if (!panel || panel.querySelector(':scope > .dev-layout-handle')) return;
+            const handle = document.createElement('div');
+            handle.className = 'dev-layout-handle';
+            handle.textContent = 'Drag';
+            panel.prepend(handle);
+        },
+
+        clampPosition(panel, left, top) {
+            const container = document.getElementById('scene-container');
+            if (!container || !panel) return { left, top };
+            const maxLeft = Math.max(0, container.clientWidth - panel.offsetWidth);
+            const maxTop = Math.max(0, container.clientHeight - panel.offsetHeight);
+            return {
+                left: Math.min(maxLeft, Math.max(0, left)),
+                top: Math.min(maxTop, Math.max(0, top))
+            };
+        },
+
+        savePanelFromElement(panel) {
+            const panelKey = panel?.dataset?.layoutPanel;
+            if (!panelKey) return;
+            const left = parseFloat(panel.style.left) || 0;
+            const top = parseFloat(panel.style.top) || 0;
+            this.setPanelLayout(panelKey, {
+                left,
+                top,
+                width: panel.offsetWidth,
+                height: panel.offsetHeight
+            });
+        },
+
+        handlePointerDown(event) {
+            if (!this.isActive() || event.button !== 0) return;
+            const panel = event.target.closest('[data-layout-panel]');
+            if (!panel) return;
+            const fromHandle = Boolean(event.target.closest('.dev-layout-handle'));
+            if (!fromHandle && !event.altKey) return;
+            const container = document.getElementById('scene-container');
+            if (!container) return;
+            const panelRect = panel.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            const currentLeft = panelRect.left - containerRect.left;
+            const currentTop = panelRect.top - containerRect.top;
+            const start = this.clampPosition(panel, currentLeft, currentTop);
+            this.applyLayoutToPanel(panel, { left: start.left, top: start.top });
+            this.ensureHandle(panel);
+            this.dragging = {
+                panel,
+                startX: event.clientX,
+                startY: event.clientY,
+                baseLeft: start.left,
+                baseTop: start.top
+            };
+            panel.classList.add('dev-layout-dragging');
+            event.preventDefault();
+        },
+
+        handlePointerMove(event) {
+            if (!this.dragging || !this.isActive()) return;
+            const { panel, startX, startY, baseLeft, baseTop } = this.dragging;
+            const deltaX = event.clientX - startX;
+            const deltaY = event.clientY - startY;
+            const next = this.clampPosition(panel, baseLeft + deltaX, baseTop + deltaY);
+            this.applyLayoutToPanel(panel, { left: next.left, top: next.top });
+            this.ensureHandle(panel);
+            event.preventDefault();
+        },
+
+        handlePointerUp() {
+            if (!this.dragging) return;
+            const { panel } = this.dragging;
+            panel.classList.remove('dev-layout-dragging');
+            this.savePanelFromElement(panel);
+            this.dragging = null;
+        },
+
+        resetLayouts() {
+            const all = this.loadLayouts();
+            all[this.breakpointKey()] = {};
+            this.saveLayouts(all);
+            this.clearAllPanelLayouts();
+        },
+
+        async exportJSON() {
+            const text = JSON.stringify(this.loadLayouts(), null, 2);
+            let copied = false;
+            try {
+                if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    copied = true;
+                }
+            } catch (error) {
+                errorLogger.log('dev-layout-copy', error);
+            }
+            if (!copied) {
+                const blob = new Blob([text], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ui-layouts-${Date.now()}.json`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            }
+        },
+
+        ensurePanel() {
+            const hubPanel = document.getElementById('devHubPanel');
+            if (!hubPanel || document.getElementById('devLayoutPanel')) return;
+            const panel = document.createElement('section');
+            panel.id = 'devLayoutPanel';
+            panel.className = 'dev-trace-panel hidden';
+            panel.innerHTML = `
+                <h3>UI Layout Editor</h3>
+                <div class="dev-hotspot-actions">
+                    <button type="button" id="dev-export-layout" class="dev-hub-btn">Export Layout JSON</button>
+                    <button type="button" id="dev-reset-layout" class="dev-hub-btn">Reset Layout</button>
+                </div>
+                <p>Drag with the top strip, or hold <strong>Alt</strong> and drag any panel area.</p>
+            `;
+            const footer = hubPanel.querySelector('.dev-hub-footer');
+            hubPanel.insertBefore(panel, footer);
+            panel.querySelector('#dev-export-layout').addEventListener('click', () => this.exportJSON());
+            panel.querySelector('#dev-reset-layout').addEventListener('click', () => this.resetLayouts());
+        },
+
+        render() {
+            const panel = document.getElementById('devLayoutPanel');
+            if (panel) {
+                panel.classList.toggle('hidden', !this.isActive());
+            }
+            if (this.isActive()) {
+                this.applySavedLayouts();
+            } else {
+                this.clearAllPanelLayouts();
+            }
+        },
+
+        init() {
+            document.addEventListener('pointerdown', (event) => this.handlePointerDown(event));
+            document.addEventListener('pointermove', (event) => this.handlePointerMove(event));
+            document.addEventListener('pointerup', () => this.handlePointerUp());
+            document.addEventListener('pointercancel', () => this.handlePointerUp());
         }
     },
 
@@ -784,6 +1033,9 @@ const Dev = {
                 if (event.currentTarget.dataset.devAction === 'hotspot-editor') {
                     this.setActiveTool('hotspots');
                 }
+                if (event.currentTarget.dataset.devAction === 'ui-layout-editor') {
+                    this.setActiveTool('layout');
+                }
                 this.updateStatus();
             });
         });
@@ -825,6 +1077,8 @@ const Dev = {
 
         this.trace.renderLogs();
         this.hotspots.ensurePanel();
+        this.layout.ensurePanel();
+        this.layout.init();
         this.updateStatus();
     },
 
@@ -874,6 +1128,7 @@ const Dev = {
             this.trace.hideHighlight();
         }
         this.hotspots.render();
+        this.layout.render();
         this.updateStatus();
     },
 
@@ -885,9 +1140,11 @@ const Dev = {
         status.innerHTML = `currentSceneId: <strong>${sceneLabel}</strong><br>devEnabled: <strong>${this.enabled}</strong><br>toolsEnabled: <strong>${this.toolsEnabled}</strong><br>activeTool: <strong>${this.activeTool || 'none'}</strong>`;
 
         document.querySelectorAll('[data-dev-action]').forEach(button => {
-            const isTraceButton = button.dataset.devAction === 'click-trace';
-            const isHotspotButton = button.dataset.devAction === 'hotspot-editor';
-            button.classList.toggle('active', (isTraceButton && this.activeTool === 'trace') || (isHotspotButton && this.activeTool === 'hotspots'));
+            const action = button.dataset.devAction;
+            const isActive = (action === 'click-trace' && this.activeTool === 'trace')
+                || (action === 'hotspot-editor' && this.activeTool === 'hotspots')
+                || (action === 'ui-layout-editor' && this.activeTool === 'layout');
+            button.classList.toggle('active', isActive);
         });
 
         if (tracePanel) {
@@ -899,6 +1156,7 @@ const Dev = {
         }
 
         this.hotspots.render();
+        this.layout.render();
     }
 };
 
@@ -2104,6 +2362,7 @@ const sceneRenderer = {
 
             saveSystem.save();
             Dev.hotspots.render();
+            Dev.layout.render();
         } catch (error) {
             errorLogger.log('scene-transition', error, { sceneId });
             document.getElementById('dialogue-box').classList.add('hidden');
@@ -2127,6 +2386,7 @@ const sceneRenderer = {
         this.currentHotspots = Dev.hotspots.getRuntimeHotspots(sceneId, scene.hotspots || []);
         this.loadHotspots(this.currentHotspots);
         Dev.hotspots.render();
+        Dev.layout.render();
     },
 
     _setInteractionBlocking(block) {
@@ -2425,6 +2685,7 @@ const sceneRenderer = {
 
             dialogueBox.classList.remove('hidden');
             this._clampDialogueToViewport(dialogueBox);
+            Dev.layout.applySavedLayouts();
             text.textContent = dialogueEntry.text || '';
 
             SFXGenerator.playDialogueAdvance();
@@ -2666,7 +2927,7 @@ const SCENES = {
 
             const container = document.getElementById('hotspot-layer');
             container.innerHTML = `
-                <div id="main-menu-content">
+                <div id="main-menu-content" data-layout-panel="menu-prompts">
                     <h1 id="main-menu-title">THE HARDIGAN BOYS<br>VS.<br>THE MEXICAN DRUG CARTEL</h1>
                     <button class="menu-btn" id="btn-new-game">NEW GAME</button>
                     <button class="menu-btn" id="btn-continue-game">CONTINUE</button>
@@ -3976,6 +4237,7 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
             try {
                 positioningSystem.recalculateAll();
                 Dev.hotspots.render();
+                Dev.layout.render();
             } catch (error) {
                 errorLogger.log('resize-recalculate', error);
             }
@@ -3988,6 +4250,7 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
             try {
                 positioningSystem.recalculateAll();
                 Dev.hotspots.render();
+                Dev.layout.render();
             } catch (error) {
                 errorLogger.log('orientation-recalculate', error);
             }
