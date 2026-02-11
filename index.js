@@ -3978,6 +3978,17 @@ const SCENES = {
         onEnter() {
             // Clear main menu specific class and setup
             document.body.classList.add('main-menu');
+            const sceneContainer = document.getElementById('scene-container');
+            sceneContainer?.classList.remove('scene-transitioning');
+            gameState.sceneTransitioning = false;
+            gameState.actionLock = false;
+            gameState.dialogueLock = false;
+
+            const dialogueBox = document.getElementById('dialogue-box');
+            if (dialogueBox) {
+                dialogueBox.classList.add('hidden');
+                dialogueBox.classList.remove('dialogue-enter', 'dialogue-exit', 'dialogue-left', 'dialogue-right', 'dialogue-center');
+            }
 
             // Start music automatically with fade in
             audioManager.playMusic('main-menu-theme.mp3', true);
