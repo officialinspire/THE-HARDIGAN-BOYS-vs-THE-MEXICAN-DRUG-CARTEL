@@ -1310,6 +1310,48 @@ body.show-hotspots .hotspot-debug-label {
     margin-bottom: 4px;
 }
 
+
+.dev-hub-quick-row {
+    display: grid;
+    grid-template-columns: auto 1fr 120px 170px;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.dev-hub-quick-row label {
+    font-size: 12px;
+    color: #ffd700;
+    text-transform: uppercase;
+}
+
+.dev-hub-quick-row input {
+    min-height: 36px;
+    border-radius: 8px;
+    border: 1px solid #666;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    padding: 0 10px;
+}
+
+.dev-hotspot-toggles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 12px;
+}
+
+.dev-hotspot-toggles label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.dev-hotspot-toggles input[type="number"] {
+    width: 70px;
+}
+
 .dev-hub-footer {
     display: flex;
     gap: 10px;
@@ -1370,6 +1412,10 @@ body.show-hotspots .hotspot-debug-label {
 
 #dev-hotspot-editor-layer.active {
     pointer-events: auto;
+}
+
+#dev-hotspot-editor-layer.active.allow-click-through {
+    pointer-events: none;
 }
 
 .dev-hotspot-box {
@@ -1952,5 +1998,11 @@ body.main-menu #scene-container {
 
     .phone-buttons button {
         font-size: clamp(14px, 3.4vw, 18px);
+    }
+}
+
+@media (max-width: 768px) {
+    .dev-hub-quick-row {
+        grid-template-columns: 1fr;
     }
 }
