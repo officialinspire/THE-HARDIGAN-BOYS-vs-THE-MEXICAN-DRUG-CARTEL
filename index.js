@@ -3017,11 +3017,61 @@ const sceneRenderer = {
         const sceneId = this.transitionQueue[this.transitionQueue.length - 1];
         this.transitionQueue = [];
 
-        await this._executeSceneLoad(sceneId);
+        this.isTransitioning = true;
+        gameState.sceneTransitioning = true;
 
-        // Process any scenes queued during this transition
-        if (this.transitionQueue.length > 0) {
-            this._processQueue();
+        try {
+            // Call existing transition start callback
+            if (this.onTransitionStart) {
+                this.onTransitionStart(sceneId);
+            }
+
+            // Perform the actual transition
+            await this._performSceneTransition(sceneId);
+
+            // Call existing transition complete callback
+            if (this.onTransitionComplete) {
+                this.onTransitionComplete(sceneId);
+            }
+
+        } catch (error) {
+            // Log detailed error for debugging
+            errorLogger.log('scene-transition-failed', error, {
+                sceneId,
+                currentScene: this.currentScene?.id,
+                timestamp: new Date().toISOString()
+            });
+
+            // Show user-friendly error
+            console.error('Scene transition failed:', sceneId, error);
+
+            // Try to recover by showing error overlay
+            const fadeOverlay = document.getElementById('fade-overlay');
+            if (fadeOverlay) {
+                fadeOverlay.style.opacity = '0.95';
+                fadeOverlay.style.pointerEvents = 'all';
+                fadeOverlay.innerHTML = `
+                    <div style="text-align: center; color: #FFD700; padding: 40px;">
+                        <h2>Scene Transition Error</h2>
+                        <p style="color: #fff; margin: 20px 0;">Failed to load scene: ${sceneId}</p>
+                        <button onclick="location.reload()" style="
+                            padding: 12px 24px;
+                            background: #FFD700;
+                            color: #000;
+                            border: none;
+                            border-radius: 8px;
+                            font-size: 16px;
+                            cursor: pointer;
+                            font-weight: bold;
+                        ">Reload Game</button>
+                    </div>
+                `;
+            }
+
+        } finally {
+            // CRITICAL: Always unlock, even if transition failed
+            this.isTransitioning = false;
+            gameState.sceneTransitioning = false;
         }
     },
 
