@@ -3059,7 +3059,7 @@ const sceneRenderer = {
             }
 
             // Perform the actual transition
-            await this._performSceneTransition(sceneId);
+            await this._executeSceneLoad(sceneId);
 
             // Call existing transition complete callback
             if (this.onTransitionComplete) {
