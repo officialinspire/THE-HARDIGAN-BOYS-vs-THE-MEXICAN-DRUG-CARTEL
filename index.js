@@ -373,32 +373,7 @@ const Dev = {
         },
 
         mapClientToScene(clientX, clientY) {
-            const container = document.getElementById('scene-container');
-            if (!container) return null;
-            const containerRect = container.getBoundingClientRect();
-            const rect = positioningSystem.getBackgroundRect();
-            const localX = clientX - containerRect.left;
-            const localY = clientY - containerRect.top;
-
-            if (rect) {
-                const x = (localX - rect.offsetX) / rect.scaleX;
-                const y = (localY - rect.offsetY) / rect.scaleY;
-                return {
-                    x: Number.isFinite(x) ? x : 0,
-                    y: Number.isFinite(y) ? y : 0,
-                    localX,
-                    localY
-                };
-            }
-
-            const width = containerRect.width || 1;
-            const height = containerRect.height || 1;
-            return {
-                x: (localX / width) * positioningSystem.REF_WIDTH,
-                y: (localY / height) * positioningSystem.REF_HEIGHT,
-                localX,
-                localY
-            };
+            return positioningSystem.clientToNative(clientX, clientY);
         },
 
         formatTarget(target) {
@@ -2590,6 +2565,35 @@ const positioningSystem = {
             offsetY,
             scaleX: renderedW / natW,
             scaleY: renderedH / natH,
+            nativeScaleX: renderedW / this.REF_WIDTH,
+            nativeScaleY: renderedH / this.REF_HEIGHT,
+        };
+    },
+
+    clientToNative(clientX, clientY) {
+        const container = document.getElementById('scene-container');
+        if (!container) return null;
+        const containerRect = container.getBoundingClientRect();
+        const rect = this.getBackgroundRect();
+        const localX = clientX - containerRect.left;
+        const localY = clientY - containerRect.top;
+
+        if (!rect) {
+            return {
+                x: (localX / Math.max(1, containerRect.width)) * this.REF_WIDTH,
+                y: (localY / Math.max(1, containerRect.height)) * this.REF_HEIGHT,
+                localX,
+                localY
+            };
+        }
+
+        const x = (localX - rect.offsetX) / rect.nativeScaleX;
+        const y = (localY - rect.offsetY) / rect.nativeScaleY;
+        return {
+            x: Number.isFinite(x) ? x : 0,
+            y: Number.isFinite(y) ? y : 0,
+            localX,
+            localY
         };
     },
 
@@ -2709,13 +2713,13 @@ const positioningSystem = {
             };
         }
 
-        const { renderedW, renderedH, offsetX, offsetY, scaleX, scaleY } = rect;
+        const { offsetX, offsetY, nativeScaleX, nativeScaleY } = rect;
 
         return {
-            left: (offsetX + imgX * scaleX) + 'px',
-            top: (offsetY + imgY * scaleY) + 'px',
-            width: (imgW * scaleX) + 'px',
-            height: (imgH * scaleY) + 'px',
+            left: (offsetX + imgX * nativeScaleX) + 'px',
+            top: (offsetY + imgY * nativeScaleY) + 'px',
+            width: (imgW * nativeScaleX) + 'px',
+            height: (imgH * nativeScaleY) + 'px',
         };
     },
 
@@ -3302,14 +3306,11 @@ const sceneRenderer = {
 
                 // Debug: log click position in native image coordinates
                 if (gameState.settings.showHotspots) {
-                    const rect = positioningSystem.getBackgroundRect();
-                    if (rect) {
-                        const containerRect = document.getElementById('scene-container').getBoundingClientRect();
-                        const clickX = e.clientX - containerRect.left;
-                        const clickY = e.clientY - containerRect.top;
-                        const imgX = Math.round((clickX - rect.offsetX) / rect.scaleX);
-                        const imgY = Math.round((clickY - rect.offsetY) / rect.scaleY);
-                        console.log(`[Hotspot Debug] Click on "${hotspot.id || hotspot.label}" → native image coords: (${imgX}, ${imgY}) | screen: (${Math.round(clickX)}, ${Math.round(clickY)})`);
+                    const nativePoint = positioningSystem.clientToNative(e.clientX, e.clientY);
+                    if (nativePoint) {
+                        const imgX = Math.round(nativePoint.x);
+                        const imgY = Math.round(nativePoint.y);
+                        console.log(`[Hotspot Debug] Click on "${hotspot.id || hotspot.label}" → native image coords: (${imgX}, ${imgY}) | screen: (${Math.round(nativePoint.localX)}, ${Math.round(nativePoint.localY)})`);
                     }
                 }
 
@@ -3477,7 +3478,7 @@ const sceneRenderer = {
             const containerRect = container.getBoundingClientRect();
             const boxRect = dialogueBox.getBoundingClientRect();
             const marginX = containerRect.width * 0.02;
-            const minTop = containerRect.top + containerRect.height * 0.12;
+            const minTop = containerRect.top + containerRect.height * 0.06;
             const maxBottom = containerRect.bottom - containerRect.height * 0.02;
 
             let left = boxRect.left - containerRect.left;
@@ -3505,7 +3506,7 @@ const sceneRenderer = {
             if (shouldAdjust) {
                 dialogueBox.style.left = `${Math.max(marginX, left)}px`;
                 dialogueBox.style.right = 'auto';
-                dialogueBox.style.top = `${Math.max(containerRect.height * 0.12, top)}px`;
+                dialogueBox.style.top = `${Math.max(containerRect.height * 0.06, top)}px`;
                 dialogueBox.style.bottom = 'auto';
                 dialogueBox.style.transform = 'none';
             }
@@ -3564,7 +3565,7 @@ const sceneRenderer = {
 
             const margin = Math.max(14, containerRect.height * 0.02);
             const topPx = Math.max(
-                containerRect.height * 0.1,
+                containerRect.height * (window.matchMedia('(max-width: 1024px)').matches ? 0.05 : 0.1),
                 (charRect.top - containerRect.top) - boxRect.height - margin
             );
 
@@ -3574,12 +3575,14 @@ const sceneRenderer = {
             const maxLeft = containerRect.width - boxRect.width - minLeft;
             let leftPx;
 
+            const isMobile = window.matchMedia('(max-width: 1024px)').matches;
+
             if (zoneName.startsWith('left')) {
                 // Comic-style: left speaker bubble should sit above-left shoulder.
-                leftPx = charLeft - (boxRect.width * 0.12);
+                leftPx = charLeft - (boxRect.width * (isMobile ? 0.2 : 0.12));
             } else if (zoneName.startsWith('right')) {
                 // Right speaker bubble should sit above-right shoulder.
-                leftPx = charRight - (boxRect.width * 0.88);
+                leftPx = charRight - (boxRect.width * (isMobile ? 0.8 : 0.88));
             } else {
                 leftPx = (charLeft + charRight) / 2 - (boxRect.width / 2);
             }
@@ -4978,15 +4981,13 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
         // Legacy debug logging for hotspot calibration
         if (!gameState.settings.showHotspots) return;
         const rect = positioningSystem.getBackgroundRect();
-        if (!rect) return;
-        const containerRect = e.currentTarget.getBoundingClientRect();
-        const clickX = e.clientX - containerRect.left;
-        const clickY = e.clientY - containerRect.top;
-        const imgX = Math.round((clickX - rect.offsetX) / rect.scaleX);
-        const imgY = Math.round((clickY - rect.offsetY) / rect.scaleY);
-        const pctX = ((clickX - rect.offsetX) / rect.renderedW * 100).toFixed(1);
-        const pctY = ((clickY - rect.offsetY) / rect.renderedH * 100).toFixed(1);
-        console.log(`[Debug] Click → native: (${imgX}, ${imgY}) | percent: (${pctX}%, ${pctY}%) | screen: (${Math.round(clickX)}, ${Math.round(clickY)})`);
+        const nativePoint = positioningSystem.clientToNative(e.clientX, e.clientY);
+        if (!rect || !nativePoint) return;
+        const imgX = Math.round(nativePoint.x);
+        const imgY = Math.round(nativePoint.y);
+        const pctX = ((nativePoint.x / positioningSystem.REF_WIDTH) * 100).toFixed(1);
+        const pctY = ((nativePoint.y / positioningSystem.REF_HEIGHT) * 100).toFixed(1);
+        console.log(`[Debug] Click → native: (${imgX}, ${imgY}) | percent: (${pctX}%, ${pctY}%) | screen: (${Math.round(nativePoint.localX)}, ${Math.round(nativePoint.localY)})`);
     });
 
     // Responsive positioning: recalculate on resize with debounce
