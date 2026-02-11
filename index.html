@@ -64,14 +64,16 @@
                 <div id="scene-title"></div>
                 
                 <!-- Dialogue box with bubble -->
-                <div id="dialogue-box" class="hidden">
-                    <div id="dialogue-container">
+                <div id="dialogue-box" class="hidden" data-layout-panel="speech-bubble">
+                    <div id="dialogue-container" data-layout-panel="narrative-box">
                         <img id="dialogue-bubble" src="" alt="Speech bubble">
                         <div id="dialogue-content">
                             <div id="dialogue-speaker"></div>
                             <div id="dialogue-text"></div>
-                            <div id="dialogue-choices"></div>
-                            <button id="dialogue-continue" class="hidden">▶ Continue</button>
+                            <div id="action-container" data-layout-panel="action-prompts">
+                                <div id="dialogue-choices"></div>
+                                <button id="dialogue-continue" class="hidden">▶ Continue</button>
+                            </div>
                         </div>
                     </div>
                 </div>
