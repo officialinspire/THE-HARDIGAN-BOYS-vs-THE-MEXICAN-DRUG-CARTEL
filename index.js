@@ -4285,7 +4285,7 @@ const SCENES = {
                     sceneRenderer.addCharacter({
                         id: 'mom',
                         name: 'MOM',
-                        sprite: 'char_mom_angry.png',
+                        sprite: 'char_mom_angry-right.png',
                         position: 'right-2'
                     }, 100);
                 }
@@ -4404,7 +4404,7 @@ const SCENES = {
                         sceneRenderer.addCharacter({
                             id: 'ice_agent',
                             name: 'ICE AGENT',
-                            sprite: 'char_ice_generic_1.png',
+                            sprite: 'char_ice_generic_1-right.png',
                             position: 'right'
                         }, 100);
                     }, 300);
@@ -4412,7 +4412,7 @@ const SCENES = {
                         sceneRenderer.addCharacter({
                             id: 'mr_rivera',
                             name: 'MR. RIVERA',
-                            sprite: 'char_carlos_normal.png',
+                            sprite: 'char_carlos_normal-right.png',
                             position: 'right-2'
                         }, 100);
                     }, 500);
@@ -4428,7 +4428,7 @@ const SCENES = {
                     sceneRenderer.addCharacter({
                         id: 'mom',
                         name: 'MOM',
-                        sprite: 'char_mom_worried.png',
+                        sprite: 'char_mom_worried-left.png',
                         position: 'left-2'
                     }, 100);
                 }
@@ -4594,7 +4594,7 @@ const SCENES = {
         music: 'Empty Hallways (Ambient Mix).mp3',
         
         characters: [
-            { id: 'agent_smith', name: 'AGENT SMITH', sprite: 'char_ice_smith_smirk.png', position: 'center' }
+            { id: 'agent_smith', name: 'AGENT SMITH', sprite: 'char_ice_smith_smirk-right.png', position: 'center' }
         ],
         
         hotspots: [],
@@ -4736,7 +4736,7 @@ const SCENES = {
         music: 'Classified Silence.mp3',
         
         characters: [
-            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_amused.png', position: 'center' }
+            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_amused-right.png', position: 'center' }
         ],
         
         hotspots: [],
@@ -4889,7 +4889,7 @@ const SCENES = {
         music: 'Covert Investigation.mp3',
         
         characters: [
-            { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk.png', position: 'center' }
+            { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk-left.png', position: 'center' }
         ],
         
         hotspots: [],
@@ -4919,7 +4919,7 @@ const SCENES = {
         
         characters: [
             { id: 'cartel_boss', name: 'EL LICENCIADO', sprite: 'char_cartel_boss_menacing.png', position: 'left' },
-            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_threatening.png', position: 'right' }
+            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_threatening-right.png', position: 'right' }
         ],
         
         hotspots: [],
@@ -5063,7 +5063,7 @@ const SCENES = {
         music: 'Dark Police Intensity.mp3',
         
         characters: [
-            { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk.png', position: 'center' }
+            { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk-left.png', position: 'center' }
         ],
         hotspots: [],
         
