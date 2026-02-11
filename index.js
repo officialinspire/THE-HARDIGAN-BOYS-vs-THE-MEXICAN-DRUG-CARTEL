@@ -3476,26 +3476,38 @@ const sceneRenderer = {
             if (!container) return;
             const containerRect = container.getBoundingClientRect();
             const boxRect = dialogueBox.getBoundingClientRect();
+            const marginX = containerRect.width * 0.02;
+            const minTop = containerRect.top + containerRect.height * 0.12;
+            const maxBottom = containerRect.bottom - containerRect.height * 0.02;
 
-            // Clamp left edge: don't go past container left
-            if (boxRect.left < containerRect.left) {
-                dialogueBox.style.left = '2%';
+            let left = boxRect.left - containerRect.left;
+            let top = boxRect.top - containerRect.top;
+
+            if (boxRect.left < containerRect.left + marginX) {
+                left = marginX;
+            }
+
+            if (boxRect.right > containerRect.right - marginX) {
+                left = containerRect.width - boxRect.width - marginX;
+            }
+
+            if (boxRect.top < minTop) {
+                top = minTop - containerRect.top;
+            }
+
+            if (boxRect.bottom > maxBottom) {
+                top = maxBottom - containerRect.top - boxRect.height;
+            }
+
+            const shouldAdjust = Math.abs((boxRect.left - containerRect.left) - left) > 1
+                || Math.abs((boxRect.top - containerRect.top) - top) > 1;
+
+            if (shouldAdjust) {
+                dialogueBox.style.left = `${Math.max(marginX, left)}px`;
                 dialogueBox.style.right = 'auto';
-            }
-            // Clamp right edge: don't go past container right
-            if (boxRect.right > containerRect.right) {
-                dialogueBox.style.right = '2%';
-                dialogueBox.style.left = 'auto';
-            }
-            // Clamp top: don't overlap HUD (keep at least 15% from top)
-            if (boxRect.top < containerRect.top + containerRect.height * 0.12) {
+                dialogueBox.style.top = `${Math.max(containerRect.height * 0.12, top)}px`;
                 dialogueBox.style.bottom = 'auto';
-                dialogueBox.style.top = '15%';
-            }
-            // Clamp bottom: don't go off screen
-            if (boxRect.bottom > containerRect.bottom) {
-                dialogueBox.style.bottom = '2%';
-                dialogueBox.style.top = 'auto';
+                dialogueBox.style.transform = 'none';
             }
         });
     },
