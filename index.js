@@ -442,11 +442,14 @@ const Dev = {
         selectedId: null,
         snapEnabled: true,
         snapSize: 8,
+        lockGameplay: true,
+        autoIdEnabled: true,
         overlayEl: null,
         panelEl: null,
         validationWarnings: [],
         interaction: null,
         boxById: new Map(),
+        undoByScene: new Map(),
 
         isActive() {
             return Dev.toolsEnabled && Dev.activeTool === 'hotspots';
@@ -454,6 +457,43 @@ const Dev = {
 
         cancelInteraction() {
             this.interaction = null;
+        },
+
+        shouldBlockGameplay() {
+            return this.isActive() && this.lockGameplay;
+        },
+
+        pushUndoSnapshot(sceneId, patchSnapshot) {
+            if (!sceneId || !patchSnapshot) return;
+            const stack = this.undoByScene.get(sceneId) || [];
+            stack.push({ ops: Array.isArray(patchSnapshot.ops) ? [...patchSnapshot.ops] : [] });
+            while (stack.length > 50) stack.shift();
+            this.undoByScene.set(sceneId, stack);
+        },
+
+        undoLastOp() {
+            const sceneId = gameState.currentSceneId;
+            const stack = this.undoByScene.get(sceneId) || [];
+            if (!stack.length) return;
+            const prevPatch = stack.pop();
+            this.undoByScene.set(sceneId, stack);
+            this.setScenePatch(sceneId, prevPatch);
+            sceneRenderer.refreshCurrentHotspots();
+            this.render();
+        },
+
+        makeAutoId(sceneId) {
+            const normalizedSceneId = sceneId || gameState.currentSceneId || 'SCENE';
+            const prefix = `${normalizedSceneId}_hs_`;
+            const hotspots = this.getCurrentHotspots();
+            let max = 0;
+            hotspots.forEach((hotspot) => {
+                const id = hotspot?.id || '';
+                if (!id.startsWith(prefix)) return;
+                const value = Number.parseInt(id.slice(prefix.length), 10);
+                if (Number.isFinite(value) && value > max) max = value;
+            });
+            return `${prefix}${String(max + 1).padStart(2, '0')}`;
         },
 
         loadAllPatches() {
@@ -589,6 +629,13 @@ const Dev = {
                 <div class="dev-hotspot-actions">
                     <button type="button" id="dev-export-patch" class="dev-hub-btn">Export Patch JSON</button>
                     <button type="button" id="dev-export-report" class="dev-hub-btn">Export Fix Report</button>
+                    <button type="button" id="dev-undo-hotspot" class="dev-hub-btn">Undo Last Op</button>
+                </div>
+                <div class="dev-hotspot-toggles">
+                    <label><input type="checkbox" id="dev-lock-gameplay" checked> Lock gameplay while editing</label>
+                    <label><input type="checkbox" id="dev-auto-id" checked> Auto-ID new hotspots</label>
+                    <label><input type="checkbox" id="dev-snap-toggle" checked> Snap to grid</label>
+                    <label>Grid size <input type="number" id="dev-grid-size" min="1" max="128" value="8"></label>
                 </div>
                 <div id="devHotspotMeta"></div>
                 <ul id="devHotspotWarnings"></ul>
@@ -598,6 +645,24 @@ const Dev = {
             this.panelEl = panel;
             panel.querySelector('#dev-export-patch').addEventListener('click', () => this.exportPatchJSON());
             panel.querySelector('#dev-export-report').addEventListener('click', () => this.exportFixReport());
+            panel.querySelector('#dev-undo-hotspot').addEventListener('click', () => this.undoLastOp());
+            panel.querySelector('#dev-lock-gameplay').addEventListener('change', (event) => {
+                this.lockGameplay = event.target.checked;
+                this.render();
+            });
+            panel.querySelector('#dev-auto-id').addEventListener('change', (event) => {
+                this.autoIdEnabled = event.target.checked;
+            });
+            panel.querySelector('#dev-snap-toggle').addEventListener('change', (event) => {
+                this.snapEnabled = event.target.checked;
+                this.render();
+            });
+            panel.querySelector('#dev-grid-size').addEventListener('change', (event) => {
+                const next = Math.max(1, Math.min(128, Number.parseInt(event.target.value, 10) || 8));
+                this.snapSize = next;
+                event.target.value = String(next);
+                this.render();
+            });
             return panel;
         },
 
@@ -672,7 +737,7 @@ const Dev = {
                 }
 
                 if (event.shiftKey) {
-                    const newId = `dev_hs_${Date.now()}`;
+                    const newId = this.autoIdEnabled ? this.makeAutoId(gameState.currentSceneId) : `dev_hs_${Date.now()}`;
                     this.selectedId = newId;
                     this.interaction = { mode: 'create', start: point, newId };
                 } else {
@@ -689,6 +754,9 @@ const Dev = {
                 if (!point) return;
                 const sceneId = gameState.currentSceneId;
                 const interaction = this.interaction;
+                if (!interaction.initialPatch) {
+                    interaction.initialPatch = this.getScenePatch(sceneId);
+                }
                 let rect;
 
                 if (interaction.mode === 'create') {
@@ -739,6 +807,14 @@ const Dev = {
             });
 
             overlay.addEventListener('pointerup', (event) => {
+                const interaction = this.interaction;
+                if (interaction?.initialPatch) {
+                    const sceneId = gameState.currentSceneId;
+                    const latestPatch = this.getScenePatch(sceneId);
+                    if (JSON.stringify(interaction.initialPatch) !== JSON.stringify(latestPatch)) {
+                        this.pushUndoSnapshot(sceneId, interaction.initialPatch);
+                    }
+                }
                 this.interaction = null;
                 if (overlay.hasPointerCapture(event.pointerId)) {
                     overlay.releasePointerCapture(event.pointerId);
@@ -760,11 +836,21 @@ const Dev = {
 
             const active = this.isActive();
             overlay.classList.toggle('active', active);
+            overlay.classList.toggle('allow-click-through', active && !this.lockGameplay);
             panel.classList.toggle('hidden', !active);
             if (!active) {
                 this.removeStaleBoxes(new Set());
                 return;
             }
+
+            const lockToggle = panel.querySelector('#dev-lock-gameplay');
+            const autoIdToggle = panel.querySelector('#dev-auto-id');
+            const snapToggle = panel.querySelector('#dev-snap-toggle');
+            const gridInput = panel.querySelector('#dev-grid-size');
+            if (lockToggle) lockToggle.checked = this.lockGameplay;
+            if (autoIdToggle) autoIdToggle.checked = this.autoIdEnabled;
+            if (snapToggle) snapToggle.checked = this.snapEnabled;
+            if (gridInput) gridInput.value = String(this.snapSize);
 
             const hotspots = this.getCurrentHotspots();
             const activeIds = new Set();
@@ -790,7 +876,8 @@ const Dev = {
             const validation = this.validateScene(gameState.currentSceneId, hotspots);
             this.validationWarnings = validation.warnings;
             const meta = panel.querySelector('#devHotspotMeta');
-            meta.textContent = `Scene: ${gameState.currentSceneId} | Hotspots: ${hotspots.length} | Snap: ${this.snapEnabled ? `ON (${this.snapSize}px)` : 'OFF'}`;
+            const undoCount = (this.undoByScene.get(gameState.currentSceneId) || []).length;
+            meta.textContent = `Scene: ${gameState.currentSceneId} | Hotspots: ${hotspots.length} | Snap: ${this.snapEnabled ? `ON (${this.snapSize}px)` : 'OFF'} | Gameplay lock: ${this.lockGameplay ? 'ON' : 'OFF'} | Undo: ${undoCount}`;
             const warningsEl = panel.querySelector('#devHotspotWarnings');
             warningsEl.innerHTML = '';
             validation.warnings.forEach(w => {
@@ -894,16 +981,23 @@ const Dev = {
             const check = this.validateScene(sceneId, patched);
             const layoutSnapshot = Dev.layout.loadLayouts();
             const report = [
+                `=== Hotspot Fix Report ===`,
                 `sceneId: ${sceneId}`,
-                `added: ${added}`,
-                `edited: ${edited}`,
-                `deleted: ${deleted}`,
-                `invalid targets: ${check.invalidTargets}`,
-                `overlaps: ${check.overlaps.length}`,
-                `out-of-bounds: ${check.outOfBounds.length}`,
-                `zero-size: ${check.zeroSize}`,
+                `generatedAt: ${new Date().toISOString()}`,
                 '',
-                'layout-json:',
+                'Summary:',
+                `- added hotspots: ${added}`,
+                `- edited hotspots: ${edited}`,
+                `- deleted hotspots: ${deleted}`,
+                '',
+                'Validation:',
+                `- invalid targets: ${check.invalidTargets}`,
+                `- overlaps: ${check.overlaps.length}`,
+                `- out-of-bounds: ${check.outOfBounds.length}`,
+                `- zero-size: ${check.zeroSize}`,
+                ...check.warnings.map(w => `  * ${w}`),
+                '',
+                'Layout JSON:',
                 JSON.stringify(layoutSnapshot, null, 2)
             ].join('\n');
             const copied = await this.copyText(report);
@@ -913,6 +1007,7 @@ const Dev = {
 
     layout: {
         dragging: null,
+        selectedPanelKey: null,
         listenersBound: false,
 
         panelConfigs: [
@@ -1065,6 +1160,7 @@ const Dev = {
             this.ensureHandle(panel);
             this.dragging = {
                 panel,
+                panelKey: panel?.dataset?.layoutPanel || null,
                 startX: event.clientX,
                 startY: event.clientY,
                 baseLeft: start.left,
@@ -1072,6 +1168,7 @@ const Dev = {
                 previewLeft: start.left,
                 previewTop: start.top
             };
+            this.selectedPanelKey = this.dragging.panelKey;
             panel.classList.add('dev-layout-dragging');
             panel.style.transform = 'translate3d(0px, 0px, 0px)';
             event.preventDefault();
@@ -1109,6 +1206,52 @@ const Dev = {
             this.clearAllPanelLayouts();
         },
 
+
+        resetCurrentPanel() {
+            if (!this.selectedPanelKey) return;
+            const all = this.loadLayouts();
+            const bp = this.breakpointKey();
+            if (all[bp] && all[bp][this.selectedPanelKey]) {
+                delete all[bp][this.selectedPanelKey];
+                this.saveLayouts(all);
+            }
+            const panel = document.querySelector(`[data-layout-panel="${this.selectedPanelKey}"]`);
+            if (panel) this.clearPanelLayout(panel);
+        },
+
+        snapPanelsToSafeMargins() {
+            const container = document.getElementById('scene-container');
+            if (!container) return;
+            const safeMargin = Math.round(Math.min(container.clientWidth, container.clientHeight) * 0.05);
+
+            this.panelConfigs.forEach((config) => {
+                const panel = document.querySelector(config.selector);
+                if (!panel) return;
+                const rect = panel.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                const currentLeft = rect.left - containerRect.left;
+                const currentTop = rect.top - containerRect.top;
+                const maxLeft = Math.max(0, container.clientWidth - panel.offsetWidth);
+                const maxTop = Math.max(0, container.clientHeight - panel.offsetHeight);
+                const rightGap = container.clientWidth - (currentLeft + panel.offsetWidth);
+                const bottomGap = container.clientHeight - (currentTop + panel.offsetHeight);
+
+                let nextLeft = currentLeft;
+                let nextTop = currentTop;
+
+                if (currentLeft < safeMargin) nextLeft = safeMargin;
+                else if (rightGap < safeMargin) nextLeft = maxLeft - safeMargin;
+
+                if (currentTop < safeMargin) nextTop = safeMargin;
+                else if (bottomGap < safeMargin) nextTop = maxTop - safeMargin;
+
+                const clamped = this.clampPosition(panel, nextLeft, nextTop);
+                this.applyLayoutToPanel(panel, { left: clamped.left, top: clamped.top });
+                this.ensureHandle(panel);
+                this.savePanelFromElement(panel);
+            });
+        },
+
         async exportJSON() {
             const text = JSON.stringify(this.loadLayouts(), null, 2);
             let copied = false;
@@ -1144,6 +1287,8 @@ const Dev = {
                 <div class="dev-hotspot-actions">
                     <button type="button" id="dev-export-layout" class="dev-hub-btn">Export Layout JSON</button>
                     <button type="button" id="dev-reset-layout" class="dev-hub-btn">Reset Layout</button>
+                    <button type="button" id="dev-snap-safe-margins" class="dev-hub-btn">Snap To Safe Margins</button>
+                    <button type="button" id="dev-reset-current-panel" class="dev-hub-btn">Reset Current Panel</button>
                 </div>
                 <p>Drag with the top strip, or hold <strong>Alt</strong> and drag any panel area.</p>
             `;
@@ -1151,6 +1296,8 @@ const Dev = {
             hubPanel.insertBefore(panel, footer);
             panel.querySelector('#dev-export-layout').addEventListener('click', () => this.exportJSON());
             panel.querySelector('#dev-reset-layout').addEventListener('click', () => this.resetLayouts());
+            panel.querySelector('#dev-snap-safe-margins').addEventListener('click', () => this.snapPanelsToSafeMargins());
+            panel.querySelector('#dev-reset-current-panel').addEventListener('click', () => this.resetCurrentPanel());
         },
 
         render() {
@@ -1196,6 +1343,9 @@ const Dev = {
         const closeBtn = document.getElementById('btn-close-dev-hub');
         const exitBtn = document.getElementById('btn-exit-dev-mode');
         const floatingButton = document.getElementById('dev-floating-btn');
+        const runValidateBtn = document.getElementById('dev-run-validate-now');
+        const jumpInput = document.getElementById('dev-scene-jump-input');
+        const jumpBtn = document.getElementById('dev-scene-jump-btn');
 
         if (!modal || !toggle || !closeBtn || !exitBtn || !floatingButton) return;
 
@@ -1233,6 +1383,34 @@ const Dev = {
                 this.openHub();
             });
 
+            if (runValidateBtn) {
+                runValidateBtn.addEventListener('click', () => {
+                    SFXGenerator.playButtonClick();
+                    this.setActiveTool('hotspots');
+                    this.hotspots.render();
+                });
+            }
+
+            const performJump = () => {
+                const sceneId = jumpInput?.value?.trim();
+                if (!sceneId || !SCENES[sceneId]) return;
+                sceneRenderer.loadScene(sceneId);
+                this.updateStatus();
+            };
+            if (jumpBtn) {
+                jumpBtn.addEventListener('click', () => {
+                    SFXGenerator.playButtonClick();
+                    performJump();
+                });
+            }
+            if (jumpInput) {
+                jumpInput.addEventListener('keydown', (event) => {
+                    if (event.key !== 'Enter') return;
+                    event.preventDefault();
+                    performJump();
+                });
+            }
+
             modal.querySelectorAll('[data-dev-action]').forEach(button => {
                 button.addEventListener('click', (event) => {
                     SFXGenerator.playButtonClick();
@@ -1244,6 +1422,20 @@ const Dev = {
                     }
                     if (event.currentTarget.dataset.devAction === 'ui-layout-editor') {
                         this.setActiveTool('layout');
+                    }
+                    if (event.currentTarget.dataset.devAction === 'validate') {
+                        this.setActiveTool('hotspots');
+                        this.hotspots.render();
+                    }
+                    if (event.currentTarget.dataset.devAction === 'export') {
+                        this.hotspots.exportFixReport();
+                    }
+                    if (event.currentTarget.dataset.devAction === 'clear-dev-storage') {
+                        localStorage.removeItem(this.storageKeys.patches);
+                        localStorage.removeItem(this.storageKeys.layouts);
+                        this.hotspots.undoByScene.clear();
+                        sceneRenderer.refreshCurrentHotspots();
+                        this.layout.resetLayouts();
                     }
                     this.updateStatus();
                 });
@@ -1285,6 +1477,7 @@ const Dev = {
                         clone.id = `${clone.id}_copy_${Date.now()}`;
                         clone.x += this.hotspots.snapSize;
                         clone.y += this.hotspots.snapSize;
+                        this.hotspots.pushUndoSnapshot(gameState.currentSceneId, this.hotspots.getScenePatch(gameState.currentSceneId));
                         this.hotspots.upsertHotspot(gameState.currentSceneId, clone);
                         this.hotspots.selectedId = clone.id;
                         sceneRenderer.refreshCurrentHotspots();
@@ -1293,10 +1486,15 @@ const Dev = {
                 }
                 if (event.key === 'Delete' && this.hotspots.isActive() && this.hotspots.selectedId) {
                     event.preventDefault();
+                    this.hotspots.pushUndoSnapshot(gameState.currentSceneId, this.hotspots.getScenePatch(gameState.currentSceneId));
                     this.hotspots.deleteHotspot(gameState.currentSceneId, this.hotspots.selectedId);
                     this.hotspots.selectedId = null;
                     sceneRenderer.refreshCurrentHotspots();
                     this.hotspots.render();
+                }
+                if (event.key.toLowerCase() === 'z' && event.ctrlKey && this.hotspots.isActive()) {
+                    event.preventDefault();
+                    this.hotspots.undoLastOp();
                 }
             });
         }
@@ -2754,7 +2952,7 @@ const sceneRenderer = {
             div.appendChild(img);
 
             div.addEventListener('click', () => {
-                if (gameState.actionLock || gameState.sceneTransitioning) return;
+                if (Dev.hotspots.shouldBlockGameplay() || gameState.actionLock || gameState.sceneTransitioning) return;
                 gameState.actionLock = true;
                 SFXGenerator.playButtonClick();
                 if (item.onClick) {
@@ -2822,7 +3020,7 @@ const sceneRenderer = {
                     }
                 }
 
-                if (gameState.actionLock || gameState.sceneTransitioning) return;
+                if (Dev.hotspots.shouldBlockGameplay() || gameState.actionLock || gameState.sceneTransitioning) return;
                 gameState.actionLock = true;
                 SFXGenerator.playButtonClick();
                 if (hotspot.onClick) {
