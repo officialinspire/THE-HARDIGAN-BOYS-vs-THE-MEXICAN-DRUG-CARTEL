@@ -3451,6 +3451,13 @@ const sceneRenderer = {
             const choicesDiv = document.getElementById('dialogue-choices');
             const continueBtn = document.getElementById('dialogue-continue');
 
+            // Set positioning mode based on dialogue type
+            if (dialogueEntry.type === 'narration' || !dialogueEntry.speaker) {
+                dialogueBox.setAttribute('data-mode', 'narration');
+            } else {
+                dialogueBox.removeAttribute('data-mode');
+            }
+
             choicesDiv.innerHTML = '';
             continueBtn.classList.add('hidden');
             dialogueBox.classList.remove('dialogue-enter', 'dialogue-exit');
