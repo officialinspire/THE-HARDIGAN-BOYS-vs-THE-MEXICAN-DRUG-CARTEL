@@ -1317,6 +1317,26 @@ body.show-hotspots .hotspot-debug-label {
     flex-wrap: wrap;
 }
 
+#dev-floating-btn {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 12950;
+    min-width: 56px;
+    min-height: 40px;
+    border-radius: 999px;
+    border: 1px solid #ffd700;
+    background: rgba(18, 18, 22, 0.9);
+    color: #ffd700;
+    font-weight: 700;
+    letter-spacing: 0.7px;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.5);
+}
+
+#dev-floating-btn.hidden {
+    display: none !important;
+}
+
 #dev-hit-highlight {
     position: absolute;
     z-index: 12500;

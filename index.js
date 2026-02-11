@@ -179,6 +179,98 @@ const Dev = {
     enabled: false,
     toolsEnabled: false,
     activeTool: null,
+    session: {
+        enabled: false,
+        toolsEnabled: false,
+        activeTool: null
+    },
+    ui: {
+        updateFloatingButton() {
+            const floatingButton = document.getElementById('dev-floating-btn');
+            if (!floatingButton) return;
+            floatingButton.classList.toggle('hidden', !Dev.enabled);
+        }
+    },
+    kernel: {
+        initialized: false,
+
+        initOnce() {
+            if (this.initialized) {
+                Dev.updateStatus();
+                Dev.tools.applyForCurrentScene();
+                return;
+            }
+            this.initialized = true;
+            Dev.init();
+        }
+    },
+    tools: {
+        attachedTool: null,
+        attachedRoot: null,
+        traceHandlers: null,
+
+        getSceneRoot() {
+            return document.getElementById('scene-container') || document.getElementById('game-root') || document.body;
+        },
+
+        detachCurrent() {
+            if (this.attachedTool === 'trace' && this.attachedRoot && this.traceHandlers) {
+                this.attachedRoot.removeEventListener('click', this.traceHandlers.click);
+                this.attachedRoot.removeEventListener('mousemove', this.traceHandlers.mousemove);
+                this.attachedRoot.removeEventListener('touchmove', this.traceHandlers.touchmove);
+                this.attachedRoot.removeEventListener('mouseleave', this.traceHandlers.mouseleave);
+            }
+            this.attachedTool = null;
+            this.attachedRoot = null;
+            if (!Dev.trace.isActive()) {
+                Dev.trace.hideHighlight();
+            }
+        },
+
+        attachTrace(sceneRoot) {
+            if (!sceneRoot) return;
+            if (!this.traceHandlers) {
+                this.traceHandlers = {
+                    click: (event) => {
+                        if (!event.target.closest('.hotspot')) {
+                            Dev.trace.recordClick(event);
+                        }
+                    },
+                    mousemove: (event) => {
+                        Dev.trace.updatePointer(event.clientX, event.clientY);
+                    },
+                    touchmove: (event) => {
+                        const touch = event.touches && event.touches[0];
+                        if (!touch) return;
+                        Dev.trace.updatePointer(touch.clientX, touch.clientY);
+                    },
+                    mouseleave: () => {
+                        Dev.trace.hideHighlight();
+                    }
+                };
+            }
+
+            sceneRoot.addEventListener('click', this.traceHandlers.click);
+            sceneRoot.addEventListener('mousemove', this.traceHandlers.mousemove);
+            sceneRoot.addEventListener('touchmove', this.traceHandlers.touchmove, { passive: true });
+            sceneRoot.addEventListener('mouseleave', this.traceHandlers.mouseleave);
+            this.attachedTool = 'trace';
+            this.attachedRoot = sceneRoot;
+        },
+
+        applyForCurrentScene() {
+            const sceneRoot = this.getSceneRoot();
+            this.detachCurrent();
+
+            if (Dev.toolsEnabled && Dev.activeTool === 'trace') {
+                this.attachTrace(sceneRoot);
+            }
+
+            Dev.hotspots.render();
+            Dev.layout.render();
+            Dev.updateStatus();
+        }
+    },
     trace: {
         logs: [],
         maxLogs: 10,
@@ -745,6 +837,7 @@ const Dev = {
 
     layout: {
         dragging: null,
+        listenersBound: false,
 
         panelConfigs: [
             { key: 'speech-bubble', selector: '[data-layout-panel="speech-bubble"]' },
@@ -980,6 +1073,8 @@ const Dev = {
         },
 
         init() {
+            if (this.listenersBound) return;
+            this.listenersBound = true;
             document.addEventListener('pointerdown', (event) => this.handlePointerDown(event));
             document.addEventListener('pointermove', (event) => this.handlePointerMove(event));
             document.addEventListener('pointerup', () => this.handlePointerUp());
@@ -987,107 +1082,139 @@ const Dev = {
         }
     },
 
+
+    listenersBound: false,
+
+    syncSession() {
+        this.session.enabled = this.enabled;
+        this.session.toolsEnabled = this.toolsEnabled;
+        this.session.activeTool = this.activeTool;
+    },
+
     init() {
         this.enabled = localStorage.getItem(this.storageKeys.enabled) === 'true';
         this.toolsEnabled = localStorage.getItem(this.storageKeys.toolsEnabled) === 'true';
         this.activeTool = localStorage.getItem(this.storageKeys.activeTool) || null;
+        this.syncSession();
 
         const modal = document.getElementById('devHubModal');
         const toggle = document.getElementById('dev-tools-enabled-toggle');
         const closeBtn = document.getElementById('btn-close-dev-hub');
         const exitBtn = document.getElementById('btn-exit-dev-mode');
+        const floatingButton = document.getElementById('dev-floating-btn');
 
-        if (!modal || !toggle || !closeBtn || !exitBtn) return;
+        if (!modal || !toggle || !closeBtn || !exitBtn || !floatingButton) return;
 
         toggle.checked = this.toolsEnabled;
-        modal.addEventListener('click', (event) => {
-            if (event.target.dataset.devClose === 'true') {
-                this.closeHub();
-            }
-        });
 
-        toggle.addEventListener('change', (event) => {
-            SFXGenerator.playButtonClick();
-            this.setToolsEnabled(event.target.checked);
-        });
+        if (!this.listenersBound) {
+            this.listenersBound = true;
 
-        closeBtn.addEventListener('click', () => {
-            SFXGenerator.playButtonClick();
-            this.closeHub();
-        });
-
-        exitBtn.addEventListener('click', () => {
-            SFXGenerator.playButtonClick();
-            this.setEnabled(false);
-            this.setToolsEnabled(false);
-            this.setActiveTool(null);
-            this.closeHub();
-        });
-
-        modal.querySelectorAll('[data-dev-action]').forEach(button => {
-            button.addEventListener('click', (event) => {
-                SFXGenerator.playButtonClick();
-                if (event.currentTarget.dataset.devAction === 'click-trace') {
-                    this.setActiveTool('trace');
+            modal.addEventListener('click', (event) => {
+                if (event.target.dataset.devClose === 'true') {
+                    this.closeHub();
                 }
-                if (event.currentTarget.dataset.devAction === 'hotspot-editor') {
-                    this.setActiveTool('hotspots');
-                }
-                if (event.currentTarget.dataset.devAction === 'ui-layout-editor') {
-                    this.setActiveTool('layout');
-                }
-                this.updateStatus();
             });
-        });
 
-        document.addEventListener('keydown', (event) => {
-            const isTyping = event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable);
-            if (isTyping) return;
-            if (event.key.toLowerCase() === 't') {
-                this.setActiveTool('trace');
-                this.updateStatus();
-            }
-            if (event.key.toLowerCase() === 'g' && this.hotspots.isActive()) {
-                event.preventDefault();
-                this.hotspots.snapEnabled = !this.hotspots.snapEnabled;
-                this.hotspots.render();
-            }
-            if (event.key.toLowerCase() === 'd' && event.ctrlKey && this.hotspots.isActive() && this.hotspots.selectedId) {
-                event.preventDefault();
-                const source = this.hotspots.getById(this.hotspots.selectedId);
-                if (source) {
-                    const clone = this.hotspots.toPatchShape(source);
-                    clone.id = `${clone.id}_copy_${Date.now()}`;
-                    clone.x += this.hotspots.snapSize;
-                    clone.y += this.hotspots.snapSize;
-                    this.hotspots.upsertHotspot(gameState.currentSceneId, clone);
-                    this.hotspots.selectedId = clone.id;
+            toggle.addEventListener('change', (event) => {
+                SFXGenerator.playButtonClick();
+                this.setToolsEnabled(event.target.checked);
+            });
+
+            closeBtn.addEventListener('click', () => {
+                SFXGenerator.playButtonClick();
+                this.closeHub();
+            });
+
+            exitBtn.addEventListener('click', () => {
+                SFXGenerator.playButtonClick();
+                this.setEnabled(false);
+                this.setToolsEnabled(false);
+                this.setActiveTool(null);
+                this.closeHub();
+            });
+
+            floatingButton.addEventListener('click', () => {
+                SFXGenerator.playButtonClick();
+                this.openHub();
+            });
+
+            modal.querySelectorAll('[data-dev-action]').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    SFXGenerator.playButtonClick();
+                    if (event.currentTarget.dataset.devAction === 'click-trace') {
+                        this.setActiveTool('trace');
+                    }
+                    if (event.currentTarget.dataset.devAction === 'hotspot-editor') {
+                        this.setActiveTool('hotspots');
+                    }
+                    if (event.currentTarget.dataset.devAction === 'ui-layout-editor') {
+                        this.setActiveTool('layout');
+                    }
+                    this.updateStatus();
+                });
+            });
+
+            document.addEventListener('keydown', (event) => {
+                const isTyping = event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable);
+                if (isTyping) return;
+                if (event.key === 'F2') {
+                    event.preventDefault();
+                    if (modal.classList.contains('hidden')) {
+                        this.openHub();
+                    } else {
+                        this.closeHub();
+                    }
+                    return;
+                }
+                if (event.key.toLowerCase() === 't') {
+                    this.setActiveTool('trace');
+                    this.updateStatus();
+                }
+                if (event.key.toLowerCase() === 'g' && this.hotspots.isActive()) {
+                    event.preventDefault();
+                    this.hotspots.snapEnabled = !this.hotspots.snapEnabled;
+                    this.hotspots.render();
+                }
+                if (event.key.toLowerCase() === 'd' && event.ctrlKey && this.hotspots.isActive() && this.hotspots.selectedId) {
+                    event.preventDefault();
+                    const source = this.hotspots.getById(this.hotspots.selectedId);
+                    if (source) {
+                        const clone = this.hotspots.toPatchShape(source);
+                        clone.id = `${clone.id}_copy_${Date.now()}`;
+                        clone.x += this.hotspots.snapSize;
+                        clone.y += this.hotspots.snapSize;
+                        this.hotspots.upsertHotspot(gameState.currentSceneId, clone);
+                        this.hotspots.selectedId = clone.id;
+                        sceneRenderer.refreshCurrentHotspots();
+                        this.hotspots.render();
+                    }
+                }
+                if (event.key === 'Delete' && this.hotspots.isActive() && this.hotspots.selectedId) {
+                    event.preventDefault();
+                    this.hotspots.deleteHotspot(gameState.currentSceneId, this.hotspots.selectedId);
+                    this.hotspots.selectedId = null;
                     sceneRenderer.refreshCurrentHotspots();
                     this.hotspots.render();
                 }
-            }
-            if (event.key === 'Delete' && this.hotspots.isActive() && this.hotspots.selectedId) {
-                event.preventDefault();
-                this.hotspots.deleteHotspot(gameState.currentSceneId, this.hotspots.selectedId);
-                this.hotspots.selectedId = null;
-                sceneRenderer.refreshCurrentHotspots();
-                this.hotspots.render();
-            }
-        });
+            });
+        }
 
         this.trace.renderLogs();
         this.hotspots.ensurePanel();
         this.layout.ensurePanel();
         this.layout.init();
+        this.ui.updateFloatingButton();
+        this.tools.applyForCurrentScene();
         this.updateStatus();
     },
 
     openHub() {
         const modal = document.getElementById('devHubModal');
         if (!modal) return;
+        this.setEnabled(true);
         modal.classList.remove('hidden');
         modal.setAttribute('aria-hidden', 'false');
-        this.setEnabled(true);
         this.updateStatus();
     },
 
@@ -1101,6 +1228,8 @@ const Dev = {
     setEnabled(value) {
         this.enabled = Boolean(value);
         localStorage.setItem(this.storageKeys.enabled, String(this.enabled));
+        this.syncSession();
+        this.ui.updateFloatingButton();
         this.updateStatus();
     },
 
@@ -1114,11 +1243,14 @@ const Dev = {
         if (!this.toolsEnabled) {
             this.trace.hideHighlight();
         }
+        this.syncSession();
+        this.tools.applyForCurrentScene();
         this.updateStatus();
     },
 
     setActiveTool(tool) {
-        this.activeTool = tool || null;
+        const normalizedTool = tool || null;
+        this.activeTool = normalizedTool;
         if (this.activeTool) {
             localStorage.setItem(this.storageKeys.activeTool, this.activeTool);
         } else {
@@ -1127,8 +1259,8 @@ const Dev = {
         if (!this.trace.isActive()) {
             this.trace.hideHighlight();
         }
-        this.hotspots.render();
-        this.layout.render();
+        this.syncSession();
+        this.tools.applyForCurrentScene();
         this.updateStatus();
     },
 
@@ -1155,6 +1287,7 @@ const Dev = {
             }
         }
 
+        this.ui.updateFloatingButton();
         this.hotspots.render();
         this.layout.render();
     }
@@ -2361,8 +2494,7 @@ const sceneRenderer = {
             }
 
             saveSystem.save();
-            Dev.hotspots.render();
-            Dev.layout.render();
+            Dev.tools.applyForCurrentScene();
         } catch (error) {
             errorLogger.log('scene-transition', error, { sceneId });
             document.getElementById('dialogue-box').classList.add('hidden');
@@ -2385,8 +2517,7 @@ const sceneRenderer = {
         hotspotLayer.replaceChildren();
         this.currentHotspots = Dev.hotspots.getRuntimeHotspots(sceneId, scene.hotspots || []);
         this.loadHotspots(this.currentHotspots);
-        Dev.hotspots.render();
-        Dev.layout.render();
+        Dev.tools.applyForCurrentScene();
     },
 
     _setInteractionBlocking(block) {
@@ -4183,7 +4314,7 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
     // Normalize scene data before the first scene loads.
     sceneIntegrity.validateAndNormalize();
 
-    Dev.init();
+    Dev.kernel.initOnce();
 
     // Setup UI handlers
     setupUIHandlers();
@@ -4197,10 +4328,6 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
 
     const sceneContainer = document.getElementById('scene-container');
     sceneContainer.addEventListener('click', (e) => {
-        if (!e.target.closest('.hotspot')) {
-            Dev.trace.recordClick(e);
-        }
-
         // Legacy debug logging for hotspot calibration
         if (!gameState.settings.showHotspots) return;
         const rect = positioningSystem.getBackgroundRect();
@@ -4215,20 +4342,6 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
         console.log(`[Debug] Click → native: (${imgX}, ${imgY}) | percent: (${pctX}%, ${pctY}%) | screen: (${Math.round(clickX)}, ${Math.round(clickY)})`);
     });
 
-    sceneContainer.addEventListener('mousemove', (e) => {
-        Dev.trace.updatePointer(e.clientX, e.clientY);
-    });
-
-    sceneContainer.addEventListener('touchmove', (e) => {
-        const touch = e.touches && e.touches[0];
-        if (!touch) return;
-        Dev.trace.updatePointer(touch.clientX, touch.clientY);
-    }, { passive: true });
-
-    sceneContainer.addEventListener('mouseleave', () => {
-        Dev.trace.hideHighlight();
-    });
-
     // Responsive positioning: recalculate on resize with debounce
     let resizeTimer;
     window.addEventListener('resize', () => {
@@ -4236,8 +4349,7 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
         resizeTimer = setTimeout(() => {
             try {
                 positioningSystem.recalculateAll();
-                Dev.hotspots.render();
-                Dev.layout.render();
+                Dev.tools.applyForCurrentScene();
             } catch (error) {
                 errorLogger.log('resize-recalculate', error);
             }
@@ -4249,8 +4361,7 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
         setTimeout(() => {
             try {
                 positioningSystem.recalculateAll();
-                Dev.hotspots.render();
-                Dev.layout.render();
+                Dev.tools.applyForCurrentScene();
             } catch (error) {
                 errorLogger.log('orientation-recalculate', error);
             }
