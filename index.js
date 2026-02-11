@@ -2433,27 +2433,88 @@ const inventory = {
     show() {
         SFXGenerator.playMenuOpen();
         const overlay = document.getElementById('inventory-overlay');
-        const grid = document.getElementById('inventory-grid');
-        
-        grid.innerHTML = '';
-        
-        if (gameState.inventory.length === 0) {
-            grid.innerHTML = '<div class="inventory-empty">No items yet</div>';
-        } else {
-            gameState.inventory.forEach(itemId => {
-                const itemDiv = document.createElement('div');
-                itemDiv.className = 'inventory-item';
-                itemDiv.innerHTML = `
-                    <img src="./assets/items/item_${itemId}.png" alt="${itemId}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'80\\' height=\\'80\\'%3E%3Crect fill=\\'none\\' width=\\'80\\' height=\\'80\\'/%3E%3Ctext x=\\'50%25\\' y=\\'50%25\\' text-anchor=\\'middle\\' dy=\\'.3em\\' fill=\\'%23666\\' font-size=\\'12\\'%3EITEM%3C/text%3E%3C/svg%3E'">
-                    <div class="inventory-item-name">${itemId.replace(/_/g, ' ')}</div>
-                `;
-                grid.appendChild(itemDiv);
-            });
-        }
+        renderInventory();
         
         overlay.classList.remove('hidden');
     }
 };
+
+function renderInventory() {
+    const inventoryGrid = document.getElementById('inventory-grid');
+    if (!inventoryGrid) return;
+
+    inventoryGrid.innerHTML = '';
+
+    if (!gameState.inventory || gameState.inventory.length === 0) {
+        inventoryGrid.innerHTML = '<div class="inventory-empty">No items yet</div>';
+        return;
+    }
+
+    gameState.inventory.forEach(itemId => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'inventory-item';
+        itemDiv.dataset.itemId = itemId;
+
+        const img = document.createElement('img');
+        img.src = `./assets/items/item_${itemId}.png`;
+        img.alt = itemId.replace(/_/g, ' ');
+        img.draggable = false;
+        img.onerror = () => {
+            img.src = getMissingAssetPlaceholder(itemId, 80, 80);
+        };
+
+        const itemName = document.createElement('div');
+        itemName.className = 'inventory-item-name';
+        itemName.textContent = itemId.replace(/_/g, ' ');
+
+        itemDiv.appendChild(img);
+        itemDiv.appendChild(itemName);
+
+        let touchStartTime = 0;
+        const handleItemClick = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (event.type === 'click' && Date.now() - touchStartTime < 500) {
+                return;
+            }
+
+            SFXGenerator.playButtonClick();
+            showItemInfo(itemId);
+        };
+
+        itemDiv.addEventListener('touchstart', () => {
+            touchStartTime = Date.now();
+        }, { passive: true });
+        itemDiv.addEventListener('touchend', handleItemClick, { passive: false });
+        itemDiv.addEventListener('click', handleItemClick);
+
+        inventoryGrid.appendChild(itemDiv);
+    });
+}
+
+function showItemInfo(itemId) {
+    const itemName = itemId.replace(/_/g, ' ').toUpperCase();
+    const infoText = getItemDescription(itemId);
+    alert(`${itemName}\n\n${infoText}`);
+}
+
+function getItemDescription(itemId) {
+    const descriptions = {
+        house_key: 'Your house key. Essential for coming and going.',
+        conspiracy_notebook: "Hank's conspiracy theory notebook. Contains questionable geopolitical hot takes.",
+        neighbors_usb: 'USB drive from the Riveras. Contains unknown data.',
+        burner_phone: 'Burner phone. For when you need to stay off the grid.',
+        moms_nurse_badge: "Mom's hospital badge. Might grant access to restricted areas.",
+        fake_fbi_badge: 'Convincing fake FBI badge. Use with caution.',
+        cartel_usb: 'Cartel USB drive. Handle with extreme care.',
+        mysterious_passport: "Passport with your photo but someone else's name.",
+        tv_remote: 'TV remote. Channel surfing at its finest.'
+    };
+
+    const normalizedItemId = itemId.startsWith('item_') ? itemId.slice(5) : itemId;
+    return descriptions[normalizedItemId] || 'A mysterious item.';
+}
 
 // ===== NOTEBOOK SYSTEM =====
 const notebook = {
