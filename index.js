@@ -3370,6 +3370,7 @@ const sceneRenderer = {
             dialogueBox.style.right = '';
             dialogueBox.style.top = '';
             dialogueBox.style.bottom = '';
+            dialogueBox.style.transform = '';
 
             const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
             const isChoice = dialogueEntry.speaker === 'CHOICE' || dialogueEntry.speaker === 'FINAL CHOICE';
@@ -3377,12 +3378,14 @@ const sceneRenderer = {
             if (isNarration) {
                 dialogueContainer.classList.add('narrative-mode');
                 dialogueBox.classList.add('dialogue-center');
+                this._positionNarrativeDialogue(dialogueBox);
                 speaker.className = 'narration';
                 text.className = 'narration';
                 speaker.textContent = '';
             } else if (isChoice) {
                 dialogueContainer.classList.add('narrative-mode');
                 dialogueBox.classList.add('dialogue-center');
+                this._positionNarrativeDialogue(dialogueBox);
                 speaker.className = 'choice-speaker';
                 text.className = 'choice-text';
                 speaker.textContent = dialogueEntry.speaker;
@@ -3412,7 +3415,7 @@ const sceneRenderer = {
             }
 
             dialogueBox.classList.remove('hidden');
-            this._clampDialogueToViewport(dialogueBox);
+            this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
             Dev.layout.applySavedLayouts();
             text.textContent = dialogueEntry.text || '';
 
@@ -3470,7 +3473,9 @@ const sceneRenderer = {
         }
     },
 
-    _clampDialogueToViewport(dialogueBox) {
+    _clampDialogueToViewport(dialogueBox, options = {}) {
+        const preserveCentered = Boolean(options.preserveCentered);
+
         // After render, ensure the dialogue box stays within the scene container
         requestAnimationFrame(() => {
             const container = document.getElementById('scene-container');
@@ -3480,6 +3485,20 @@ const sceneRenderer = {
             const marginX = containerRect.width * 0.02;
             const minTop = containerRect.top + containerRect.height * 0.06;
             const maxBottom = containerRect.bottom - containerRect.height * 0.02;
+
+            if (preserveCentered) {
+                const centeredLeft = (containerRect.width - boxRect.width) / 2;
+                let centeredTop = (containerRect.height - boxRect.height) / 2;
+                centeredTop = Math.max(minTop - containerRect.top, centeredTop);
+                centeredTop = Math.min(maxBottom - containerRect.top - boxRect.height, centeredTop);
+
+                dialogueBox.style.left = `${Math.max(marginX, centeredLeft)}px`;
+                dialogueBox.style.right = 'auto';
+                dialogueBox.style.top = `${Math.max(containerRect.height * 0.06, centeredTop)}px`;
+                dialogueBox.style.bottom = 'auto';
+                dialogueBox.style.transform = 'none';
+                return;
+            }
 
             let left = boxRect.left - containerRect.left;
             let top = boxRect.top - containerRect.top;
@@ -3564,9 +3583,16 @@ const sceneRenderer = {
             const boxRect = dialogueBox.getBoundingClientRect();
 
             const margin = Math.max(14, containerRect.height * 0.02);
+            const zoneNudge = {
+                left: { x: 0, y: 0 },
+                'left-2': { x: -charRect.width * 0.1, y: -charRect.height * 0.04 },
+                right: { x: 0, y: 0 },
+                'right-2': { x: charRect.width * 0.1, y: -charRect.height * 0.04 },
+            };
+            const zoneOffset = zoneNudge[zoneName] || { x: 0, y: 0 };
             const topPx = Math.max(
                 containerRect.height * (window.matchMedia('(max-width: 1024px)').matches ? 0.05 : 0.1),
-                (charRect.top - containerRect.top) - boxRect.height - margin
+                (charRect.top - containerRect.top) - boxRect.height - margin + zoneOffset.y
             );
 
             const charLeft = charRect.left - containerRect.left;
@@ -3576,16 +3602,21 @@ const sceneRenderer = {
             let leftPx;
 
             const isMobile = window.matchMedia('(max-width: 1024px)').matches;
+            const charWidth = charRect.width;
 
             if (zoneName.startsWith('left')) {
-                // Comic-style: left speaker bubble should sit above-left shoulder.
-                leftPx = charLeft - (boxRect.width * (isMobile ? 0.2 : 0.12));
+                // Keep bubble upper-left of left-side speakers.
+                const shoulderX = charLeft + charWidth * (zoneName === 'left-2' ? 0.42 : 0.36);
+                leftPx = shoulderX - (boxRect.width * (isMobile ? 0.92 : 0.88));
             } else if (zoneName.startsWith('right')) {
-                // Right speaker bubble should sit above-right shoulder.
-                leftPx = charRight - (boxRect.width * (isMobile ? 0.8 : 0.88));
+                // Keep bubble upper-right of right-side speakers.
+                const shoulderX = charLeft + charWidth * (zoneName === 'right-2' ? 0.58 : 0.64);
+                leftPx = shoulderX - (boxRect.width * (isMobile ? 0.08 : 0.12));
             } else {
                 leftPx = (charLeft + charRight) / 2 - (boxRect.width / 2);
             }
+
+            leftPx += zoneOffset.x;
 
             leftPx = Math.min(maxLeft, Math.max(minLeft, leftPx));
 
@@ -3618,6 +3649,24 @@ const sceneRenderer = {
         });
     },
 
+    _positionNarrativeDialogue(dialogueBox) {
+        const container = document.getElementById('scene-container');
+        if (!container || !dialogueBox) return;
+
+        requestAnimationFrame(() => {
+            const containerRect = container.getBoundingClientRect();
+            const boxRect = dialogueBox.getBoundingClientRect();
+            const leftPx = Math.max(containerRect.width * 0.02, (containerRect.width - boxRect.width) / 2);
+            const topPx = Math.max(containerRect.height * 0.12, (containerRect.height - boxRect.height) / 2);
+
+            dialogueBox.style.left = `${leftPx}px`;
+            dialogueBox.style.right = 'auto';
+            dialogueBox.style.top = `${topPx}px`;
+            dialogueBox.style.bottom = 'auto';
+            dialogueBox.style.transform = 'none';
+        });
+    },
+
     repositionActiveDialogue() {
         const dialogueBox = document.getElementById('dialogue-box');
         if (!dialogueBox || dialogueBox.classList.contains('hidden')) return;
@@ -3630,12 +3679,8 @@ const sceneRenderer = {
         const isChoice = dialogueEntry.speaker === 'CHOICE' || dialogueEntry.speaker === 'FINAL CHOICE';
 
         if (isNarration || isChoice) {
-            dialogueBox.style.left = '';
-            dialogueBox.style.right = '';
-            dialogueBox.style.top = '';
-            dialogueBox.style.bottom = '';
-            dialogueBox.style.transform = '';
-            this._clampDialogueToViewport(dialogueBox);
+            this._positionNarrativeDialogue(dialogueBox);
+            this._clampDialogueToViewport(dialogueBox, { preserveCentered: true });
             return;
         }
 
