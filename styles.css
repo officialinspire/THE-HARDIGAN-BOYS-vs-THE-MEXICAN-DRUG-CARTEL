@@ -2384,3 +2384,144 @@ body.main-menu #scene-container {
         height: 45%;
     }
 }
+
+/* ===== MOBILE COMIC LAYOUT TUNING (2026-02) ===== */
+@media (max-width: 1024px) {
+    /* Smaller speech bubbles near character shoulders */
+    #dialogue-box.dialogue-left,
+    #dialogue-box.dialogue-right {
+        width: clamp(200px, 30vw, 300px);
+        min-width: clamp(190px, 28vw, 280px);
+        max-width: 42vw;
+    }
+
+    #dialogue-container {
+        min-height: clamp(84px, 13vh, 140px);
+    }
+
+    #dialogue-bubble {
+        min-height: clamp(84px, 13vh, 140px);
+    }
+
+    #dialogue-content {
+        top: 11%;
+        left: 10%;
+        right: 10%;
+        bottom: 10%;
+        padding: clamp(8px, 1.2vw, 12px);
+    }
+
+    #dialogue-speaker {
+        font-size: clamp(16px, 2.5vw, 24px);
+        margin-bottom: clamp(4px, 0.8vh, 8px);
+        letter-spacing: 1px;
+    }
+
+    #dialogue-text {
+        font-size: clamp(12px, 1.8vw, 17px);
+        line-height: 1.28;
+        max-height: clamp(58px, 11vh, 112px);
+        margin-bottom: clamp(4px, 0.8vh, 8px);
+        padding: clamp(3px, 0.7vw, 7px);
+    }
+
+    /* Narrative + choice prompts centered and compact */
+    #dialogue-box.dialogue-center {
+        width: min(56vw, 460px);
+        min-width: min(260px, 72vw);
+        max-width: 72vw;
+        top: 54%;
+    }
+
+    #dialogue-container.narrative-mode {
+        padding: clamp(12px, 1.8vw, 18px);
+        border-width: 2px;
+        border-radius: 10px;
+    }
+
+    #dialogue-container.narrative-mode #dialogue-text,
+    #dialogue-text.choice-text {
+        font-size: clamp(13px, 2vw, 18px);
+        line-height: 1.4;
+    }
+
+    #dialogue-speaker.choice-speaker {
+        font-size: clamp(20px, 3.3vw, 30px);
+        letter-spacing: 2px;
+    }
+
+    #dialogue-choices {
+        width: 100%;
+        max-width: 92%;
+        margin-inline: auto;
+        gap: 6px;
+        margin-top: 6px;
+    }
+
+    .dialogue-choice,
+    #dialogue-continue {
+        font-size: clamp(12px, 1.8vw, 16px);
+        padding: clamp(7px, 1vh, 10px) clamp(10px, 1.8vw, 14px);
+        border-radius: 10px;
+        border-width: 2px;
+        max-width: 100%;
+    }
+
+    /* Phone pause menu buttons sized to stay inside phone screen */
+    .phone-ui {
+        width: min(70vw, 340px);
+        height: min(86vh, 580px);
+    }
+
+    .phone-buttons {
+        top: 35.5%;
+        width: 44%;
+        max-width: 150px;
+        height: 40%;
+        gap: clamp(6px, 1.1vh, 10px);
+        justify-content: flex-start;
+    }
+
+    .phone-buttons button {
+        min-height: 0;
+        padding: clamp(6px, 0.95vh, 9px) clamp(8px, 1.3vw, 12px);
+        font-size: clamp(10px, 1.2vw, 13px);
+        line-height: 1.1;
+        border-width: 1px;
+        border-radius: 6px;
+        letter-spacing: 0.4px;
+    }
+}
+
+@media (max-width: 640px) {
+    #dialogue-box.dialogue-left,
+    #dialogue-box.dialogue-right {
+        width: min(40vw, 230px);
+        min-width: min(170px, 38vw);
+        max-width: 44vw;
+    }
+
+    #dialogue-box.dialogue-center {
+        width: min(66vw, 340px);
+        min-width: min(220px, 68vw);
+        max-width: 72vw;
+        top: 57%;
+    }
+
+    .phone-ui {
+        width: min(78vw, 300px);
+        height: min(84vh, 500px);
+    }
+
+    .phone-buttons {
+        width: 45%;
+        max-width: 126px;
+        top: 35.6%;
+        height: 40%;
+    }
+
+    .phone-buttons button {
+        font-size: clamp(9px, 2.5vw, 11px);
+        padding: 6px 7px;
+    }
+}
