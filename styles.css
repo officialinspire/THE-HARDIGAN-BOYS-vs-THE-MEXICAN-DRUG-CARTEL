@@ -482,10 +482,36 @@ body.main-menu #scene-title {
     transition: opacity 0.24s ease, transform 0.24s ease;
     pointer-events: auto;
     z-index: 5;
-    /* Default center position (narration/choices) */
-    top: 50%;
+
+    /* Default: bottom of screen (for character dialogue) */
+    bottom: max(20px, env(safe-area-inset-bottom));
     left: 50%;
+    transform: translateX(-50%);
+    top: auto;
+}
+
+/* Narration mode: center screen (no characters) */
+#dialogue-box[data-mode="narration"] {
+    top: 50%;
+    bottom: auto;
     transform: translate(-50%, -50%);
+}
+
+/* Mobile portrait: ensure enough space above for characters */
+@media (max-width: 768px) and (orientation: portrait) {
+    #dialogue-box {
+        bottom: max(60px, calc(env(safe-area-inset-bottom) + 40px));
+        width: 92vw;
+        min-width: 300px;
+    }
+}
+
+/* Very small screens */
+@media (max-width: 480px) {
+    #dialogue-box {
+        bottom: max(50px, calc(env(safe-area-inset-bottom) + 30px));
+        width: 94vw;
+    }
 }
 
 #dialogue-box.dialogue-enter {
@@ -714,11 +740,6 @@ body.main-menu #scene-title {
 
 /* Mobile: adjust dialogue box positioning and spacing */
 @media (max-width: 768px) {
-    #dialogue-box {
-        width: min(54%, 640px);
-        min-width: min(320px, 90vw);
-    }
-
     #dialogue-box.dialogue-left {
         left: 15%;
         bottom: 25%;
@@ -741,11 +762,6 @@ body.main-menu #scene-title {
 
 /* Very small phones */
 @media (max-width: 480px) {
-    #dialogue-box {
-        width: min(52%, 620px);
-        min-width: min(300px, 88vw);
-    }
-
     #dialogue-box.dialogue-left {
         left: 13%;
         bottom: 24%;
