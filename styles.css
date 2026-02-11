@@ -38,8 +38,6 @@ button {
 
 button,
 [role="button"],
-.hotspot,
-.scene-item,
 .dialogue-choice,
 #dialogue-continue,
 .menu-btn,
@@ -190,12 +188,12 @@ button:active,
 /* Mobile portrait: use cover to fill screen */
 @media (max-width: 768px) and (orientation: portrait) {
     #scene-background {
-        object-fit: cover;
+        object-fit: contain;
     }
 }
 
-/* Mobile landscape: use contain to show full image with proper scaling */
-@media (max-width: 768px) and (orientation: landscape) {
+/* Mobile/tablet: keep a 16:9 gameplay frame across phone viewports */
+@media (max-width: 1024px) {
     #scene-background {
         object-fit: contain;
         object-position: center;
@@ -715,17 +713,17 @@ body.main-menu #scene-title {
 /* Mobile: adjust dialogue box positioning and spacing */
 @media (max-width: 768px) {
     #dialogue-box {
-        width: 76.5%;
+        width: min(62%, 680px);
     }
 
     #dialogue-box.dialogue-left {
-        left: 5%;
-        bottom: 20%;
+        left: 15%;
+        bottom: 25%;
     }
 
     #dialogue-box.dialogue-right {
-        right: 5%;
-        bottom: 20%;
+        right: 15%;
+        bottom: 25%;
     }
 
     #dialogue-content {
@@ -739,17 +737,17 @@ body.main-menu #scene-title {
 /* Very small phones */
 @media (max-width: 480px) {
     #dialogue-box {
-        width: 80.75%;
+        width: min(66%, 680px);
     }
 
     #dialogue-box.dialogue-left {
-        left: 3%;
-        bottom: 18%;
+        left: 13%;
+        bottom: 24%;
     }
 
     #dialogue-box.dialogue-right {
-        right: 3%;
-        bottom: 18%;
+        right: 13%;
+        bottom: 24%;
     }
 
     #dialogue-container {
