@@ -4207,6 +4207,9 @@ const SCENES = {
                             "*click* There we go. Peak entertainment: the news yelling about cartels." :
                             "*click* And... off it goes. Back to existential silence.",
                         position: 'right',
+                        bubbleLayout: gameState.lighting.tvOn
+                            ? { left: 1085, top: 380, width: 704, height: 438 }
+                            : undefined,
                         next: 'NEXT_DIALOGUE'
                     });
                 }
@@ -4247,7 +4250,7 @@ const SCENES = {
                                     speaker: 'HANK',
                                     text: "Relax, it's probably just your DoorDash finally escaping ICE detention.",
                                     position: 'left',
-                                    bubbleLayout: { left: 781, top: 341, width: 836, height: 429 },
+                                    bubbleLayout: { left: 820, top: 412, width: 704, height: 438 },
                                     next: () => {
                                         if (gameState.objectsClicked.size >= 2) {
                                             sceneRenderer.loadScene('S2_ICE_RAID_WINDOW');
@@ -4277,6 +4280,9 @@ const SCENES = {
                             "*click* There. Mood lighting for the collapse of the republic." :
                             "*click* Lights off. Very noir. Very ominous.",
                         position: 'left',
+                        bubbleLayout: gameState.lighting.lampOn
+                            ? { left: 806, top: 378, width: 704, height: 438 }
+                            : undefined,
                         next: 'NEXT_DIALOGUE'
                     });
                 }
@@ -4481,7 +4487,7 @@ const SCENES = {
                 bubbleLayout: { left: 821, top: 221, width: 898, height: 518 },
                 next: 'NEXT_DIALOGUE',
                 onShow: () => {
-                    sceneRenderer.removeCharacter('hank');
+                    sceneRenderer.removeCharacter('hank', false);
                     setTimeout(() => {
                         sceneRenderer.addCharacter({
                             id: 'mom',
@@ -4498,7 +4504,7 @@ const SCENES = {
                 position: 'left',
                 bubbleLayout: { left: 821, top: 221, width: 898, height: 518 },
                 next: () => {
-                    sceneRenderer.removeCharacter('mom');
+                    sceneRenderer.removeCharacter('mom', false);
                     setTimeout(() => {
                         sceneRenderer.addCharacter({
                             id: 'hank',
