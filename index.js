@@ -4241,11 +4241,13 @@ const SCENES = {
                             speaker: 'JONAH',
                             text: "Uh. Hank? There's like... a lot of lights outside.",
                             position: 'right',
+                            bubbleLayout: { left: 1016, top: 348, width: 836, height: 429 },
                             next: () => {
                                 sceneRenderer.showDialogue({
                                     speaker: 'HANK',
                                     text: "Relax, it's probably just your DoorDash finally escaping ICE detention.",
                                     position: 'left',
+                                    bubbleLayout: { left: 781, top: 341, width: 836, height: 429 },
                                     next: () => {
                                         if (gameState.objectsClicked.size >= 2) {
                                             sceneRenderer.loadScene('S2_ICE_RAID_WINDOW');
@@ -4313,21 +4315,21 @@ const SCENES = {
                 speaker: 'HANK',
                 text: "I'm telling you, Jonah, everything connects. Private prisons, avocado prices, and your For You Page.",
                 position: 'left',
-                bubbleLayout: { left: 912, top: 417, width: 705, height: 336 },
+                bubbleLayout: { left: 857, top: 329, width: 704, height: 438 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'JONAH',
                 text: "You say this every time we run out of chips, dude.",
                 position: 'right',
-                bubbleLayout: { left: 874, top: 289, width: 737, height: 336 },
+                bubbleLayout: { left: 1099, top: 311, width: 704, height: 438 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'MOM',
                 text: "If either of you used this much energy on school, we'd be rich by now!",
                 position: 'right',
-                bubbleLayout: { left: 793, top: 267, width: 737, height: 336 },
+                bubbleLayout: { left: 798, top: 286, width: 704, height: 438 },
                 next: () => {
                     // Slide out Mom after her dialogue
                     sceneRenderer.removeCharacter('mom');
@@ -4429,27 +4431,28 @@ const SCENES = {
                 speaker: 'JONAH',
                 text: "Okay. That's… definitely ICE.",
                 position: 'left-2',
-                bubbleLayout: { left: 793, top: 267, width: 737, height: 336 },
+                bubbleLayout: { left: 1050, top: 394, width: 836, height: 429 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'HANK',
                 text: "No way. They'd never raid a quiet cul-de-sac with a Whole Foods loyalty card.",
                 position: 'left',
-                bubbleLayout: { left: 1078, top: 291, width: 737, height: 336 },
+                bubbleLayout: { left: 692, top: 301, width: 836, height: 429 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'JONAH',
                 text: "Bro, that's the Riveras' house.",
                 position: 'left-2',
-                bubbleLayout: { left: 634, top: 236, width: 737, height: 336 },
+                bubbleLayout: { left: 1129, top: 402, width: 836, height: 429 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'HANK',
                 text: "Mom, they're taking Carlos. He literally coached the neighborhood soccer team.",
                 position: 'left',
+                bubbleLayout: { left: 654, top: 282, width: 836, height: 429 },
                 next: 'NEXT_DIALOGUE',
                 onShow: () => {
                     // Keep four visible characters (Hank/Jonah left, ICE/Carlos right)
@@ -4475,7 +4478,7 @@ const SCENES = {
                 speaker: 'MOM',
                 text: "Away from the window. Now. Both of you.",
                 position: 'left',
-                bubbleLayout: { left: 706, top: 271, width: 737, height: 336 },
+                bubbleLayout: { left: 821, top: 221, width: 898, height: 518 },
                 next: 'NEXT_DIALOGUE',
                 onShow: () => {
                     sceneRenderer.removeCharacter('hank');
@@ -4493,7 +4496,7 @@ const SCENES = {
                 speaker: 'MOM',
                 text: "We are not getting involved. Do you hear me?",
                 position: 'left',
-                bubbleLayout: { left: 706, top: 271, width: 737, height: 336 },
+                bubbleLayout: { left: 821, top: 221, width: 898, height: 518 },
                 next: () => {
                     sceneRenderer.removeCharacter('mom');
                     setTimeout(() => {
@@ -4509,6 +4512,7 @@ const SCENES = {
                         sceneRenderer.showDialogue({
                         speaker: 'CHOICE',
                         text: 'What do you do?',
+                        bubbleLayout: { left: 821, top: 221, width: 898, height: 518 },
                         choices: [
                             {
                                 text: 'Listen to Mom - stay inside and watch',
