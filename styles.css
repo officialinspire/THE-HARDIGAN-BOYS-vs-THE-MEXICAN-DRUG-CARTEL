@@ -2818,10 +2818,6 @@ body.main-menu #scene-container {
 }
 
 /* ===== FINAL MOBILE + MENU INTERACTION HOTFIXES ===== */
-#hotspot-layer {
-    pointer-events: none;
-}
-
 .hotspot,
 #main-menu-content,
 #main-menu-content * {
