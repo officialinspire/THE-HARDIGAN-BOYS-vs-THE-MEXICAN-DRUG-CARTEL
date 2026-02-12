@@ -1109,10 +1109,7 @@ const Dev = {
         moveRaf: null,
 
         panelConfigs: [
-            { key: 'speech-bubble', selector: '[data-layout-panel="speech-bubble"]' },
-            { key: 'narrative-box', selector: '[data-layout-panel="narrative-box"]' },
-            { key: 'action-prompts', selector: '[data-layout-panel="action-prompts"]' },
-            { key: 'menu-prompts', selector: '[data-layout-panel="menu-prompts"]' }
+            { key: 'speech-bubble', selector: '[data-layout-panel="speech-bubble"]' }
         ],
 
         isActive() {
@@ -4079,8 +4076,8 @@ const SCENES = {
                 id: 'tv_remote',
                 label: 'TV Remote',
                 coordSystem: 'native',
-                x: 996,
-                y: 1026,
+                x: 846,
+                y: 794,
                 width: 138,
                 height: 54,
                 onClick() {
@@ -4100,7 +4097,7 @@ const SCENES = {
                 id: 'television',
                 label: 'Television',
                 coordSystem: 'native',
-                x: 388, y: 478, width: 467, height: 365,
+                x: 168, y: 345, width: 396, height: 315,
                 onClick() {
                     gameState.objectsClicked.add('television');
                     lightingEffects.toggleTV();
@@ -4118,7 +4115,7 @@ const SCENES = {
                 id: 'window',
                 label: 'Window',
                 coordSystem: 'native',
-                x: 858, y: 89, width: 1008, height: 380,
+                x: 432, y: 97, width: 768, height: 478,
                 onClick() {
                     if (!gameState.objectsClicked.has('window')) {
                         gameState.objectsClicked.add('window');
@@ -4150,7 +4147,7 @@ const SCENES = {
                 id: 'lamp',
                 label: 'Lamp',
                 coordSystem: 'native',
-                x: 1904, y: 602, width: 259, height: 511,
+                x: 1552, y: 370, width: 272, height: 424,
                 onClick() {
                     gameState.objectsClicked.add('lamp');
                     lightingEffects.toggleLamp();
@@ -4168,7 +4165,7 @@ const SCENES = {
                 id: 'notebook',
                 label: "Hank's Conspiracy Notebook",
                 coordSystem: 'native',
-                x: 1172, y: 1050, width: 119, height: 76,
+                x: 690, y: 722, width: 119, height: 76,
                 onClick() {
                     if (!inventory.has('conspiracy_notebook')) {
                         gameState.objectsClicked.add('notebook');
