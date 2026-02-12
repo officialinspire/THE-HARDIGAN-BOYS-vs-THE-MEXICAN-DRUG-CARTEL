@@ -1109,7 +1109,8 @@ const Dev = {
         moveRaf: null,
 
         panelConfigs: [
-            { key: 'speech-bubble', selector: '[data-layout-panel="speech-bubble"]' }
+            { key: 'speech-bubble', selector: '[data-layout-panel="speech-bubble"]' },
+            { key: 'narrative-box', selector: '[data-layout-panel="narrative-box"]' }
         ],
 
         isActive() {
@@ -3636,6 +3637,7 @@ const sceneRenderer = {
             const isChoice = dialogueEntry.speaker === 'CHOICE' || dialogueEntry.speaker === 'FINAL CHOICE';
 
             if (isNarration) {
+                dialogueBox.dataset.layoutPanel = 'narrative-box';
                 dialogueContainer.classList.add('narrative-mode');
                 dialogueBox.classList.add('dialogue-center');
                 this._positionNarrativeDialogue(dialogueBox);
@@ -3643,6 +3645,7 @@ const sceneRenderer = {
                 text.className = 'narration';
                 speaker.textContent = '';
             } else if (isChoice) {
+                dialogueBox.dataset.layoutPanel = 'narrative-box';
                 dialogueContainer.classList.add('narrative-mode');
                 dialogueBox.classList.add('dialogue-center');
                 this._positionNarrativeDialogue(dialogueBox);
@@ -3650,6 +3653,7 @@ const sceneRenderer = {
                 text.className = 'choice-text';
                 speaker.textContent = dialogueEntry.speaker;
             } else {
+                dialogueBox.dataset.layoutPanel = 'speech-bubble';
                 dialogueContainer.classList.remove('narrative-mode');
 
                 const pos = this.normalizeZoneName(dialogueEntry.position || 'left');
@@ -3689,6 +3693,7 @@ const sceneRenderer = {
             dialogueBox.classList.remove('hidden');
             this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
             Dev.layout.applySavedLayouts();
+            this._fitMobileDialogueText(dialogueBox);
 
             // Reveal after positioning settles (double-rAF ensures layout is applied)
             requestAnimationFrame(() => {
@@ -3991,6 +3996,49 @@ const sceneRenderer = {
             dialogueBox.style.top = `${topPx}px`;
             dialogueBox.style.bottom = 'auto';
             dialogueBox.style.transform = 'none';
+        }
+    },
+
+    _fitMobileDialogueText(dialogueBox) {
+        if (!window.matchMedia('(max-width: 768px)').matches || !dialogueBox) return;
+
+        const textEl = document.getElementById('dialogue-text');
+        const speakerEl = document.getElementById('dialogue-speaker');
+        const contentEl = document.getElementById('dialogue-content');
+        if (!textEl || !contentEl) return;
+
+        const defaultTextSize = textEl.classList.contains('choice-text') ? 14 : 13;
+        const minTextSize = 10;
+        const defaultSpeakerSize = speakerEl?.classList.contains('choice-speaker') ? 18 : 16;
+        const minSpeakerSize = 12;
+
+        textEl.style.fontSize = `${defaultTextSize}px`;
+        textEl.style.lineHeight = '1.25';
+        if (speakerEl) {
+            speakerEl.style.fontSize = `${defaultSpeakerSize}px`;
+            speakerEl.style.lineHeight = '1.1';
+        }
+
+        let textSize = defaultTextSize;
+        let speakerSize = defaultSpeakerSize;
+        let guard = 0;
+
+        while (guard < 12 && (contentEl.scrollHeight > contentEl.clientHeight || textEl.scrollHeight > textEl.clientHeight)) {
+            guard += 1;
+
+            if (textSize > minTextSize) {
+                textSize -= 0.5;
+                textEl.style.fontSize = `${textSize}px`;
+            }
+
+            if (speakerEl && speakerSize > minSpeakerSize && contentEl.scrollHeight > contentEl.clientHeight) {
+                speakerSize -= 0.5;
+                speakerEl.style.fontSize = `${speakerSize}px`;
+            }
+
+            if (textSize <= minTextSize && (!speakerEl || speakerSize <= minSpeakerSize)) {
+                break;
+            }
         }
     },
 
