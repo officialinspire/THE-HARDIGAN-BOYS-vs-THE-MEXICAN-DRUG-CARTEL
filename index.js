@@ -1860,12 +1860,16 @@ const spriteTransparencyProcessor = {
             const threshold = this.whiteThreshold;
 
             const indexOf = (x, y) => (y * width + x) * 4;
-            const isBg = (x, y) => {
+            const isNearWhite = (x, y) => {
                 const i = indexOf(x, y);
+                const r = pixels[i];
+                const g = pixels[i + 1];
+                const b = pixels[i + 2];
+                const minChannel = Math.min(r, g, b);
+                const maxChannel = Math.max(r, g, b);
                 return pixels[i + 3] > 0
-                    && pixels[i] >= threshold
-                    && pixels[i + 1] >= threshold
-                    && pixels[i + 2] >= threshold;
+                    && minChannel >= threshold
+                    && (maxChannel - minChannel) <= 22;
             };
 
             const visited = new Uint8Array(width * height);
@@ -1890,7 +1894,7 @@ const spriteTransparencyProcessor = {
             let changed = 0;
             while (queue.length > 0) {
                 const [x, y] = queue.shift();
-                if (!isBg(x, y)) continue;
+                if (!isNearWhite(x, y)) continue;
 
                 const i = indexOf(x, y);
                 pixels[i + 3] = 0;
@@ -1900,6 +1904,59 @@ const spriteTransparencyProcessor = {
                 push(x - 1, y);
                 push(x, y + 1);
                 push(x, y - 1);
+            }
+
+            const internalVisited = new Uint8Array(width * height);
+            const isTransparent = (x, y) => {
+                const i = indexOf(x, y);
+                return pixels[i + 3] === 0;
+            };
+
+            const minIslandSize = 26;
+            for (let y = 1; y < height - 1; y += 1) {
+                for (let x = 1; x < width - 1; x += 1) {
+                    const idx = y * width + x;
+                    if (internalVisited[idx] || !isNearWhite(x, y)) continue;
+
+                    const component = [];
+                    const stack = [[x, y]];
+                    let touchesEdge = false;
+
+                    while (stack.length > 0) {
+                        const [cx, cy] = stack.pop();
+                        const cIdx = cy * width + cx;
+                        if (internalVisited[cIdx]) continue;
+                        internalVisited[cIdx] = 1;
+                        if (!isNearWhite(cx, cy)) continue;
+
+                        component.push([cx, cy]);
+                        if (cx === 0 || cy === 0 || cx === width - 1 || cy === height - 1) {
+                            touchesEdge = true;
+                        }
+
+                        stack.push([cx + 1, cy]);
+                        stack.push([cx - 1, cy]);
+                        stack.push([cx, cy + 1]);
+                        stack.push([cx, cy - 1]);
+                    }
+
+                    if (touchesEdge || component.length < minIslandSize) continue;
+
+                    let transparentNeighbors = 0;
+                    component.forEach(([cx, cy]) => {
+                        if (isTransparent(cx + 1, cy) || isTransparent(cx - 1, cy) || isTransparent(cx, cy + 1) || isTransparent(cx, cy - 1)) {
+                            transparentNeighbors += 1;
+                        }
+                    });
+
+                    if (transparentNeighbors / component.length > 0.45) {
+                        component.forEach(([cx, cy]) => {
+                            const i = indexOf(cx, cy);
+                            pixels[i + 3] = 0;
+                            changed += 1;
+                        });
+                    }
+                }
             }
 
             if (changed > 0) {
@@ -3617,6 +3674,17 @@ const sceneRenderer = {
                 this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
             }
 
+            if (dialogueEntry.bubbleLayout) {
+                const { left, top, width, height } = dialogueEntry.bubbleLayout;
+                if (Number.isFinite(left)) dialogueBox.style.left = `${left}px`;
+                if (Number.isFinite(top)) dialogueBox.style.top = `${top}px`;
+                if (Number.isFinite(width)) dialogueBox.style.width = `${width}px`;
+                if (Number.isFinite(height)) dialogueBox.style.height = `${height}px`;
+                dialogueBox.style.right = 'auto';
+                dialogueBox.style.bottom = 'auto';
+                dialogueBox.style.transform = 'none';
+            }
+
             text.textContent = dialogueEntry.text || '';
             dialogueBox.classList.remove('hidden');
             this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
@@ -3685,6 +3753,8 @@ const sceneRenderer = {
                 });
             } else if (dialogueEntry.next) {
                 continueBtn.classList.remove('hidden');
+                continueBtn.textContent = '▶';
+                continueBtn.setAttribute('aria-label', 'Continue dialogue');
                 continueBtn.onclick = () => {
                     if (gameState.actionLock || this.isTransitioning) return;
                     gameState.actionLock = true;
@@ -4243,18 +4313,21 @@ const SCENES = {
                 speaker: 'HANK',
                 text: "I'm telling you, Jonah, everything connects. Private prisons, avocado prices, and your For You Page.",
                 position: 'left',
+                bubbleLayout: { left: 912, top: 417, width: 705, height: 336 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'JONAH',
                 text: "You say this every time we run out of chips, dude.",
                 position: 'right',
+                bubbleLayout: { left: 874, top: 289, width: 737, height: 336 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'MOM',
                 text: "If either of you used this much energy on school, we'd be rich by now!",
                 position: 'right',
+                bubbleLayout: { left: 793, top: 267, width: 737, height: 336 },
                 next: () => {
                     // Slide out Mom after her dialogue
                     sceneRenderer.removeCharacter('mom');
@@ -4356,18 +4429,21 @@ const SCENES = {
                 speaker: 'JONAH',
                 text: "Okay. That's… definitely ICE.",
                 position: 'left-2',
+                bubbleLayout: { left: 793, top: 267, width: 737, height: 336 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'HANK',
                 text: "No way. They'd never raid a quiet cul-de-sac with a Whole Foods loyalty card.",
                 position: 'left',
+                bubbleLayout: { left: 1078, top: 291, width: 737, height: 336 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'JONAH',
                 text: "Bro, that's the Riveras' house.",
                 position: 'left-2',
+                bubbleLayout: { left: 634, top: 236, width: 737, height: 336 },
                 next: 'NEXT_DIALOGUE'
             },
             {
@@ -4399,14 +4475,38 @@ const SCENES = {
                 speaker: 'MOM',
                 text: "Away from the window. Now. Both of you.",
                 position: 'left',
+                bubbleLayout: { left: 706, top: 271, width: 737, height: 336 },
                 next: 'NEXT_DIALOGUE',
+                onShow: () => {
+                    sceneRenderer.removeCharacter('hank');
+                    setTimeout(() => {
+                        sceneRenderer.addCharacter({
+                            id: 'mom',
+                            name: 'MOM',
+                            sprite: 'char_mom_worried-left.png',
+                            position: 'left'
+                        }, 60);
+                    }, 180);
+                }
             },
             {
                 speaker: 'MOM',
                 text: "We are not getting involved. Do you hear me?",
                 position: 'left',
+                bubbleLayout: { left: 706, top: 271, width: 737, height: 336 },
                 next: () => {
-                    sceneRenderer.showDialogue({
+                    sceneRenderer.removeCharacter('mom');
+                    setTimeout(() => {
+                        sceneRenderer.addCharacter({
+                            id: 'hank',
+                            name: 'HANK',
+                            sprite: 'char_hank_thinking.png',
+                            position: 'left'
+                        }, 60);
+                    }, 180);
+
+                    setTimeout(() => {
+                        sceneRenderer.showDialogue({
                         speaker: 'CHOICE',
                         text: 'What do you do?',
                         choices: [
@@ -4428,7 +4528,8 @@ const SCENES = {
                                 }
                             }
                         ]
-                    });
+                        });
+                    }, 720);
                 }
             }
         ]
@@ -4505,24 +4606,28 @@ const SCENES = {
                 speaker: 'SOFIA',
                 text: "You shouldn't be here.",
                 position: 'right',
+                bubbleLayout: { left: 1137, top: 313, width: 737, height: 336 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'HANK',
                 text: "We saw ICE. We thought we could… help?",
                 position: 'left',
+                bubbleLayout: { left: 723, top: 265, width: 737, height: 336 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'SOFIA',
                 text: "Unless you have a helicopter and a non-extradition treaty, you're late.",
                 position: 'right',
+                bubbleLayout: { left: 1030, top: 244, width: 863, height: 312 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'SOFIA',
                 text: "Here. Take this USB drive. It has contacts, numbers... everything. My dad thought it would clear his name. Maybe you can use it.",
                 position: 'right',
+                bubbleLayout: { left: 1134, top: 199, width: 729, height: 293 },
                 next: () => {
                     inventory.add('neighbors_usb');
                     notebook.add('RIVERA USB', 'Contains sensitive contacts and information. Could clear the Riveras... or condemn them further.');
