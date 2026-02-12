@@ -3581,8 +3581,8 @@ const sceneRenderer = {
                 this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
             }
 
-            dialogueBox.classList.remove('hidden');
             text.textContent = dialogueEntry.text || '';
+            dialogueBox.classList.remove('hidden');
             this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
             Dev.layout.applySavedLayouts();
 
@@ -3685,60 +3685,57 @@ const sceneRenderer = {
     _clampDialogueToViewport(dialogueBox, options = {}) {
         const preserveCentered = Boolean(options.preserveCentered);
 
-        // After render, ensure the dialogue box stays within the scene container
-        requestAnimationFrame(() => {
-            const container = document.getElementById('scene-container');
-            if (!container) return;
-            const containerRect = container.getBoundingClientRect();
-            const boxRect = dialogueBox.getBoundingClientRect();
-            const marginX = containerRect.width * 0.02;
-            const minTop = containerRect.top + containerRect.height * 0.06;
-            const maxBottom = containerRect.bottom - containerRect.height * 0.02;
+        const container = document.getElementById('scene-container');
+        if (!container) return;
+        const containerRect = container.getBoundingClientRect();
+        const boxRect = dialogueBox.getBoundingClientRect();
+        const marginX = containerRect.width * 0.02;
+        const minTop = containerRect.top + containerRect.height * 0.06;
+        const maxBottom = containerRect.bottom - containerRect.height * 0.02;
 
-            if (preserveCentered) {
-                const centeredLeft = (containerRect.width - boxRect.width) / 2;
-                let centeredTop = (containerRect.height - boxRect.height) / 2;
-                centeredTop = Math.max(minTop - containerRect.top, centeredTop);
-                centeredTop = Math.min(maxBottom - containerRect.top - boxRect.height, centeredTop);
+        if (preserveCentered) {
+            const centeredLeft = (containerRect.width - boxRect.width) / 2;
+            let centeredTop = (containerRect.height - boxRect.height) / 2;
+            centeredTop = Math.max(minTop - containerRect.top, centeredTop);
+            centeredTop = Math.min(maxBottom - containerRect.top - boxRect.height, centeredTop);
 
-                dialogueBox.style.left = `${Math.max(marginX, centeredLeft)}px`;
-                dialogueBox.style.right = 'auto';
-                dialogueBox.style.top = `${Math.max(containerRect.height * 0.06, centeredTop)}px`;
-                dialogueBox.style.bottom = 'auto';
-                dialogueBox.style.transform = 'none';
-                return;
-            }
+            dialogueBox.style.left = `${Math.max(marginX, centeredLeft)}px`;
+            dialogueBox.style.right = 'auto';
+            dialogueBox.style.top = `${Math.max(containerRect.height * 0.06, centeredTop)}px`;
+            dialogueBox.style.bottom = 'auto';
+            dialogueBox.style.transform = 'none';
+            return;
+        }
 
-            let left = boxRect.left - containerRect.left;
-            let top = boxRect.top - containerRect.top;
+        let left = boxRect.left - containerRect.left;
+        let top = boxRect.top - containerRect.top;
 
-            if (boxRect.left < containerRect.left + marginX) {
-                left = marginX;
-            }
+        if (boxRect.left < containerRect.left + marginX) {
+            left = marginX;
+        }
 
-            if (boxRect.right > containerRect.right - marginX) {
-                left = containerRect.width - boxRect.width - marginX;
-            }
+        if (boxRect.right > containerRect.right - marginX) {
+            left = containerRect.width - boxRect.width - marginX;
+        }
 
-            if (boxRect.top < minTop) {
-                top = minTop - containerRect.top;
-            }
+        if (boxRect.top < minTop) {
+            top = minTop - containerRect.top;
+        }
 
-            if (boxRect.bottom > maxBottom) {
-                top = maxBottom - containerRect.top - boxRect.height;
-            }
+        if (boxRect.bottom > maxBottom) {
+            top = maxBottom - containerRect.top - boxRect.height;
+        }
 
-            const shouldAdjust = Math.abs((boxRect.left - containerRect.left) - left) > 1
-                || Math.abs((boxRect.top - containerRect.top) - top) > 1;
+        const shouldAdjust = Math.abs((boxRect.left - containerRect.left) - left) > 1
+            || Math.abs((boxRect.top - containerRect.top) - top) > 1;
 
-            if (shouldAdjust) {
-                dialogueBox.style.left = `${Math.max(marginX, left)}px`;
-                dialogueBox.style.right = 'auto';
-                dialogueBox.style.top = `${Math.max(containerRect.height * 0.06, top)}px`;
-                dialogueBox.style.bottom = 'auto';
-                dialogueBox.style.transform = 'none';
-            }
-        });
+        if (shouldAdjust) {
+            dialogueBox.style.left = `${Math.max(marginX, left)}px`;
+            dialogueBox.style.right = 'auto';
+            dialogueBox.style.top = `${Math.max(containerRect.height * 0.06, top)}px`;
+            dialogueBox.style.bottom = 'auto';
+            dialogueBox.style.transform = 'none';
+        }
     },
 
     _resolveDialogueCharacter(zoneName, dialogueEntry) {
@@ -5315,6 +5312,10 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
     sceneIntegrity.validateAndNormalize();
 
     Dev.kernel.initOnce();
+
+    // Clear stale dev patches now that coordinates are baked into source
+    try { localStorage.removeItem('DEV_PATCHES'); } catch(e) {}
+    try { localStorage.removeItem('DEV_LAYOUTS'); } catch(e) {}
 
     // Setup UI handlers
     setupUIHandlers();
