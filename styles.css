@@ -508,9 +508,9 @@ body.main-menu #scene-title {
 /* ===== DIALOGUE BOX - DYNAMIC POSITIONING ===== */
 #dialogue-box {
     position: absolute;
-    width: min(56%, 680px);
-    min-width: min(380px, 92vw);
-    max-width: calc(100% - 32px);
+    width: clamp(300px, 36vw, 540px);
+    min-width: min(280px, 90vw);
+    max-width: calc(100% - 24px);
     transition: opacity 0.24s ease, transform 0.24s ease;
     pointer-events: auto;
     z-index: 5;
@@ -586,6 +586,16 @@ body.main-menu #scene-title {
     bottom: auto;
     transform: translate(-50%, -50%);
     animation: fadeInCenter 0.3s ease-out;
+    width: clamp(340px, 44vw, 640px);
+    min-width: min(300px, 88vw);
+    max-width: 92vw;
+}
+
+@media (max-width: 640px) {
+    #dialogue-box.dialogue-center {
+        width: min(90vw, 420px);
+        min-width: min(240px, 86vw);
+    }
 }
 
 #dialogue-box.dialogue-offscreen {
@@ -2126,10 +2136,6 @@ body.main-menu #scene-container {
 }
 
 /* ===== UX TUNING: DIALOGUE + MENUS ===== */
-#dialogue-box {
-    width: min(61%, 720px);
-}
-
 #dialogue-box.dialogue-left {
     left: 18%;
     bottom: 28%;
@@ -2349,11 +2355,6 @@ body.main-menu #scene-container {
     width: clamp(320px, 40vw, 560px);
 }
 
-#dialogue-box.dialogue-left,
-#dialogue-box.dialogue-right {
-    width: clamp(300px, 36vw, 500px);
-}
-
 #dialogue-container {
     min-height: clamp(100px, 16vh, 210px);
 }
@@ -2371,12 +2372,6 @@ body.main-menu #scene-container {
     #dialogue-box {
         width: min(80vw, 420px);
         min-width: min(300px, 90vw);
-    }
-
-    #dialogue-box.dialogue-left,
-    #dialogue-box.dialogue-right {
-        width: min(76vw, 400px);
-        min-width: min(280px, 86vw);
     }
 
     #dialogue-container {
@@ -2519,13 +2514,6 @@ body.main-menu #scene-container {
 /* ===== MOBILE COMIC LAYOUT TUNING (2026-02) ===== */
 @media (max-width: 1024px) {
     /* Smaller speech bubbles near character shoulders */
-    #dialogue-box.dialogue-left,
-    #dialogue-box.dialogue-right {
-        width: clamp(200px, 30vw, 300px);
-        min-width: clamp(190px, 28vw, 280px);
-        max-width: 42vw;
-    }
-
     #dialogue-container {
         min-height: clamp(100px, 16vh, 160px);
     }
@@ -2549,13 +2537,6 @@ body.main-menu #scene-container {
     }
 
     /* Narrative + choice prompts centered and compact */
-    #dialogue-box.dialogue-center {
-        width: min(56vw, 460px);
-        min-width: min(260px, 72vw);
-        max-width: 72vw;
-        top: 54%;
-    }
-
     #dialogue-container.narrative-mode {
         padding: clamp(12px, 1.8vw, 18px);
         border-width: 2px;
@@ -2617,20 +2598,6 @@ body.main-menu #scene-container {
 }
 
 @media (max-width: 640px) {
-    #dialogue-box.dialogue-left,
-    #dialogue-box.dialogue-right {
-        width: min(40vw, 230px);
-        min-width: min(170px, 38vw);
-        max-width: 44vw;
-    }
-
-    #dialogue-box.dialogue-center {
-        width: min(66vw, 340px);
-        min-width: min(220px, 68vw);
-        max-width: 72vw;
-        top: 57%;
-    }
-
     .phone-ui {
         width: min(78vw, 300px);
         height: min(84vh, 500px);
@@ -2650,26 +2617,9 @@ body.main-menu #scene-container {
 }
 
 /* ===== DIALOGUE VIEWPORT PLACEMENT FIX (desktop + mobile parity) ===== */
-#dialogue-box {
-    width: clamp(280px, 34vw, 520px);
-    min-width: min(280px, 90vw);
-    max-width: calc(100% - 28px);
-}
-
 #dialogue-box.dialogue-left,
 #dialogue-box.dialogue-right {
     bottom: auto;
-}
-
-#dialogue-box.dialogue-center {
-    left: 50% !important;
-    right: auto !important;
-    top: 50% !important;
-    bottom: auto !important;
-    transform: translate(-50%, -50%) !important;
-    width: clamp(320px, 50vw, 640px);
-    min-width: min(320px, 90vw);
-    max-width: 92vw;
 }
 
 #dialogue-container.narrative-mode {
@@ -2703,25 +2653,6 @@ body.main-menu #scene-container {
 }
 
 @media (max-width: 1024px) {
-    #dialogue-box {
-        width: min(80vw, 420px);
-        min-width: min(240px, 90vw);
-        max-width: 90vw;
-    }
-
-    #dialogue-box.dialogue-left,
-    #dialogue-box.dialogue-right {
-        width: clamp(220px, 42vw, 360px);
-        min-width: min(220px, 64vw);
-        max-width: 46vw;
-    }
-
-    #dialogue-box.dialogue-center {
-        width: min(84vw, 500px);
-        min-width: min(240px, 84vw);
-        max-width: 90vw;
-    }
-
     #dialogue-speaker {
         font-size: clamp(16px, 3.2vw, 24px);
     }
@@ -2762,19 +2693,6 @@ body.main-menu #scene-container {
 }
 
 @media (max-width: 640px) {
-    #dialogue-box.dialogue-left,
-    #dialogue-box.dialogue-right {
-        width: clamp(190px, 44vw, 280px);
-        min-width: min(180px, 62vw);
-        max-width: 50vw;
-    }
-
-    #dialogue-box.dialogue-center {
-        width: min(90vw, 420px);
-        min-width: min(220px, 86vw);
-        max-width: 92vw;
-    }
-
     #dialogue-container.narrative-mode {
         max-height: min(40vh, 260px);
     }
@@ -2798,14 +2716,14 @@ body.main-menu #scene-container {
 
 @media (max-width: 1024px) {
     #dialogue-box {
-        width: min(90vw, 500px) !important;
-        max-width: 92vw !important;
         z-index: 25;
     }
 
     #dialogue-box.dialogue-left,
     #dialogue-box.dialogue-right {
-        bottom: 22% !important;
+        width: clamp(240px, 38vw, 400px);
+        min-width: min(230px, 70vw);
+        max-width: 72vw;
     }
 
     #dialogue-container {
@@ -2893,16 +2811,6 @@ body.main-menu #scene-container {
 }
 
 @media (max-width: 640px) {
-    #dialogue-box.dialogue-left,
-    #dialogue-box.dialogue-right {
-        width: min(70vw, 300px) !important;
-        max-width: 72vw !important;
-    }
-
-    #dialogue-box.dialogue-center {
-        width: min(92vw, 420px) !important;
-    }
-
     .notebook-ui {
         width: min(98vw, 540px) !important;
         height: min(82vh, 560px) !important;
@@ -2916,5 +2824,14 @@ body.main-menu #scene-container {
     .phone-buttons {
         width: 74% !important;
         top: 24% !important;
+    }
+}
+
+@media (max-width: 640px) {
+    #dialogue-box.dialogue-left,
+    #dialogue-box.dialogue-right {
+        width: clamp(200px, 48vw, 300px);
+        min-width: min(190px, 65vw);
+        max-width: 68vw;
     }
 }
