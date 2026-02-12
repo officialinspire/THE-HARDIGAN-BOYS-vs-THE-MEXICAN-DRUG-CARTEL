@@ -1839,7 +1839,7 @@ const Dev = {
 };
 
 const spriteTransparencyProcessor = {
-    whiteThreshold: 250,
+    whiteThreshold: 235,
 
     makeWhitePixelsTransparent(imageEl) {
         if (!imageEl || imageEl.dataset.whiteRemoved === 'true') return;
@@ -1858,13 +1858,48 @@ const spriteTransparencyProcessor = {
             const imageData = ctx.getImageData(0, 0, width, height);
             const pixels = imageData.data;
             const threshold = this.whiteThreshold;
-            let changed = 0;
 
-            for (let i = 0; i < pixels.length; i += 4) {
-                if (pixels[i] >= threshold && pixels[i + 1] >= threshold && pixels[i + 2] >= threshold) {
-                    pixels[i + 3] = 0;
-                    changed++;
-                }
+            const indexOf = (x, y) => (y * width + x) * 4;
+            const isBg = (x, y) => {
+                const i = indexOf(x, y);
+                return pixels[i + 3] > 0
+                    && pixels[i] >= threshold
+                    && pixels[i + 1] >= threshold
+                    && pixels[i + 2] >= threshold;
+            };
+
+            const visited = new Uint8Array(width * height);
+            const queue = [];
+            const push = (x, y) => {
+                if (x < 0 || y < 0 || x >= width || y >= height) return;
+                const idx = y * width + x;
+                if (visited[idx]) return;
+                visited[idx] = 1;
+                queue.push([x, y]);
+            };
+
+            for (let x = 0; x < width; x += 1) {
+                push(x, 0);
+                push(x, height - 1);
+            }
+            for (let y = 1; y < height - 1; y += 1) {
+                push(0, y);
+                push(width - 1, y);
+            }
+
+            let changed = 0;
+            while (queue.length > 0) {
+                const [x, y] = queue.shift();
+                if (!isBg(x, y)) continue;
+
+                const i = indexOf(x, y);
+                pixels[i + 3] = 0;
+                changed += 1;
+
+                push(x + 1, y);
+                push(x - 1, y);
+                push(x, y + 1);
+                push(x, y - 1);
             }
 
             if (changed > 0) {
@@ -1877,6 +1912,7 @@ const spriteTransparencyProcessor = {
         }
     }
 };
+
 
 function getMissingAssetPlaceholder(src, width = 200, height = 120) {
     const filename = (src || 'missing-asset').split('/').pop();
@@ -3776,6 +3812,21 @@ const sceneRenderer = {
         const container = document.getElementById('scene-container');
         if (!container || !dialogueBox || !zoneName) return;
 
+        if (zoneName.startsWith('left') || zoneName.startsWith('right')) {
+            const containerRect = container.getBoundingClientRect();
+            const boxRect = dialogueBox.getBoundingClientRect();
+            const isMobile = window.matchMedia('(max-width: 1024px)').matches;
+            const leftPx = Math.max(containerRect.width * 0.02, (containerRect.width - boxRect.width) / 2);
+            const topPx = containerRect.height * (isMobile ? 0.12 : 0.105);
+
+            dialogueBox.style.left = `${leftPx}px`;
+            dialogueBox.style.right = 'auto';
+            dialogueBox.style.top = `${topPx}px`;
+            dialogueBox.style.bottom = 'auto';
+            dialogueBox.style.transform = 'none';
+            return;
+        }
+
         const characterEl = this._resolveDialogueCharacter(zoneName, dialogueEntry);
 
         if (!characterEl) {
@@ -4073,8 +4124,8 @@ const SCENES = {
                 id: 'tv_remote',
                 label: 'TV Remote',
                 coordSystem: 'native',
-                x: 846,
-                y: 794,
+                x: 558,
+                y: 802,
                 width: 138,
                 height: 54,
                 onClick() {
@@ -4094,7 +4145,7 @@ const SCENES = {
                 id: 'television',
                 label: 'Television',
                 coordSystem: 'native',
-                x: 168, y: 345, width: 396, height: 315,
+                x: 24, y: 376, width: 272, height: 216,
                 onClick() {
                     gameState.objectsClicked.add('television');
                     lightingEffects.toggleTV();
@@ -4112,7 +4163,7 @@ const SCENES = {
                 id: 'window',
                 label: 'Window',
                 coordSystem: 'native',
-                x: 432, y: 97, width: 768, height: 478,
+                x: 304, y: 121, width: 520, height: 343,
                 onClick() {
                     if (!gameState.objectsClicked.has('window')) {
                         gameState.objectsClicked.add('window');
@@ -4144,7 +4195,7 @@ const SCENES = {
                 id: 'lamp',
                 label: 'Lamp',
                 coordSystem: 'native',
-                x: 1552, y: 370, width: 272, height: 424,
+                x: 1528, y: 450, width: 272, height: 424,
                 onClick() {
                     gameState.objectsClicked.add('lamp');
                     lightingEffects.toggleLamp();
@@ -4162,7 +4213,7 @@ const SCENES = {
                 id: 'notebook',
                 label: "Hank's Conspiracy Notebook",
                 coordSystem: 'native',
-                x: 690, y: 722, width: 119, height: 76,
+                x: 458, y: 722, width: 119, height: 76,
                 onClick() {
                     if (!inventory.has('conspiracy_notebook')) {
                         gameState.objectsClicked.add('notebook');
@@ -4214,7 +4265,7 @@ const SCENES = {
                     sceneRenderer.addCharacter({
                         id: 'mom',
                         name: 'MOM',
-                        sprite: 'char_mom_angry-right.png',
+                        sprite: 'char_mom_worried-right.png',
                         position: 'right-2'
                     }, 100);
                 }
@@ -4295,7 +4346,7 @@ const SCENES = {
 
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
-            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused-right.png', position: 'right' }
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused-left.png', position: 'left-2' }
         ],
 
         hotspots: [],
@@ -4304,7 +4355,7 @@ const SCENES = {
             {
                 speaker: 'JONAH',
                 text: "Okay. That's… definitely ICE.",
-                position: 'right',
+                position: 'left-2',
                 next: 'NEXT_DIALOGUE'
             },
             {
@@ -4316,7 +4367,7 @@ const SCENES = {
             {
                 speaker: 'JONAH',
                 text: "Bro, that's the Riveras' house.",
-                position: 'right',
+                position: 'left-2',
                 next: 'NEXT_DIALOGUE'
             },
             {
@@ -4325,10 +4376,7 @@ const SCENES = {
                 position: 'left',
                 next: 'NEXT_DIALOGUE',
                 onShow: () => {
-                    // Remove Jonah before adding Ice Agent and Mr. Rivera
-                    sceneRenderer.removeCharacter('jonah');
-
-                    // Add Ice Agent and Mr. Rivera on the right side when Hank points them out
+                    // Keep four visible characters (Hank/Jonah left, ICE/Carlos right)
                     setTimeout(() => {
                         sceneRenderer.addCharacter({
                             id: 'ice_agent',
@@ -4352,15 +4400,6 @@ const SCENES = {
                 text: "Away from the window. Now. Both of you.",
                 position: 'left',
                 next: 'NEXT_DIALOGUE',
-                onShow: () => {
-                    // Add Mom on the left side (adjacent to Hank)
-                    sceneRenderer.addCharacter({
-                        id: 'mom',
-                        name: 'MOM',
-                        sprite: 'char_mom_worried-left.png',
-                        position: 'left-2'
-                    }, 100);
-                }
             },
             {
                 speaker: 'MOM',
