@@ -2837,3 +2837,23 @@ body.main-menu #scene-container {
         max-width: 68vw;
     }
 }
+
+/* ===== DIALOGUE CONTINUE BUTTON HOTFIX ===== */
+#dialogue-continue {
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    padding: 0 !important;
+    border-radius: 10px !important;
+    font-size: 18px !important;
+    line-height: 1 !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-end;
+    margin: 10px 8px 0 auto !important;
+}
+
+#dialogue-continue:hover {
+    transform: scale(1.05) !important;
+}
