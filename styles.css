@@ -674,7 +674,9 @@ body.main-menu #scene-title {
 #dialogue-container {
     position: relative;
     width: 100%;
-    min-height: 120px;
+    min-height: 130px;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Narrative Container - Stylish box without speech bubble */
@@ -703,28 +705,32 @@ body.main-menu #scene-title {
 }
 
 #dialogue-bubble {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
-    height: auto;
+    height: 100%;
     display: block;
-    min-height: 120px;
     background: transparent;
     opacity: 1;
     image-rendering: auto;
     filter: contrast(1.06) saturate(1.03);
     backface-visibility: hidden;
     transform: translateZ(0);
+    z-index: 0;
+    object-fit: fill;
+    pointer-events: none;
 }
 
 #dialogue-content {
-    position: absolute;
-    top: 11%;
-    left: 8.5%;
-    right: 8.5%;
-    bottom: 11%;
+    position: relative;
+    z-index: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: clamp(12px, 2vw, 22px);
+    justify-content: center;
+    padding: clamp(16px, 3vw, 28px) clamp(20px, 4vw, 34px);
+    min-height: 120px;
     overflow: hidden;
 }
 
@@ -805,10 +811,6 @@ body.main-menu #scene-title {
     }
 
     #dialogue-container {
-        min-height: 100px;
-    }
-
-    #dialogue-bubble {
         min-height: 100px;
     }
 
@@ -1990,10 +1992,6 @@ body.main-menu #scene-container {
         min-height: 80px;
     }
 
-    #dialogue-bubble {
-        min-height: 80px;
-    }
-
     #dialogue-text {
         max-height: 100px;
     }
@@ -2137,13 +2135,6 @@ body.main-menu #scene-container {
 
 #dialogue-box.dialogue-center {
     top: 54%;
-}
-
-#dialogue-content {
-    top: 11%;
-    left: 7%;
-    right: 7%;
-    bottom: 10%;
 }
 
 #dialogue-text {
@@ -2360,17 +2351,6 @@ body.main-menu #scene-container {
     min-height: clamp(100px, 16vh, 210px);
 }
 
-#dialogue-bubble {
-    min-height: clamp(100px, 16vh, 210px);
-}
-
-#dialogue-content {
-    top: 10%;
-    left: 8%;
-    right: 8%;
-    bottom: 9%;
-}
-
 #dialogue-speaker {
     font-size: clamp(32px, 4.4vw, 50px);
 }
@@ -2393,10 +2373,6 @@ body.main-menu #scene-container {
     }
 
     #dialogue-container {
-        min-height: clamp(90px, 15vh, 180px);
-    }
-
-    #dialogue-bubble {
         min-height: clamp(90px, 15vh, 180px);
     }
 
@@ -2544,18 +2520,10 @@ body.main-menu #scene-container {
     }
 
     #dialogue-container {
-        min-height: clamp(84px, 13vh, 140px);
-    }
-
-    #dialogue-bubble {
-        min-height: clamp(84px, 13vh, 140px);
+        min-height: clamp(100px, 16vh, 160px);
     }
 
     #dialogue-content {
-        top: 11%;
-        left: 10%;
-        right: 10%;
-        bottom: 10%;
         padding: clamp(8px, 1.2vw, 12px);
     }
 
@@ -2747,13 +2715,6 @@ body.main-menu #scene-container {
         max-width: 90vw;
     }
 
-    #dialogue-content {
-        top: 11%;
-        left: 9%;
-        right: 9%;
-        bottom: 10%;
-    }
-
     #dialogue-speaker {
         font-size: clamp(16px, 3.2vw, 24px);
     }
@@ -2841,22 +2802,15 @@ body.main-menu #scene-container {
     }
 
     #dialogue-container {
-        min-height: clamp(180px, 34vw, 300px);
+        min-height: clamp(120px, 20vw, 200px);
     }
 
     #dialogue-bubble {
-        width: 100%;
-        height: auto;
-        min-height: clamp(180px, 34vw, 300px);
-        object-fit: contain;
+        object-fit: fill;
     }
 
     #dialogue-content {
-        top: 14% !important;
-        left: 11% !important;
-        right: 11% !important;
-        bottom: 10% !important;
-        padding: clamp(8px, 1.8vw, 14px) !important;
+        padding: clamp(8px, 1.8vw, 14px);
         gap: clamp(6px, 1.2vw, 10px);
     }
 
