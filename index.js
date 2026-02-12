@@ -3532,6 +3532,7 @@ const sceneRenderer = {
             choicesDiv.innerHTML = '';
             continueBtn.classList.add('hidden');
             dialogueBox.classList.remove('dialogue-enter', 'dialogue-exit');
+            dialogueBox.classList.add('dialogue-positioning');
 
             // Clear previous position classes and inline overrides from bounds clamping
             dialogueBox.classList.remove('dialogue-left', 'dialogue-right', 'dialogue-center', 'dialogue-offscreen');
@@ -3584,11 +3585,17 @@ const sceneRenderer = {
             }
 
             dialogueBox.classList.remove('hidden');
+            text.textContent = dialogueEntry.text || '';
             this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
             Dev.layout.applySavedLayouts();
-            text.textContent = dialogueEntry.text || '';
 
-            this._animateDialogueEntry();
+            // Reveal after positioning settles (double-rAF ensures layout is applied)
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    dialogueBox.classList.remove('dialogue-positioning');
+                    this._animateDialogueEntry();
+                });
+            });
 
             if (dialogueEntry.choices && dialogueEntry.choices.length > 0) {
                 dialogueEntry.choices.forEach(choice => {
@@ -3782,7 +3789,7 @@ const sceneRenderer = {
             return;
         }
 
-        requestAnimationFrame(() => {
+        {
             const containerRect = container.getBoundingClientRect();
             const charRect = characterEl.getBoundingClientRect();
             const boxRect = dialogueBox.getBoundingClientRect();
@@ -3830,14 +3837,14 @@ const sceneRenderer = {
             dialogueBox.style.top = `${topPx}px`;
             dialogueBox.style.bottom = 'auto';
             dialogueBox.style.transform = 'none';
-        });
+        }
     },
 
     _positionDialogueTopCenter(dialogueBox) {
         const container = document.getElementById('scene-container');
         if (!container || !dialogueBox) return;
 
-        requestAnimationFrame(() => {
+        {
             const containerRect = container.getBoundingClientRect();
             const boxRect = dialogueBox.getBoundingClientRect();
             const leftPx = Math.max(
@@ -3851,14 +3858,14 @@ const sceneRenderer = {
             dialogueBox.style.top = `${containerRect.height * 0.16}px`;
             dialogueBox.style.bottom = 'auto';
             dialogueBox.style.transform = 'none';
-        });
+        }
     },
 
     _positionNarrativeDialogue(dialogueBox) {
         const container = document.getElementById('scene-container');
         if (!container || !dialogueBox) return;
 
-        requestAnimationFrame(() => {
+        {
             const containerRect = container.getBoundingClientRect();
             const boxRect = dialogueBox.getBoundingClientRect();
             const leftPx = Math.max(containerRect.width * 0.02, (containerRect.width - boxRect.width) / 2);
@@ -3869,7 +3876,7 @@ const sceneRenderer = {
             dialogueBox.style.top = `${topPx}px`;
             dialogueBox.style.bottom = 'auto';
             dialogueBox.style.transform = 'none';
-        });
+        }
     },
 
     repositionActiveDialogue() {

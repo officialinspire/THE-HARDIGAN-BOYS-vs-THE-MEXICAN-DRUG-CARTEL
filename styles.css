@@ -671,6 +671,13 @@ body.main-menu #scene-title {
     animation: none;
 }
 
+#dialogue-box.dialogue-positioning {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transition: none !important;
+    animation: none !important;
+}
+
 #dialogue-container {
     position: relative;
     width: 100%;
