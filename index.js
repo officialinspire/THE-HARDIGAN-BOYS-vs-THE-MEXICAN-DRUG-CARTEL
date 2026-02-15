@@ -3713,7 +3713,9 @@ const sceneRenderer = {
                 this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
             }
 
-            if (dialogueEntry.bubbleLayout) {
+            const useBubbleLayout = Boolean(dialogueEntry.bubbleLayout) && (isNarration || isChoice);
+
+            if (useBubbleLayout) {
                 const bl = dialogueEntry.bubbleLayout;
                 const rect = positioningSystem.getBackgroundRect();
                 if (rect) {
@@ -4086,7 +4088,9 @@ const sceneRenderer = {
             return;
         }
 
-        if (dialogueEntry.bubbleLayout) {
+        const useBubbleLayout = Boolean(dialogueEntry.bubbleLayout) && (isNarration || isChoice);
+
+        if (useBubbleLayout) {
             const bl = dialogueEntry.bubbleLayout;
             const rect = positioningSystem.getBackgroundRect();
             if (rect) {
@@ -4599,7 +4603,7 @@ const SCENES = {
                         sceneRenderer.addCharacter({
                             id: 'mr_rivera',
                             name: 'MR. RIVERA',
-                            sprite: 'char_carlos_normal-right.png',
+                            sprite: 'char_carlos_detained.png',
                             position: 'right-2'
                         }, 100);
                     }, 500);
