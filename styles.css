@@ -219,6 +219,21 @@ button:active,
     background: #000;
 }
 
+/* Scene entry: subtle zoom-in reveal */
+#scene-background {
+    transition: opacity 0.5s ease, transform 1.2s ease-out;
+}
+
+#scene-background.scene-entering {
+    transform: scale(1.03);
+    opacity: 0.95;
+}
+
+#scene-background.scene-entered {
+    transform: scale(1);
+    opacity: 1;
+}
+
 /* Mobile portrait: use cover to fill screen */
 @media (max-width: 768px) and (orientation: portrait) {
     #scene-background {
