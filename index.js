@@ -4261,6 +4261,19 @@ const SCENES = {
         title: 'Another Normal Night',
         background: './assets/backgrounds/bg_hardigan_livingroom_night_02.png',
         music: 'Hardigan Noir Tension.mp3',
+        checkProgression(delay = 0) {
+            const attemptTransition = () => {
+                if (gameState.objectsClicked.has('window') && gameState.objectsClicked.size >= 3) {
+                    sceneRenderer.loadScene('S2_ICE_RAID_WINDOW');
+                }
+            };
+
+            if (delay > 0) {
+                setTimeout(attemptTransition, delay);
+            } else {
+                attemptTransition();
+            }
+        },
 
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
@@ -4292,6 +4305,8 @@ const SCENES = {
                             : undefined,
                         next: 'NEXT_DIALOGUE'
                     });
+
+                    SCENES.S1_LIVING_ROOM_INTRO.checkProgression(2000);
                 }
             },
             {
@@ -4310,6 +4325,8 @@ const SCENES = {
                         position: 'right',
                         next: 'NEXT_DIALOGUE'
                     });
+
+                    SCENES.S1_LIVING_ROOM_INTRO.checkProgression(2000);
                 }
             },
             {
@@ -4318,8 +4335,15 @@ const SCENES = {
                 coordSystem: 'native',
                 x: 304, y: 121, width: 520, height: 343,
                 onClick() {
-                    if (!gameState.objectsClicked.has('window')) {
-                        gameState.objectsClicked.add('window');
+                    gameState.objectsClicked.add('window');
+
+                    SCENES.S1_LIVING_ROOM_INTRO.checkProgression();
+                    if (gameState.objectsClicked.has('window') && gameState.objectsClicked.size >= 3) {
+                        return;
+                    }
+
+                    if (!gameState.objectsClicked.has('window_dialogue_shown')) {
+                        gameState.objectsClicked.add('window_dialogue_shown');
                         sceneRenderer.showDialogue({
                             speaker: 'JONAH',
                             text: "Uh. Hank? There's like... a lot of lights outside.",
@@ -4332,17 +4356,16 @@ const SCENES = {
                                     position: 'left',
                                     bubbleLayout: { left: 820, top: 412, width: 704, height: 438 },
                                     next: () => {
-                                        if (gameState.objectsClicked.size >= 2) {
-                                            sceneRenderer.loadScene('S2_ICE_RAID_WINDOW');
+                                        if (gameState.objectsClicked.has('window') && gameState.objectsClicked.size >= 3) {
+                                            SCENES.S1_LIVING_ROOM_INTRO.checkProgression();
                                         } else {
                                             document.getElementById('dialogue-box').classList.add('hidden');
+                                            gameState.dialogueLock = false;
                                         }
                                     }
                                 });
                             }
                         });
-                    } else if (gameState.objectsClicked.size >= 2) {
-                        sceneRenderer.loadScene('S2_ICE_RAID_WINDOW');
                     }
                 }
             },
@@ -4365,6 +4388,8 @@ const SCENES = {
                             : undefined,
                         next: 'NEXT_DIALOGUE'
                     });
+
+                    SCENES.S1_LIVING_ROOM_INTRO.checkProgression(2000);
                 }
             },
             {
@@ -4387,6 +4412,8 @@ const SCENES = {
                         // Open notebook directly
                         notebook.show();
                     }
+
+                    SCENES.S1_LIVING_ROOM_INTRO.checkProgression(2000);
                 }
             }
         ],
