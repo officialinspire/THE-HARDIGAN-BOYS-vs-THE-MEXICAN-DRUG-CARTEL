@@ -4602,15 +4602,16 @@ const SCENES = {
         
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
-            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_excited.png', position: 'right' }
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_excited.png', position: 'left-2' },
+            { id: 'mom', name: 'MOM', sprite: 'char_mom_worried.png', position: 'right' }
         ],
         
         hotspots: [],
         
         dialogue: [
             {
-                speaker: 'TV ANCHOR',
-                text: "Sources say the operation targets a dangerous trafficking network hidden in quiet communities like yours.",
+                speaker: 'NARRATION',
+                text: "TV Anchor: \"Sources say the operation targets a dangerous trafficking network hidden in quiet communities like yours.\"",
                 next: 'NEXT_DIALOGUE'
             },
             {
@@ -4653,7 +4654,7 @@ const SCENES = {
 
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
-            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared_left.png', position: 'left-2' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' },
             { id: 'sofia', name: 'SOFIA', sprite: 'char_sofia_upset.png', position: 'right' }
         ],
         
@@ -4725,7 +4726,9 @@ const SCENES = {
         music: 'Empty Hallways (Ambient Mix).mp3',
         
         characters: [
-            { id: 'agent_smith', name: 'AGENT SMITH', sprite: 'char_ice_smith_smirk-right.png', position: 'center' }
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
+            { id: 'agent_smith', name: 'AGENT SMITH', sprite: 'char_ice_smith_smirk-right.png', position: 'right' }
         ],
         
         hotspots: [],
@@ -4781,7 +4784,10 @@ const SCENES = {
         background: './assets/backgrounds/bg_school_hallway_day.png',
         music: 'Empty Hallways (Ambient Mix).mp3',
         
-        characters: [],
+        characters: [
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'right' }
+        ],
         hotspots: [],
         
         dialogue: [
@@ -4814,6 +4820,8 @@ const SCENES = {
         music: 'Empty Hallways (Ambient Mix).mp3',
         
         characters: [
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
             { id: 'sofia', name: 'SOFIA', sprite: 'char_sofia_neutral.png', position: 'right' }
         ],
         
@@ -4867,7 +4875,9 @@ const SCENES = {
         music: 'Classified Silence.mp3',
         
         characters: [
-            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_amused-right.png', position: 'center' }
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
+            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_amused-right.png', position: 'right' }
         ],
         
         hotspots: [],
@@ -4932,8 +4942,10 @@ const SCENES = {
         music: 'Safehouse Ambience.mp3',
         
         characters: [
-            { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_calm.png', position: 'left' },
-            { id: 'cartel_boss', name: 'EL LICENCIADO', sprite: 'char_cartel_boss_menacing.png', position: 'right' }
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' },
+            { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_calm.png', position: 'right-2' },
+            { id: 'cartel_boss', name: 'EL LICENCIADO', sprite: 'char_cartel_boss_menacing-right.png', position: 'right' }
         ],
         
         hotspots: [],
@@ -4948,7 +4960,7 @@ const SCENES = {
             {
                 speaker: 'JONAH',
                 text: "Fun fact: this is not what we meant by 'side hustle.'",
-                position: 'left',
+                position: 'left-2',
                 next: () => {
                     sceneRenderer.showDialogue({
                         speaker: 'CHOICE',
@@ -5121,7 +5133,10 @@ const SCENES = {
         background: './assets/backgrounds/bg_hardigan_livingroom_day.png',
         music: 'Empty Hallways (Ambient Mix).mp3',
         
-        characters: [],
+        characters: [
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_smirk-right.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_excited-right.png', position: 'right' }
+        ],
         hotspots: [],
         
         dialogue: [
@@ -5160,7 +5175,9 @@ const SCENES = {
         background: './assets/backgrounds/bg_rivera_livingroom_normal.png',
         music: 'Muted Aftermath.mp3',
         
-        characters: [],
+        characters: [
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' }
+        ],
         hotspots: [],
         
         dialogue: [
@@ -5194,7 +5211,8 @@ const SCENES = {
         music: 'Dark Police Intensity.mp3',
         
         characters: [
-            { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk-left.png', position: 'center' }
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left' },
+            { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk-left.png', position: 'right' }
         ],
         hotspots: [],
         
@@ -5233,7 +5251,10 @@ const SCENES = {
         background: './assets/backgrounds/bg_hardigan_livingroom_night_02.png',
         music: 'Hardigan Noir Tension.mp3',
         
-        characters: [],
+        characters: [
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'right' }
+        ],
         hotspots: [],
         
         dialogue: [
