@@ -2958,6 +2958,7 @@ const sceneRenderer = {
     onTransitionStart: null,
     onTransitionComplete: null,
     validZones: new Set(['left', 'left-2', 'center', 'right-2', 'right']),
+    isTyping: false,
 
     _bindDialogueTapHandlers() {
         const dialogueBox = document.getElementById('dialogue-box');
@@ -2976,7 +2977,7 @@ const sceneRenderer = {
                 return;
             }
 
-            if (textEl.dataset.typing === 'true') {
+            if (this.isTyping) {
                 e.preventDefault();
                 e.stopPropagation();
                 this.finishTypeText(textEl);
@@ -3031,6 +3032,7 @@ const sceneRenderer = {
 
         el.textContent = '';
         el.dataset.typing = 'true';
+        this.isTyping = true;
 
         let index = 0;
         let timeoutId = null;
@@ -3042,6 +3044,7 @@ const sceneRenderer = {
             clearTimeout(timeoutId);
             el.textContent = resolvedText;
             el.dataset.typing = 'false';
+            this.isTyping = false;
             delete el._typeTextController;
         };
 
@@ -3050,6 +3053,7 @@ const sceneRenderer = {
             done = true;
             clearTimeout(timeoutId);
             el.dataset.typing = 'false';
+            this.isTyping = false;
             delete el._typeTextController;
         };
 
@@ -3087,11 +3091,17 @@ const sceneRenderer = {
 
     cancelTypeText(el) {
         if (!el?._typeTextController) {
+            this.isTyping = false;
             if (el) el.dataset.typing = 'false';
             return false;
         }
         el._typeTextController.cancel();
         return true;
+    },
+
+    _cleanupTypewriter(el = document.getElementById('dialogue-text')) {
+        this.cancelTypeText(el);
+        this.isTyping = false;
     },
 
     getZoneSide(zoneName = '') {
@@ -3496,6 +3506,7 @@ const sceneRenderer = {
             Dev.tools.applyForCurrentScene();
         } catch (error) {
             errorLogger.log('scene-transition', error, { sceneId });
+            this._cleanupTypewriter(document.getElementById('dialogue-text'));
             document.getElementById('dialogue-box').classList.add('hidden');
             throw error;
         } finally {
@@ -3557,7 +3568,7 @@ const sceneRenderer = {
                 document.getElementById('item-layer').replaceChildren();
                 document.getElementById('hotspot-layer').replaceChildren();
                 this.currentHotspots = [];
-                this.cancelTypeText(document.getElementById('dialogue-text'));
+                this._cleanupTypewriter(document.getElementById('dialogue-text'));
                 document.getElementById('dialogue-box').classList.add('hidden');
 
                 // Remove police light effect if present
@@ -3787,7 +3798,7 @@ const sceneRenderer = {
             const choicesDiv = document.getElementById('dialogue-choices');
             const continueBtn = document.getElementById('dialogue-continue');
 
-            this.cancelTypeText(text);
+            this._cleanupTypewriter(text);
 
             // Set positioning mode based on dialogue type
             if (dialogueEntry.type === 'narration' || !dialogueEntry.speaker) {
@@ -3953,6 +3964,10 @@ const sceneRenderer = {
                 continueBtn.textContent = '▶';
                 continueBtn.setAttribute('aria-label', 'Continue dialogue');
                 continueBtn.onclick = () => {
+                    if (this.isTyping) {
+                        this.finishTypeText(text);
+                        return;
+                    }
                     if (gameState.actionLock || this.isTransitioning) return;
                     gameState.actionLock = true;
                     gameState.dialogueLock = false;
@@ -3978,6 +3993,7 @@ const sceneRenderer = {
             errorLogger.log('dialogue-render', error, { sceneId: gameState.currentSceneId, dialogueEntry });
             const dialogueBox = document.getElementById('dialogue-box');
             if (dialogueBox) {
+                this._cleanupTypewriter(document.getElementById('dialogue-text'));
                 dialogueBox.classList.add('hidden');
             }
             gameState.dialogueLock = false;
@@ -4313,7 +4329,7 @@ const sceneRenderer = {
     _closeDialogueThen(nextAction) {
         const dialogueBox = document.getElementById('dialogue-box');
         const textEl = document.getElementById('dialogue-text');
-        this.cancelTypeText(textEl);
+        this._cleanupTypewriter(textEl);
         if (!dialogueBox || dialogueBox.classList.contains('hidden')) {
             gameState.dialogueLock = false; // Safety release
             if (typeof nextAction === 'function') nextAction();
@@ -4544,6 +4560,7 @@ const SCENES = {
                                         if (gameState.objectsClicked.has('window') && gameState.objectsClicked.size >= 3) {
                                             SCENES.S1_LIVING_ROOM_INTRO.checkProgression();
                                         } else {
+                                            sceneRenderer._cleanupTypewriter(document.getElementById('dialogue-text'));
                                             document.getElementById('dialogue-box').classList.add('hidden');
                                             gameState.dialogueLock = false;
                                         }
@@ -4631,6 +4648,7 @@ const SCENES = {
                 next: () => {
                     // Slide out Mom after her dialogue
                     sceneRenderer.removeCharacter('mom');
+                    sceneRenderer._cleanupTypewriter(document.getElementById('dialogue-text'));
                     document.getElementById('dialogue-box').classList.add('hidden');
                 },
                 onShow: () => {
