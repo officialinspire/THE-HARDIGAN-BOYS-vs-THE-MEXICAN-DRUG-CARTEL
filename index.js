@@ -4118,11 +4118,20 @@ const sceneRenderer = {
             const fullHeight = this._measureDialogueTextHeight(text, dialogueText);
             text.style.minHeight = fullHeight > 0 ? `${fullHeight}px` : '';
 
-            this.typeText(text, dialogueText);
+            this.typeText(text, dialogueText, {
+                onFinish: () => this._updateDialogueOverflowIndicator(text)
+            });
+            // Check for text overflow and add indicator
+            requestAnimationFrame(() => {
+                this._updateDialogueOverflowIndicator(text);
+            });
             dialogueBox.classList.remove('hidden');
             this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
             Dev.layout.applySavedLayouts();
             this._fitMobileDialogueText(dialogueBox);
+            requestAnimationFrame(() => {
+                this._updateDialogueOverflowIndicator(text);
+            });
 
             // Reveal after positioning settles (double-rAF ensures layout is applied)
             requestAnimationFrame(() => {
@@ -4469,8 +4478,19 @@ const sceneRenderer = {
         }
     },
 
+    _updateDialogueOverflowIndicator(textEl = document.getElementById('dialogue-text')) {
+        if (!textEl) return;
+
+        if (textEl.scrollHeight > textEl.clientHeight) {
+            textEl.classList.add('has-overflow');
+        } else {
+            textEl.classList.remove('has-overflow');
+        }
+    },
+
     _fitMobileDialogueText(dialogueBox) {
-        if (!window.matchMedia('(max-width: 768px)').matches || !dialogueBox) return;
+        // Run on any screen under 1024px, not just 768px
+        if (!window.matchMedia('(max-width: 1024px)').matches || !dialogueBox) return;
 
         const textEl = document.getElementById('dialogue-text');
         const speakerEl = document.getElementById('dialogue-speaker');
