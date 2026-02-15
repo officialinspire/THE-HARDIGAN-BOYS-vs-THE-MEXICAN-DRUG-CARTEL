@@ -192,7 +192,7 @@ button:active,
 #game-root {
     width: 100%;
     height: var(--app-height, 100vh);
-    height: 100dvh;
+    height: 100dvh; /* Modern browsers: dynamic viewport height */
     min-height: var(--app-height, 100vh);
     position: relative;
     display: flex;
