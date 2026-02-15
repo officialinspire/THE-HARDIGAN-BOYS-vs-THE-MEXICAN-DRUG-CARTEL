@@ -682,10 +682,10 @@ body.main-menu #scene-title {
 }
 
 #dialogue-box.dialogue-positioning {
-    opacity: 0 !important;
-    pointer-events: none !important;
-    transition: none !important;
-    animation: none !important;
+    opacity: 0;
+    pointer-events: none;
+    transition: none;
+    animation: none;
 }
 
 #dialogue-container {
@@ -1782,7 +1782,7 @@ body.main-menu #scene-title {
 #scene-container.scene-transitioning #hotspot-layer,
 #scene-container.scene-transitioning #dialogue-box,
 #scene-container.scene-transitioning #hud-buttons {
-    pointer-events: none !important;
+    pointer-events: none;
 }
 
 /* ===== MAIN MENU - FULLY RESPONSIVE ===== */
@@ -2290,123 +2290,9 @@ body.main-menu #scene-container {
         font-size: clamp(14px, 2.2vw, 18px);
     }
 
-    #dialogue-box {
-        width: min(86vw, 560px);
-        max-height: calc(
-            100% - max(74px, calc(env(safe-area-inset-top) + 52px)) - max(14px, calc(env(safe-area-inset-bottom) + 6px))
-        );
-    }
-
-    #dialogue-container {
-        min-height: 0;
-        max-height: 100%;
-        overflow: hidden;
-    }
-
-    #dialogue-container.narrative-mode {
-        padding: clamp(12px, 2.1vh, 18px);
-    }
-
-    #dialogue-container.narrative-mode #dialogue-content {
-        min-height: 0;
-    }
-
-    #dialogue-content {
-        padding: clamp(8px, 1.7vh, 12px);
-        gap: clamp(6px, 1.2vh, 10px);
-    }
-
-    #dialogue-speaker {
-        font-size: clamp(18px, 3.2vw, 24px);
-        margin-bottom: clamp(4px, 1vh, 8px);
-    }
-
-    #dialogue-text {
-        max-height: min(26vh, 180px);
-        font-size: clamp(14px, 2.4vw, 18px);
-        line-height: 1.45;
-        margin-bottom: clamp(4px, 1vh, 8px);
-    }
-
-    #dialogue-container.narrative-mode #dialogue-text {
-        max-height: min(30vh, 210px);
-        line-height: 1.45;
-    }
-
-    #dialogue-choices {
-        width: 100%;
-        max-height: min(22vh, 150px);
-        overflow-y: auto;
-        padding-right: 4px;
-    }
-
-    .dialogue-choice {
-        font-size: clamp(14px, 2.2vw, 17px);
-        padding: clamp(9px, 1.7vh, 12px) clamp(12px, 2.3vw, 20px);
-    }
-
-    #dialogue-continue {
-        margin-top: clamp(8px, 1.3vh, 12px);
-        font-size: clamp(14px, 2.2vw, 17px);
-        padding: clamp(9px, 1.7vh, 12px) clamp(14px, 2.5vw, 22px);
-    }
 }
 
 /* ===== PHONE PRECISION HOTFIX: SPEECH + CHOICE + PAUSE MENU ===== */
-#dialogue-box {
-    width: clamp(320px, 40vw, 560px);
-}
-
-#dialogue-container {
-    min-height: clamp(100px, 16vh, 210px);
-}
-
-#dialogue-speaker {
-    font-size: clamp(32px, 4.4vw, 50px);
-}
-
-#dialogue-text {
-    font-size: clamp(17px, 2vw, 30px);
-    max-height: clamp(95px, 22vh, 270px);
-}
-
-@media (max-width: 768px) {
-    #dialogue-box {
-        width: min(80vw, 420px);
-        min-width: min(300px, 90vw);
-    }
-
-    #dialogue-container {
-        min-height: clamp(90px, 15vh, 180px);
-    }
-
-    #dialogue-speaker {
-        font-size: clamp(25px, 5vw, 34px);
-    }
-
-    #dialogue-text {
-        font-size: clamp(15px, 3.1vw, 20px);
-        line-height: 1.35;
-        max-height: clamp(74px, 17vh, 160px);
-    }
-
-    #dialogue-choices {
-        gap: 8px;
-        margin-top: 8px;
-    }
-
-    .dialogue-choice {
-        font-size: clamp(14px, 3.2vw, 17px);
-        padding: clamp(8px, 2vh, 11px) clamp(12px, 3vw, 18px);
-    }
-
-    #dialogue-continue {
-        margin-top: 8px;
-        font-size: clamp(14px, 3.1vw, 17px);
-        padding: clamp(8px, 2vh, 11px) clamp(14px, 3.5vw, 20px);
-    }
-}
-
 .phone-ui {
     width: min(78vw, 560px);
     height: min(94vh, 900px);
@@ -2515,64 +2401,6 @@ body.main-menu #scene-container {
 
 /* ===== MOBILE COMIC LAYOUT TUNING (2026-02) ===== */
 @media (max-width: 1024px) {
-    /* Smaller speech bubbles near character shoulders */
-    #dialogue-container {
-        min-height: clamp(100px, 16vh, 160px);
-    }
-
-    #dialogue-content {
-        padding: clamp(8px, 1.2vw, 12px);
-    }
-
-    #dialogue-speaker {
-        font-size: clamp(16px, 2.5vw, 24px);
-        margin-bottom: clamp(4px, 0.8vh, 8px);
-        letter-spacing: 1px;
-    }
-
-    #dialogue-text {
-        font-size: clamp(12px, 1.8vw, 17px);
-        line-height: 1.28;
-        max-height: clamp(58px, 11vh, 112px);
-        margin-bottom: clamp(4px, 0.8vh, 8px);
-        padding: clamp(3px, 0.7vw, 7px);
-    }
-
-    /* Narrative + choice prompts centered and compact */
-    #dialogue-container.narrative-mode {
-        padding: clamp(12px, 1.8vw, 18px);
-        border-width: 2px;
-        border-radius: 10px;
-    }
-
-    #dialogue-container.narrative-mode #dialogue-text,
-    #dialogue-text.choice-text {
-        font-size: clamp(13px, 2vw, 18px);
-        line-height: 1.4;
-    }
-
-    #dialogue-speaker.choice-speaker {
-        font-size: clamp(20px, 3.3vw, 30px);
-        letter-spacing: 2px;
-    }
-
-    #dialogue-choices {
-        width: 100%;
-        max-width: 92%;
-        margin-inline: auto;
-        gap: 6px;
-        margin-top: 6px;
-    }
-
-    .dialogue-choice,
-    #dialogue-continue {
-        font-size: clamp(12px, 1.8vw, 16px);
-        padding: clamp(7px, 1vh, 10px) clamp(10px, 1.8vw, 14px);
-        border-radius: 10px;
-        border-width: 2px;
-        max-width: 100%;
-    }
-
     /* Phone pause menu buttons sized to stay inside phone screen */
     .phone-ui {
         width: min(70vw, 340px);
@@ -2619,104 +2447,6 @@ body.main-menu #scene-container {
 }
 
 /* ===== DIALOGUE VIEWPORT PLACEMENT FIX (desktop + mobile parity) ===== */
-#dialogue-box.dialogue-left,
-#dialogue-box.dialogue-right {
-    bottom: auto;
-}
-
-#dialogue-container.narrative-mode {
-    max-height: min(46vh, 360px);
-    padding: clamp(12px, 2vw, 20px);
-    border-radius: 10px;
-}
-
-#dialogue-container.narrative-mode #dialogue-content {
-    max-height: min(40vh, 320px);
-    overflow: hidden;
-}
-
-#dialogue-container.narrative-mode #dialogue-text,
-#dialogue-text.choice-text {
-    max-height: min(24vh, 170px);
-    overflow-y: auto;
-}
-
-#dialogue-choices {
-    width: min(100%, 720px);
-    max-height: min(24vh, 220px);
-    overflow-y: auto;
-    margin-inline: auto;
-}
-
-.dialogue-choice,
-#dialogue-continue {
-    width: min(100%, 92%);
-    max-width: 680px;
-}
-
-@media (max-width: 1024px) {
-    #dialogue-speaker {
-        font-size: clamp(16px, 3.2vw, 24px);
-    }
-
-    #dialogue-text {
-        font-size: clamp(13px, 2.4vw, 18px);
-        line-height: 1.34;
-        max-height: min(16vh, 130px);
-    }
-
-    #dialogue-container.narrative-mode {
-        max-height: min(42vh, 300px);
-        padding: clamp(10px, 2.3vw, 16px);
-    }
-
-    #dialogue-container.narrative-mode #dialogue-content {
-        max-height: min(36vh, 260px);
-    }
-
-    #dialogue-container.narrative-mode #dialogue-text,
-    #dialogue-text.choice-text {
-        max-height: min(22vh, 170px);
-        font-size: clamp(14px, 2.8vw, 20px);
-        line-height: 1.38;
-    }
-
-    #dialogue-choices {
-        max-height: min(18vh, 150px);
-        gap: 7px;
-    }
-
-    .dialogue-choice,
-    #dialogue-continue {
-        font-size: clamp(13px, 2.8vw, 17px);
-        padding: clamp(8px, 1.4vh, 11px) clamp(12px, 2.4vw, 18px);
-        width: min(100%, 96%);
-    }
-}
-
-@media (max-width: 640px) {
-    #dialogue-container.narrative-mode {
-        max-height: min(40vh, 260px);
-    }
-
-    #dialogue-container.narrative-mode #dialogue-text,
-    #dialogue-text.choice-text {
-        max-height: none;
-        overflow-y: hidden;
-    }
-
-    #dialogue-text {
-        max-height: none;
-        overflow-y: hidden;
-        font-size: clamp(10px, 2.8vw, 13px);
-        line-height: 1.25;
-    }
-
-    #dialogue-speaker {
-        font-size: clamp(12px, 3.2vw, 16px);
-    }
-}
-
 /* ===== FINAL MOBILE + MENU INTERACTION HOTFIXES ===== */
 .hotspot,
 #main-menu-content,
@@ -2729,62 +2459,12 @@ body.main-menu #scene-container {
 }
 
 @media (max-width: 1024px) {
-    #dialogue-box {
-        z-index: 25;
-    }
-
-    #dialogue-box.dialogue-left,
-    #dialogue-box.dialogue-right {
-        width: clamp(240px, 38vw, 400px);
-        min-width: min(230px, 70vw);
-        max-width: 72vw;
-    }
-
-    #dialogue-container {
-        min-height: clamp(120px, 20vw, 200px);
-    }
-
-    #dialogue-bubble {
-        object-fit: fill;
-    }
-
-    #dialogue-content {
-        padding: clamp(8px, 1.8vw, 14px);
-        gap: clamp(6px, 1.2vw, 10px);
-    }
-
-    #dialogue-speaker {
-        font-size: clamp(18px, 3.8vw, 24px) !important;
-        margin-bottom: clamp(4px, 1vh, 8px);
-    }
-
-    #dialogue-text {
-        font-size: clamp(13px, 2.6vw, 17px) !important;
-        line-height: 1.4 !important;
-        max-height: min(18vh, 145px) !important;
-        margin-bottom: 6px;
-    }
-
     #action-container {
         width: 100%;
         display: flex;
         flex-direction: column;
         align-items: center;
         gap: 8px;
-    }
-
-    #dialogue-choices {
-        width: 100%;
-        max-height: min(20vh, 160px);
-    }
-
-    .dialogue-choice,
-    #dialogue-continue {
-        width: min(100%, 300px) !important;
-        max-width: 100% !important;
-        margin: 0 auto;
-        font-size: clamp(14px, 3.2vw, 18px) !important;
-        padding: clamp(10px, 1.8vh, 14px) clamp(12px, 3vw, 18px) !important;
     }
 
     .notebook-ui {
@@ -2872,31 +2552,192 @@ body.main-menu #scene-container {
     }
 }
 
-@media (max-width: 640px) {
-    #dialogue-box.dialogue-left,
-    #dialogue-box.dialogue-right {
-        width: clamp(200px, 48vw, 300px);
-        min-width: min(190px, 65vw);
-        max-width: 68vw;
-    }
+/* ===== DIALOGUE SYSTEM — CONSOLIDATED RESPONSIVE RULES ===== */
+/* This is the single source of truth for all dialogue sizing. */
+/* DO NOT add dialogue rules elsewhere in the stylesheet.      */
+
+/* --- Base (desktop 1025px+) --- */
+#dialogue-box {
+    width: clamp(320px, 38vw, 560px);
+    min-width: 280px;
+    max-width: calc(100% - 24px);
+    z-index: 25;
 }
 
-/* ===== DIALOGUE CONTINUE BUTTON HOTFIX ===== */
+#dialogue-box.dialogue-left,
+#dialogue-box.dialogue-right {
+    bottom: auto;
+}
+
+#dialogue-container {
+    min-height: clamp(120px, 14vh, 200px);
+}
+
+#dialogue-content {
+    padding: clamp(14px, 2.5vw, 28px) clamp(18px, 3.5vw, 36px);
+}
+
+#dialogue-speaker {
+    font-size: clamp(22px, 2.8vw, 34px);
+    margin-bottom: clamp(6px, 1vh, 12px);
+}
+
+#dialogue-text {
+    font-size: clamp(16px, 2vw, 24px);
+    line-height: 1.5;
+    max-height: clamp(100px, 24vh, 300px);
+}
+
+#dialogue-container.narrative-mode {
+    max-height: min(50vh, 400px);
+    padding: clamp(14px, 2.5vw, 24px);
+}
+
+#dialogue-container.narrative-mode #dialogue-content {
+    max-height: min(44vh, 360px);
+}
+
+#dialogue-container.narrative-mode #dialogue-text,
+#dialogue-text.choice-text {
+    max-height: min(28vh, 200px);
+    overflow-y: auto;
+}
+
+#dialogue-choices {
+    width: min(100%, 720px);
+    max-height: min(26vh, 240px);
+    overflow-y: auto;
+    gap: clamp(8px, 1.5vw, 12px);
+    margin-top: clamp(8px, 1.5vw, 14px);
+}
+
+.dialogue-choice {
+    font-size: clamp(14px, 1.8vw, 18px);
+    padding: clamp(10px, 1.5vh, 14px) clamp(14px, 2.5vw, 22px);
+    max-width: 680px;
+    width: min(100%, 92%);
+}
+
 #dialogue-continue {
-    width: 42px !important;
-    height: 42px !important;
-    min-width: 42px !important;
-    padding: 0 !important;
-    border-radius: 10px !important;
-    font-size: 18px !important;
-    line-height: 1 !important;
-    display: inline-flex !important;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    padding: 0;
+    border-radius: 10px;
+    font-size: 18px;
+    line-height: 1;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     align-self: flex-end;
-    margin: 10px 8px 0 auto !important;
+    margin: 8px 8px 0 auto;
 }
 
-#dialogue-continue:hover {
-    transform: scale(1.05) !important;
+/* --- Tablet/mobile (max 1024px) --- */
+@media (max-width: 1024px) {
+    #dialogue-box {
+        width: clamp(240px, 42vw, 420px);
+        min-width: min(230px, 75vw);
+        max-width: 76vw;
+    }
+
+    #dialogue-container {
+        min-height: clamp(100px, 16vw, 180px);
+    }
+
+    #dialogue-content {
+        padding: clamp(8px, 1.5vw, 14px);
+    }
+
+    #dialogue-speaker {
+        font-size: clamp(16px, 3.5vw, 24px);
+        margin-bottom: clamp(4px, 0.8vh, 8px);
+    }
+
+    #dialogue-text {
+        font-size: clamp(13px, 2.6vw, 18px);
+        line-height: 1.38;
+        max-height: min(18vh, 150px);
+    }
+
+    #dialogue-container.narrative-mode {
+        max-height: min(44vh, 320px);
+        padding: clamp(10px, 2vw, 16px);
+    }
+
+    #dialogue-container.narrative-mode #dialogue-text,
+    #dialogue-text.choice-text {
+        max-height: min(22vh, 180px);
+        font-size: clamp(14px, 2.8vw, 20px);
+    }
+
+    #dialogue-choices {
+        max-height: min(20vh, 170px);
+        gap: 7px;
+    }
+
+    .dialogue-choice {
+        font-size: clamp(13px, 2.8vw, 17px);
+        padding: clamp(8px, 1.4vh, 12px) clamp(12px, 2.4vw, 18px);
+        width: min(100%, 96%);
+    }
+}
+
+/* --- Small phone (max 640px) --- */
+@media (max-width: 640px) {
+    #dialogue-box {
+        width: clamp(200px, 52vw, 320px);
+        min-width: min(190px, 68vw);
+        max-width: 72vw;
+    }
+
+    #dialogue-speaker {
+        font-size: clamp(14px, 3.8vw, 18px);
+    }
+
+    #dialogue-text {
+        font-size: clamp(11px, 3vw, 14px);
+        line-height: 1.3;
+        max-height: min(16vh, 120px);
+    }
+
+    #dialogue-container.narrative-mode {
+        max-height: min(42vh, 280px);
+    }
+}
+
+/* --- Landscape (short viewport) --- */
+@media (max-width: 1024px) and (orientation: landscape) {
+    #dialogue-box {
+        width: min(50vw, 480px);
+        max-height: calc(100% - 80px);
+    }
+
+    #dialogue-container {
+        min-height: 0;
+        max-height: 100%;
+        overflow: hidden;
+    }
+
+    #dialogue-text {
+        max-height: min(24vh, 160px);
+        font-size: clamp(13px, 2.2vw, 17px);
+    }
+
+    #dialogue-container.narrative-mode #dialogue-text {
+        max-height: min(28vh, 190px);
+    }
+
+    #dialogue-choices {
+        max-height: min(20vh, 140px);
+    }
+
+    .dialogue-choice {
+        font-size: clamp(13px, 2vw, 16px);
+        padding: clamp(8px, 1.5vh, 11px) clamp(10px, 2vw, 16px);
+    }
+
+    #dialogue-continue {
+        margin-top: clamp(6px, 1vh, 10px);
+    }
 }
