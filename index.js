@@ -3703,14 +3703,15 @@ const sceneRenderer = {
                     dialogueBox.classList.add('dialogue-center');
                 }
 
-                dialogueBubble.src = isLeft ?
-                    './assets/menu_dialogue/dialogue-bubble-large-left.png' :
-                    './assets/menu_dialogue/dialogue-bubble-large-right.png';
                 speaker.className = '';
                 text.className = '';
                 speaker.textContent = dialogueEntry.speaker;
 
                 this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
+                if (!dialogueBox.dataset.tail) {
+                    dialogueBox.dataset.tail = isLeft ? 'left' : 'right';
+                }
+                this._applyDialogueBubbleTail(dialogueBox);
             }
 
             const useBubbleLayout = Boolean(dialogueEntry.bubbleLayout) && (isNarration || isChoice);
@@ -3901,11 +3902,24 @@ const sceneRenderer = {
 
     _resolveDialogueCharacter(zoneName, dialogueEntry) {
         const speakerName = (dialogueEntry?.speaker || '').toUpperCase().trim();
+        const normalizeSpeakerToken = (value) => (value || '')
+            .toUpperCase()
+            .replace(/[^A-Z0-9 ]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const normalizedSpeaker = normalizeSpeakerToken(speakerName);
         const sceneChars = this.currentScene?.characters || [];
 
         const bySpeakerMeta = sceneChars.find(char => {
             const charName = (char.name || '').toUpperCase().trim();
-            return speakerName && charName === speakerName;
+            const normalizedChar = normalizeSpeakerToken(charName);
+            return normalizedSpeaker && (
+                charName === speakerName
+                || normalizedChar === normalizedSpeaker
+                || normalizedChar.includes(normalizedSpeaker)
+                || normalizedSpeaker.includes(normalizedChar)
+            );
         });
 
         if (bySpeakerMeta?.id) {
@@ -3915,7 +3929,14 @@ const sceneRenderer = {
 
         if (speakerName) {
             const byName = Array.from(document.querySelectorAll('#character-layer .character-sprite'))
-                .find(el => (el.dataset.characterName || '').trim() === speakerName);
+                .find(el => {
+                    const charName = (el.dataset.characterName || '').trim();
+                    const normalizedChar = normalizeSpeakerToken(charName);
+                    return charName === speakerName
+                        || normalizedChar === normalizedSpeaker
+                        || normalizedChar.includes(normalizedSpeaker)
+                        || normalizedSpeaker.includes(normalizedChar);
+                });
             if (byName) return byName;
         }
 
@@ -3950,43 +3971,53 @@ const sceneRenderer = {
         const boxRect = dialogueBox.getBoundingClientRect();
         const isMobile = window.matchMedia('(max-width: 1024px)').matches;
 
-        const margin = Math.max(14, containerRect.height * 0.02);
+        const margin = Math.max(12, containerRect.height * (isMobile ? 0.014 : 0.02));
+        const horizontalGap = Math.max(12, containerRect.width * (isMobile ? 0.015 : 0.02));
 
         // Position bubble ABOVE the character's head
-        let topPx = Math.max(
-            containerRect.height * (isMobile ? 0.08 : 0.10),
-            (charRect.top - containerRect.top) - boxRect.height - margin
-        );
+        const charTop = charRect.top - containerRect.top;
+        let topPx = charTop - boxRect.height - margin;
+        topPx = Math.max(containerRect.height * (isMobile ? 0.06 : 0.08), topPx);
 
         // If character is too tall and pushes bubble off screen, place it at minimum top
         if (topPx < containerRect.height * 0.06) {
             topPx = containerRect.height * 0.06;
         }
 
-        // Horizontal: center bubble over character with slight offset based on zone
+        // Horizontal: keep bubble offset to upper-left or upper-right of speaker
         const charCenterX = (charRect.left + charRect.right) / 2 - containerRect.left;
         const minLeft = containerRect.width * 0.02;
         const maxLeft = containerRect.width - boxRect.width - minLeft;
-        let leftPx;
+        const charSidePreference = zoneName.startsWith('left') ? 'right' : (zoneName.startsWith('right') ? 'left' : null);
+        const useRightOffset = charSidePreference
+            ? charSidePreference === 'right'
+            : charCenterX < containerRect.width * 0.5;
 
-        if (zoneName.startsWith('left')) {
-            // For left-side characters, offset bubble slightly right of character center
-            leftPx = charCenterX - (boxRect.width * 0.35);
-        } else if (zoneName.startsWith('right')) {
-            // For right-side characters, offset bubble slightly left of character center
-            leftPx = charCenterX - (boxRect.width * 0.65);
-        } else {
-            leftPx = charCenterX - (boxRect.width / 2);
-        }
+        let leftPx = useRightOffset
+            ? charCenterX + horizontalGap
+            : charCenterX - boxRect.width - horizontalGap;
 
-        // Clamp to viewport
         leftPx = Math.min(maxLeft, Math.max(minLeft, leftPx));
+
+        // Tail should point down toward the speaking character.
+        const bubbleCenterX = leftPx + (boxRect.width / 2);
+        dialogueBox.dataset.tail = charCenterX < bubbleCenterX ? 'left' : 'right';
 
         dialogueBox.style.left = `${leftPx}px`;
         dialogueBox.style.right = 'auto';
         dialogueBox.style.top = `${topPx}px`;
         dialogueBox.style.bottom = 'auto';
         dialogueBox.style.transform = 'none';
+    },
+
+    _applyDialogueBubbleTail(dialogueBox) {
+        const dialogueBubble = document.getElementById('dialogue-bubble');
+        if (!dialogueBox || !dialogueBubble) return;
+
+        const tailSide = dialogueBox.dataset.tail === 'left' ? 'left' : 'right';
+        dialogueBubble.src = tailSide === 'left'
+            ? './assets/menu_dialogue/dialogue-bubble-large-left.png'
+            : './assets/menu_dialogue/dialogue-bubble-large-right.png';
     },
 
     _positionDialogueTopCenter(dialogueBox) {
@@ -4111,6 +4142,7 @@ const sceneRenderer = {
 
         const zoneName = this.normalizeZoneName(dialogueEntry.position || 'left');
         this._positionDialogueNearCharacter(dialogueBox, zoneName, dialogueEntry);
+        this._applyDialogueBubbleTail(dialogueBox);
         this._clampDialogueToViewport(dialogueBox);
     },
 
