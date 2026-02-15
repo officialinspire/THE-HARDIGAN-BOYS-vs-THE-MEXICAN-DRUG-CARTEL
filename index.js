@@ -2671,8 +2671,7 @@ const positioningSystem = {
 
         let renderedW, renderedH, offsetX, offsetY;
 
-        // Standardized on object-fit: contain for consistent positioning
-        const isCover = false;
+        const isCover = false; // Standardized on contain for consistent positioning
 
         if (isCover) {
             // object-fit: cover — image fills container, may be cropped
