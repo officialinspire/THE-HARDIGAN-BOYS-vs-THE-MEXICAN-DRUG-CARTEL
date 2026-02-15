@@ -3038,12 +3038,20 @@ const sceneRenderer = {
 
         let index = 0;
         let timeoutId = null;
+        let rafId = null;
         let done = false;
+
+        const scheduleNextTick = (delayMs) => {
+            timeoutId = window.setTimeout(() => {
+                rafId = window.requestAnimationFrame(tick);
+            }, delayMs);
+        };
 
         const finish = () => {
             if (done) return;
             done = true;
             clearTimeout(timeoutId);
+            window.cancelAnimationFrame(rafId);
             el.textContent = resolvedText;
             el.dataset.typing = 'false';
             this.isTyping = false;
@@ -3055,6 +3063,7 @@ const sceneRenderer = {
             if (done) return;
             done = true;
             clearTimeout(timeoutId);
+            window.cancelAnimationFrame(rafId);
             el.dataset.typing = 'false';
             this.isTyping = false;
             delete el._typeTextController;
@@ -3077,14 +3086,42 @@ const sceneRenderer = {
                 return;
             }
 
-            timeoutId = window.setTimeout(tick, charDelayMs);
+            const currentChar = resolvedText[index - 1] || '';
+            const prevChar = resolvedText[index - 2] || '';
+            const delayMs = Number.isFinite(options.charDelayMs)
+                ? charDelayMs
+                : this.getCharDelay(currentChar, prevChar);
+
+            scheduleNextTick(delayMs);
         };
 
-        timeoutId = window.setTimeout(tick, charDelayMs);
+        const initialDelayMs = Number.isFinite(options.charDelayMs)
+            ? charDelayMs
+            : this.getCharDelay(resolvedText[0] || '', '');
+
+        scheduleNextTick(initialDelayMs);
 
         const controller = { finish, cancel };
         el._typeTextController = controller;
         return controller;
+    },
+
+    getCharDelay(char, prevChar) {
+        const baseDelay = 20 + Math.floor(Math.random() * 11);
+
+        if (char === '\n') {
+            return baseDelay + 150;
+        }
+
+        if (char === '.' && prevChar === '.') {
+            return baseDelay + 200 + Math.floor(Math.random() * 101);
+        }
+
+        if (char === ',' || char === '.') {
+            return baseDelay + 120;
+        }
+
+        return baseDelay;
     },
 
     finishTypeText(el) {
