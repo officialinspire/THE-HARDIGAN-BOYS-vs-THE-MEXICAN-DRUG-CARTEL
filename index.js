@@ -3600,6 +3600,15 @@ const sceneRenderer = {
 
             gameState.dialogueLock = true;
 
+            // Safety: auto-release lock after 30 seconds to prevent permanent lockout
+            clearTimeout(this._dialogueLockTimeout);
+            this._dialogueLockTimeout = setTimeout(() => {
+                if (gameState.dialogueLock) {
+                    console.warn('Dialogue lock safety timeout — releasing stuck lock');
+                    gameState.dialogueLock = false;
+                }
+            }, 30000);
+
             // Call onShow callback if it exists (for character slide-ins, etc.)
             if (dialogueEntry.onShow) {
                 dialogueEntry.onShow();
@@ -4087,6 +4096,8 @@ const sceneRenderer = {
                 this.showDialogue(scene.dialogue[gameState.currentDialogueIndex]);
             });
         } else {
+            // CRITICAL: Release dialogue lock when we've exhausted all dialogue
+            gameState.dialogueLock = false;
             this._closeDialogueThen(() => {
                 document.getElementById('dialogue-box').classList.add('hidden');
             });
@@ -4111,6 +4122,7 @@ const sceneRenderer = {
     _closeDialogueThen(nextAction) {
         const dialogueBox = document.getElementById('dialogue-box');
         if (!dialogueBox || dialogueBox.classList.contains('hidden')) {
+            gameState.dialogueLock = false; // Safety release
             if (typeof nextAction === 'function') nextAction();
             return;
         }
@@ -4122,6 +4134,7 @@ const sceneRenderer = {
         window.setTimeout(() => {
             dialogueBox.classList.add('hidden');
             dialogueBox.classList.remove('dialogue-exit');
+            gameState.dialogueLock = false; // Always release after close animation
             if (typeof nextAction === 'function') nextAction();
         }, this.dialogueExitDurationMs);
     },
