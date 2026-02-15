@@ -1841,9 +1841,20 @@ const Dev = {
 
 const spriteTransparencyProcessor = {
     whiteThreshold: 235,
+    _cache: new Map(),
 
     makeWhitePixelsTransparent(imageEl) {
         if (!imageEl || imageEl.dataset.whiteRemoved === 'true') return;
+
+        const originalSrc = imageEl.dataset.spriteCandidate || imageEl.src;
+
+        const cached = this._cache.get(originalSrc);
+        if (cached) {
+            imageEl.src = cached;
+            imageEl.dataset.whiteRemoved = 'true';
+            return;
+        }
+
         try {
             const canvas = document.createElement('canvas');
             const width = imageEl.naturalWidth || imageEl.width;
@@ -1962,7 +1973,14 @@ const spriteTransparencyProcessor = {
 
             if (changed > 0) {
                 ctx.putImageData(imageData, 0, 0);
-                imageEl.src = canvas.toDataURL('image/png');
+                const processedUrl = canvas.toDataURL('image/png');
+                this._cache.set(originalSrc, processedUrl);
+                imageEl.src = processedUrl;
+
+                if (this._cache.size > 30) {
+                    const firstKey = this._cache.keys().next().value;
+                    this._cache.delete(firstKey);
+                }
             }
             imageEl.dataset.whiteRemoved = 'true';
         } catch (error) {
