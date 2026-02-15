@@ -3614,8 +3614,10 @@ const sceneRenderer = {
             document.getElementById('scene-title').textContent = '';
         }
 
-        // Show loading indicator for transition lifecycle
-        showTransitionLoader();
+        // Only show spinner for initial load, not scene transitions
+        if (gameState.currentSceneId === 'S0_MAIN_MENU' && sceneId !== 'S0_MAIN_MENU') {
+            showTransitionLoader();
+        }
 
         try {
             // Set transitioning state
@@ -3656,6 +3658,15 @@ const sceneRenderer = {
                     bg.onload = () => resolve();
                     bg.onerror = () => resolve(); // Continue even if image fails
                 }
+            });
+
+            // Add cinematic zoom-in on background
+            bg.classList.add('scene-entering');
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    bg.classList.remove('scene-entering');
+                    bg.classList.add('scene-entered');
+                });
             });
 
             document.getElementById('scene-title').textContent = scene.title || '';
@@ -3717,7 +3728,7 @@ const sceneRenderer = {
         } finally {
             // Keep visual continuity as the last scene elements settle.
             await new Promise(resolve => setTimeout(resolve, 100));
-            hideTransitionLoader();
+            hideTransitionLoader(); // Safe to call even if not shown
 
             // Clear transitioning state
             this.isTransitioning = false;
@@ -3769,6 +3780,11 @@ const sceneRenderer = {
 
             // Wait for all slide-out animations, then clear DOM
             setTimeout(() => {
+                const bg = document.getElementById('scene-background');
+                if (bg) {
+                    bg.classList.remove('scene-entering', 'scene-entered');
+                }
+
                 document.getElementById('character-layer').replaceChildren();
                 document.getElementById('item-layer').replaceChildren();
                 document.getElementById('hotspot-layer').replaceChildren();
@@ -3795,7 +3811,8 @@ const sceneRenderer = {
 
         if (normalizedCharacters.length > 0) {
             for (let i = 0; i < normalizedCharacters.length; i++) {
-                await this.addCharacter(normalizedCharacters[i], 100 + (i * 200));
+                // Stagger: first character at 200ms, then 400ms between each
+                await this.addCharacter(normalizedCharacters[i], 200 + (i * 400));
             }
         }
     },
@@ -4599,15 +4616,19 @@ const sceneRenderer = {
     fadeTransition(fadeIn) {
         return new Promise(resolve => {
             const overlay = document.getElementById('fade-overlay');
-
+            
             if (fadeIn) {
+                // Fade TO black — slightly faster for snappiness
+                overlay.style.transition = 'opacity 0.5s ease-in';
                 overlay.classList.add('active');
-                setTimeout(resolve, 700);
+                setTimeout(resolve, 550);
             } else {
+                // Fade FROM black — slower, more cinematic reveal
+                overlay.style.transition = 'opacity 0.8s ease-out';
                 setTimeout(() => {
                     overlay.classList.remove('active');
-                    setTimeout(resolve, 700);
-                }, 100);
+                    setTimeout(resolve, 850);
+                }, 50); // Tiny delay lets new content settle before revealing
             }
         });
     }
