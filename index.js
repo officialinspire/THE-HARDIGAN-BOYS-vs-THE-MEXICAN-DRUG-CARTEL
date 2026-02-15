@@ -2162,6 +2162,14 @@ const assetLoader = {
         }, { once: true });
     },
 
+    registerBackgroundFallback(bg, src) {
+        bg.addEventListener('error', () => {
+            const filename = src.split('/').pop();
+            console.error(`Missing background: ${src}`);
+            bg.src = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1920' height='1080'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23111'/%3E%3Cstop offset='1' stop-color='%23000'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23g)'/%3E%3Ctext x='50%25' y='50%25' fill='%23ffd700' font-size='36' text-anchor='middle' dominant-baseline='middle' font-family='monospace'%3E${encodeURIComponent(filename)}%3C/text%3E%3C/svg%3E`;
+        }, { once: true });
+    },
+
     getCriticalAssets() {
         const sceneAssets = [
             SCENES.S0_MAIN_MENU?.background,
@@ -3286,7 +3294,7 @@ const sceneRenderer = {
             await this.clearScene();
 
             const bg = document.getElementById('scene-background');
-            assetLoader.registerImageFallback(bg, scene.background);
+            assetLoader.registerBackgroundFallback(bg, scene.background);
             bg.src = scene.background;
 
             // Ensure background loads before fading in
@@ -5418,6 +5426,17 @@ const sceneIntegrity = {
         if (flowWarnings.length > 0) {
             console.warn('Scene flow warnings detected:', flowWarnings);
         }
+
+        // Audit background assets
+        const bgWarnings = [];
+        Object.values(SCENES).forEach(scene => {
+            if (!scene?.background) return;
+            const img = new Image();
+            img.onerror = () => {
+                console.warn(`⚠️ Missing background asset: ${scene.background} (scene: ${scene.id})`);
+            };
+            img.src = scene.background;
+        });
     }
 };
 
