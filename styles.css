@@ -192,6 +192,7 @@ button:active,
 #game-root {
     width: 100%;
     height: var(--app-height, 100vh);
+    height: 100dvh;
     min-height: var(--app-height, 100vh);
     position: relative;
     display: flex;
@@ -248,13 +249,6 @@ button:active,
 #scene-background.scene-entered {
     transform: scale(1);
     opacity: 1;
-}
-
-/* Mobile portrait: use cover to fill screen */
-@media (max-width: 768px) and (orientation: portrait) {
-    #scene-background {
-        object-fit: contain;
-    }
 }
 
 /* Mobile/tablet: keep a 16:9 gameplay frame across phone viewports */
@@ -655,6 +649,16 @@ body.main-menu #scene-title {
     #dialogue-box.dialogue-center {
         width: min(90vw, 420px);
         min-width: min(240px, 86vw);
+    }
+}
+
+@media (min-width: 1600px) {
+    #dialogue-box {
+        max-width: 540px;
+    }
+
+    #dialogue-box.dialogue-center {
+        max-width: 640px;
     }
 }
 

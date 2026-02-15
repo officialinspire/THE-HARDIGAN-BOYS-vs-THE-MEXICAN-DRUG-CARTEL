@@ -2671,8 +2671,8 @@ const positioningSystem = {
 
         let renderedW, renderedH, offsetX, offsetY;
 
-        // Detect if we are in portrait mobile mode (cover) or normal (contain)
-        const isCover = window.innerWidth <= 768 && window.innerHeight > window.innerWidth;
+        // Standardized on object-fit: contain for consistent positioning
+        const isCover = false;
 
         if (isCover) {
             // object-fit: cover — image fills container, may be cropped
@@ -3986,6 +3986,14 @@ const sceneRenderer = {
         hotspots.forEach(hotspot => {
             const div = document.createElement('div');
             div.className = 'hotspot';
+
+            // Scale minimum touch target to viewport — 44px at 1920, proportionally smaller at smaller viewports
+            const rect = positioningSystem.getBackgroundRect();
+            if (rect) {
+                const scaledMin = Math.max(30, Math.round(44 * rect.nativeScaleX));
+                div.style.minWidth = `${scaledMin}px`;
+                div.style.minHeight = `${scaledMin}px`;
+            }
 
             // Determine coordinate system: native (1920×1080 pixels) or percentage
             const isNative = hotspot.coordSystem === 'native';
