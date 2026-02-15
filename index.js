@@ -3026,13 +3026,14 @@ const sceneRenderer = {
 
         this.cancelTypeText(el);
 
-        const resolvedText = String(fullText || '');
+        const emphasisData = this._parseEmphasisMarkup(fullText);
+        const resolvedText = emphasisData.text;
         const charDelayMs = Number.isFinite(options.charDelayMs) ? options.charDelayMs : this.dialogueTypeSpeedMs;
         const disabled = options.disabled === true;
         const onFinish = typeof options.onFinish === 'function' ? options.onFinish : null;
         const onCancel = typeof options.onCancel === 'function' ? options.onCancel : null;
 
-        el.textContent = '';
+        this._renderTypeTextAtIndex(el, emphasisData, 0);
         el.dataset.typing = 'true';
         this.isTyping = true;
 
@@ -3052,7 +3053,7 @@ const sceneRenderer = {
             done = true;
             clearTimeout(timeoutId);
             window.cancelAnimationFrame(rafId);
-            el.textContent = resolvedText;
+            this._renderTypeTextAtIndex(el, emphasisData, resolvedText.length);
             el.dataset.typing = 'false';
             this.isTyping = false;
             delete el._typeTextController;
@@ -3079,7 +3080,7 @@ const sceneRenderer = {
             if (done) return;
 
             index += 1;
-            el.textContent = resolvedText.slice(0, index);
+            this._renderTypeTextAtIndex(el, emphasisData, index);
 
             if (index >= resolvedText.length) {
                 finish();
@@ -3145,17 +3146,143 @@ const sceneRenderer = {
         this.isTyping = false;
     },
 
+    _parseEmphasisMarkup(fullText) {
+        const fallbackText = String(fullText || '');
+
+        try {
+            const tokens = fallbackText.split(/(\s+)/);
+            const ranges = [];
+            const parsedTokens = [];
+            let currentIndex = 0;
+
+            tokens.forEach((token) => {
+                if (!token) return;
+
+                if (/^\s+$/.test(token)) {
+                    parsedTokens.push(token);
+                    currentIndex += token.length;
+                    return;
+                }
+
+                const parsed = this._parseEmphasisToken(token);
+                parsedTokens.push(parsed.text);
+
+                if (parsed.className) {
+                    ranges.push({
+                        start: currentIndex,
+                        end: currentIndex + parsed.text.length,
+                        className: parsed.className
+                    });
+                }
+
+                currentIndex += parsed.text.length;
+            });
+
+            return {
+                text: parsedTokens.join(''),
+                ranges
+            };
+        } catch (error) {
+            errorLogger.log('Dialogue emphasis parsing fallback', error, { fullText: fallbackText });
+            return {
+                text: fallbackText,
+                ranges: []
+            };
+        }
+    },
+
+    _parseEmphasisToken(token = '') {
+        if (token.length >= 3 && token.startsWith('*') && token.endsWith('*')) {
+            const inner = token.slice(1, -1);
+            if (inner && !inner.includes('*')) {
+                return { text: inner, className: 'emphasis-angry' };
+            }
+        }
+
+        if (token.length >= 3 && token.startsWith('_') && token.endsWith('_')) {
+            const inner = token.slice(1, -1);
+            if (inner && !inner.includes('_')) {
+                return { text: inner, className: 'emphasis-whisper' };
+            }
+        }
+
+        if (token.length >= 3 && token.startsWith('!') && token.endsWith('!')) {
+            const inner = token.slice(1, -1);
+            if (inner && !inner.includes('!')) {
+                return { text: inner, className: 'emphasis-important' };
+            }
+        }
+
+        return { text: token, className: '' };
+    },
+
+    _renderTypeTextAtIndex(el, emphasisData, charCount) {
+        if (!el) return;
+
+        const text = String(emphasisData?.text || '');
+        const ranges = Array.isArray(emphasisData?.ranges) ? emphasisData.ranges : [];
+        const clampedCount = Math.max(0, Math.min(charCount, text.length));
+
+        if (ranges.length === 0) {
+            el.textContent = text.slice(0, clampedCount);
+            return;
+        }
+
+        const escaped = this._escapeHtml(text.slice(0, clampedCount));
+        if (!escaped) {
+            el.textContent = '';
+            return;
+        }
+
+        let cursor = 0;
+        let html = '';
+
+        ranges.forEach((range) => {
+            const start = Math.max(0, Math.min(range.start, clampedCount));
+            const end = Math.max(start, Math.min(range.end, clampedCount));
+            if (end <= start) return;
+
+            if (cursor < start) {
+                html += this._escapeHtml(text.slice(cursor, start));
+            }
+
+            const content = this._escapeHtml(text.slice(start, end));
+            html += `<span class="${range.className}">${content}</span>`;
+            cursor = end;
+        });
+
+        if (cursor < clampedCount) {
+            html += this._escapeHtml(text.slice(cursor, clampedCount));
+        }
+
+        el.innerHTML = html;
+    },
+
+    _escapeHtml(value = '') {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    },
+
     _measureDialogueTextHeight(textEl, fullText) {
         if (!textEl) return 0;
 
         const previousText = textEl.textContent;
+        const previousHtml = textEl.innerHTML;
         const previousMinHeight = textEl.style.minHeight;
+        const emphasisData = this._parseEmphasisMarkup(fullText);
 
         textEl.style.minHeight = '0px';
-        textEl.textContent = String(fullText || '');
+        textEl.textContent = emphasisData.text;
         const measuredHeight = Math.ceil(textEl.scrollHeight || 0);
 
-        textEl.textContent = previousText;
+        textEl.innerHTML = previousHtml;
+        if (textEl.textContent !== previousText) {
+            textEl.textContent = previousText;
+        }
         textEl.style.minHeight = previousMinHeight;
 
         return measuredHeight;
