@@ -3522,6 +3522,65 @@ const sceneRenderer = {
         }
     },
 
+    /**
+     * Swap a character's sprite expression in-place without re-positioning.
+     * Usage: sceneRenderer.swapExpression('hank', 'char_hank_angry-left.png');
+     */
+    swapExpression(charId, newSprite) {
+        const img = document.getElementById(`char-${charId}`);
+        if (!img) {
+            console.warn(`swapExpression: character '${charId}' not found in scene`);
+            return;
+        }
+
+        const zoneName = img.dataset.zone || 'center';
+        const candidates = this.buildSpriteCandidates(newSprite, zoneName);
+
+        if (candidates.length === 0) return;
+
+        // Subtle flash transition for expression change
+        img.style.transition = 'opacity 0.15s ease';
+        img.style.opacity = '0.7';
+
+        // Detach old error handler and set new src
+        const oldOnError = img.onerror;
+        const oldOnLoad = img.onload;
+        let candidateIdx = 0;
+
+        const tryNext = () => {
+            if (candidateIdx >= candidates.length) {
+                // All failed — restore original
+                img.onerror = oldOnError;
+                img.onload = oldOnLoad;
+                img.style.opacity = '1';
+                return;
+            }
+            img.src = `./assets/characters/${candidates[candidateIdx]}`;
+            candidateIdx += 1;
+        };
+
+        img.onerror = () => tryNext();
+        img.onload = () => {
+            // Process transparency on new expression
+            if (!img.src.includes('data:image/svg')) {
+                img.dataset.whiteRemoved = 'false'; // Force reprocess
+                spriteTransparencyProcessor.makeWhitePixelsTransparent(img);
+            }
+
+            // Fade back in
+            requestAnimationFrame(() => {
+                img.style.opacity = '1';
+                setTimeout(() => {
+                    img.style.transition = '';
+                    img.onerror = oldOnError;
+                    img.onload = oldOnLoad;
+                }, 200);
+            });
+        };
+
+        tryNext();
+    },
+
     // Public API: queues scene transitions to prevent race conditions
     loadScene(sceneId) {
         this.queueSceneTransition(sceneId);
