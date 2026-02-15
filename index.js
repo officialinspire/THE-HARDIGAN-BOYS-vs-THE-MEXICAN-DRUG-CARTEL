@@ -3900,77 +3900,56 @@ const sceneRenderer = {
         const container = document.getElementById('scene-container');
         if (!container || !dialogueBox || !zoneName) return;
 
-        if (zoneName.startsWith('left') || zoneName.startsWith('right')) {
-            const containerRect = container.getBoundingClientRect();
-            const boxRect = dialogueBox.getBoundingClientRect();
-            const isMobile = window.matchMedia('(max-width: 1024px)').matches;
-            const leftPx = Math.max(containerRect.width * 0.02, (containerRect.width - boxRect.width) / 2);
-            const topPx = containerRect.height * (isMobile ? 0.12 : 0.105);
-
-            dialogueBox.style.left = `${leftPx}px`;
-            dialogueBox.style.right = 'auto';
-            dialogueBox.style.top = `${topPx}px`;
-            dialogueBox.style.bottom = 'auto';
-            dialogueBox.style.transform = 'none';
-            return;
-        }
-
         const characterEl = this._resolveDialogueCharacter(zoneName, dialogueEntry);
 
         if (!characterEl) {
+            // No character found — center the dialogue as fallback
             this._positionDialogueTopCenter(dialogueBox);
             return;
         }
 
-        {
-            const containerRect = container.getBoundingClientRect();
-            const charRect = characterEl.getBoundingClientRect();
-            const boxRect = dialogueBox.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const charRect = characterEl.getBoundingClientRect();
+        const boxRect = dialogueBox.getBoundingClientRect();
+        const isMobile = window.matchMedia('(max-width: 1024px)').matches;
 
-            const margin = Math.max(14, containerRect.height * 0.02);
-            const zoneNudge = {
-                left: { x: 0, y: 0 },
-                'left-2': { x: -charRect.width * 0.1, y: -charRect.height * 0.04 },
-                right: { x: 0, y: 0 },
-                'right-2': { x: charRect.width * 0.1, y: -charRect.height * 0.04 },
-            };
-            const zoneOffset = zoneNudge[zoneName] || { x: 0, y: 0 };
-            const topPx = Math.max(
-                containerRect.height * (window.matchMedia('(max-width: 1024px)').matches ? 0.05 : 0.1),
-                (charRect.top - containerRect.top) - boxRect.height - margin + zoneOffset.y
-            );
+        const margin = Math.max(14, containerRect.height * 0.02);
 
-            const charLeft = charRect.left - containerRect.left;
-            const charRight = charRect.right - containerRect.left;
-            const minLeft = containerRect.width * 0.02;
-            const maxLeft = containerRect.width - boxRect.width - minLeft;
-            let leftPx;
+        // Position bubble ABOVE the character's head
+        let topPx = Math.max(
+            containerRect.height * (isMobile ? 0.08 : 0.10),
+            (charRect.top - containerRect.top) - boxRect.height - margin
+        );
 
-            const isMobile = window.matchMedia('(max-width: 1024px)').matches;
-            const charWidth = charRect.width;
-
-            if (zoneName.startsWith('left')) {
-                // Keep bubble upper-left of left-side speakers.
-                const shoulderX = charLeft + charWidth * (zoneName === 'left-2' ? 0.42 : 0.36);
-                leftPx = shoulderX - (boxRect.width * (isMobile ? 0.92 : 0.88));
-            } else if (zoneName.startsWith('right')) {
-                // Keep bubble upper-right of right-side speakers.
-                const shoulderX = charLeft + charWidth * (zoneName === 'right-2' ? 0.58 : 0.64);
-                leftPx = shoulderX - (boxRect.width * (isMobile ? 0.08 : 0.12));
-            } else {
-                leftPx = (charLeft + charRight) / 2 - (boxRect.width / 2);
-            }
-
-            leftPx += zoneOffset.x;
-
-            leftPx = Math.min(maxLeft, Math.max(minLeft, leftPx));
-
-            dialogueBox.style.left = `${leftPx}px`;
-            dialogueBox.style.right = 'auto';
-            dialogueBox.style.top = `${topPx}px`;
-            dialogueBox.style.bottom = 'auto';
-            dialogueBox.style.transform = 'none';
+        // If character is too tall and pushes bubble off screen, place it at minimum top
+        if (topPx < containerRect.height * 0.06) {
+            topPx = containerRect.height * 0.06;
         }
+
+        // Horizontal: center bubble over character with slight offset based on zone
+        const charCenterX = (charRect.left + charRect.right) / 2 - containerRect.left;
+        const minLeft = containerRect.width * 0.02;
+        const maxLeft = containerRect.width - boxRect.width - minLeft;
+        let leftPx;
+
+        if (zoneName.startsWith('left')) {
+            // For left-side characters, offset bubble slightly right of character center
+            leftPx = charCenterX - (boxRect.width * 0.35);
+        } else if (zoneName.startsWith('right')) {
+            // For right-side characters, offset bubble slightly left of character center
+            leftPx = charCenterX - (boxRect.width * 0.65);
+        } else {
+            leftPx = charCenterX - (boxRect.width / 2);
+        }
+
+        // Clamp to viewport
+        leftPx = Math.min(maxLeft, Math.max(minLeft, leftPx));
+
+        dialogueBox.style.left = `${leftPx}px`;
+        dialogueBox.style.right = 'auto';
+        dialogueBox.style.top = `${topPx}px`;
+        dialogueBox.style.bottom = 'auto';
+        dialogueBox.style.transform = 'none';
     },
 
     _positionDialogueTopCenter(dialogueBox) {
