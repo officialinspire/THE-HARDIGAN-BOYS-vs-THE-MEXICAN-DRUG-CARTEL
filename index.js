@@ -2952,11 +2952,147 @@ const sceneRenderer = {
     isTransitioning: false,
     dialogueExitDurationMs: 220,
     dialogueEnterDurationMs: 250,
+    dialogueTypeSpeedMs: 24,
 
     // Transition state callbacks
     onTransitionStart: null,
     onTransitionComplete: null,
     validZones: new Set(['left', 'left-2', 'center', 'right-2', 'right']),
+
+    _bindDialogueTapHandlers() {
+        const dialogueBox = document.getElementById('dialogue-box');
+        if (!dialogueBox || dialogueBox.dataset.tapHandlerBound === 'true') return;
+
+        let touchStartTime = 0;
+        let touchStartPos = null;
+
+        const handleAdvanceTap = (e) => {
+            const textEl = document.getElementById('dialogue-text');
+            const continueBtn = document.getElementById('dialogue-continue');
+            const choicesDiv = document.getElementById('dialogue-choices');
+            if (!textEl || !continueBtn || !choicesDiv) return;
+
+            if (e.target.closest('#dialogue-choices') || e.target.closest('#dialogue-continue')) {
+                return;
+            }
+
+            if (textEl.dataset.typing === 'true') {
+                e.preventDefault();
+                e.stopPropagation();
+                this.finishTypeText(textEl);
+                return;
+            }
+
+            const hasChoices = choicesDiv.children.length > 0;
+            const canContinue = !continueBtn.classList.contains('hidden') && typeof continueBtn.onclick === 'function';
+            if (!hasChoices && canContinue) {
+                e.preventDefault();
+                e.stopPropagation();
+                continueBtn.click();
+            }
+        };
+
+        const handleInteraction = (e) => {
+            if (e.type === 'click' && touchStartTime > Date.now() - 500) {
+                return;
+            }
+
+            if (e.type === 'touchend' && touchStartPos) {
+                const touch = e.changedTouches[0];
+                const deltaX = Math.abs(touch.clientX - touchStartPos.x);
+                const deltaY = Math.abs(touch.clientY - touchStartPos.y);
+                if (deltaX > 10 || deltaY > 10) {
+                    return;
+                }
+            }
+
+            handleAdvanceTap(e);
+        };
+
+        dialogueBox.addEventListener('touchstart', (e) => {
+            touchStartTime = Date.now();
+            const touch = e.touches[0];
+            touchStartPos = { x: touch.clientX, y: touch.clientY };
+        }, { passive: true });
+
+        dialogueBox.addEventListener('touchend', handleInteraction, { passive: false });
+        dialogueBox.addEventListener('click', handleInteraction);
+        dialogueBox.dataset.tapHandlerBound = 'true';
+    },
+
+    typeText(el, fullText, options = {}) {
+        if (!el) return { finish: () => {}, cancel: () => {} };
+
+        this.cancelTypeText(el);
+
+        const resolvedText = String(fullText || '');
+        const charDelayMs = Number.isFinite(options.charDelayMs) ? options.charDelayMs : this.dialogueTypeSpeedMs;
+        const disabled = options.disabled === true;
+
+        el.textContent = '';
+        el.dataset.typing = 'true';
+
+        let index = 0;
+        let timeoutId = null;
+        let done = false;
+
+        const finish = () => {
+            if (done) return;
+            done = true;
+            clearTimeout(timeoutId);
+            el.textContent = resolvedText;
+            el.dataset.typing = 'false';
+            delete el._typeTextController;
+        };
+
+        const cancel = () => {
+            if (done) return;
+            done = true;
+            clearTimeout(timeoutId);
+            el.dataset.typing = 'false';
+            delete el._typeTextController;
+        };
+
+        if (disabled || resolvedText.length === 0 || charDelayMs <= 0) {
+            finish();
+            return { finish, cancel };
+        }
+
+        const tick = () => {
+            if (done) return;
+
+            index += 1;
+            el.textContent = resolvedText.slice(0, index);
+
+            if (index >= resolvedText.length) {
+                finish();
+                return;
+            }
+
+            timeoutId = window.setTimeout(tick, charDelayMs);
+        };
+
+        timeoutId = window.setTimeout(tick, charDelayMs);
+
+        const controller = { finish, cancel };
+        el._typeTextController = controller;
+        return controller;
+    },
+
+    finishTypeText(el) {
+        if (!el?._typeTextController) return false;
+        el._typeTextController.finish();
+        return true;
+    },
+
+    cancelTypeText(el) {
+        if (!el?._typeTextController) {
+            if (el) el.dataset.typing = 'false';
+            return false;
+        }
+        el._typeTextController.cancel();
+        return true;
+    },
 
     getZoneSide(zoneName = '') {
         if (String(zoneName).startsWith('left')) return 'left';
@@ -3421,6 +3557,7 @@ const sceneRenderer = {
                 document.getElementById('item-layer').replaceChildren();
                 document.getElementById('hotspot-layer').replaceChildren();
                 this.currentHotspots = [];
+                this.cancelTypeText(document.getElementById('dialogue-text'));
                 document.getElementById('dialogue-box').classList.add('hidden');
 
                 // Remove police light effect if present
@@ -3612,6 +3749,8 @@ const sceneRenderer = {
     
     showDialogue(dialogueEntry) {
         try {
+            this._bindDialogueTapHandlers();
+
             // Block dialogue during scene transitions
             if (this.isTransitioning) {
                 console.log('Scene transition in progress, blocking dialogue');
@@ -3647,6 +3786,8 @@ const sceneRenderer = {
             const text = document.getElementById('dialogue-text');
             const choicesDiv = document.getElementById('dialogue-choices');
             const continueBtn = document.getElementById('dialogue-continue');
+
+            this.cancelTypeText(text);
 
             // Set positioning mode based on dialogue type
             if (dialogueEntry.type === 'narration' || !dialogueEntry.speaker) {
@@ -3740,7 +3881,7 @@ const sceneRenderer = {
                 dialogueBox.style.transform = 'none';
             }
 
-            text.textContent = dialogueEntry.text || '';
+            this.typeText(text, dialogueEntry.text || '');
             dialogueBox.classList.remove('hidden');
             this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
             Dev.layout.applySavedLayouts();
@@ -4171,6 +4312,8 @@ const sceneRenderer = {
 
     _closeDialogueThen(nextAction) {
         const dialogueBox = document.getElementById('dialogue-box');
+        const textEl = document.getElementById('dialogue-text');
+        this.cancelTypeText(textEl);
         if (!dialogueBox || dialogueBox.classList.contains('hidden')) {
             gameState.dialogueLock = false; // Safety release
             if (typeof nextAction === 'function') nextAction();
