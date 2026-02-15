@@ -3971,37 +3971,25 @@ const sceneRenderer = {
         const boxRect = dialogueBox.getBoundingClientRect();
         const isMobile = window.matchMedia('(max-width: 1024px)').matches;
 
-        const margin = Math.max(12, containerRect.height * (isMobile ? 0.014 : 0.02));
-        const horizontalGap = Math.max(12, containerRect.width * (isMobile ? 0.015 : 0.02));
+        const topMargin = Math.max(10, containerRect.height * (isMobile ? 0.01 : 0.016));
+        const sideMargin = Math.max(10, containerRect.width * (isMobile ? 0.015 : 0.02));
+        const minTop = containerRect.height * (isMobile ? 0.04 : 0.06);
 
-        // Position bubble ABOVE the character's head
+        const charCenterX = ((charRect.left + charRect.right) / 2) - containerRect.left;
         const charTop = charRect.top - containerRect.top;
-        let topPx = charTop - boxRect.height - margin;
-        topPx = Math.max(containerRect.height * (isMobile ? 0.06 : 0.08), topPx);
 
-        // If character is too tall and pushes bubble off screen, place it at minimum top
-        if (topPx < containerRect.height * 0.06) {
-            topPx = containerRect.height * 0.06;
-        }
+        // Position bubble directly above the speaker's head.
+        let topPx = charTop - boxRect.height - topMargin;
+        let leftPx = charCenterX - (boxRect.width / 2);
 
-        // Horizontal: keep bubble offset to upper-left or upper-right of speaker
-        const charCenterX = (charRect.left + charRect.right) / 2 - containerRect.left;
-        const minLeft = containerRect.width * 0.02;
-        const maxLeft = containerRect.width - boxRect.width - minLeft;
-        const charSidePreference = zoneName.startsWith('left') ? 'right' : (zoneName.startsWith('right') ? 'left' : null);
-        const useRightOffset = charSidePreference
-            ? charSidePreference === 'right'
-            : charCenterX < containerRect.width * 0.5;
-
-        let leftPx = useRightOffset
-            ? charCenterX + horizontalGap
-            : charCenterX - boxRect.width - horizontalGap;
-
+        const minLeft = sideMargin;
+        const maxLeft = containerRect.width - boxRect.width - sideMargin;
         leftPx = Math.min(maxLeft, Math.max(minLeft, leftPx));
+        topPx = Math.max(minTop, topPx);
 
-        // Tail should point down toward the speaking character.
+        // Tail should face the side where the character sits relative to bubble center.
         const bubbleCenterX = leftPx + (boxRect.width / 2);
-        dialogueBox.dataset.tail = charCenterX < bubbleCenterX ? 'left' : 'right';
+        dialogueBox.dataset.tail = charCenterX <= bubbleCenterX ? 'left' : 'right';
 
         dialogueBox.style.left = `${leftPx}px`;
         dialogueBox.style.right = 'auto';
