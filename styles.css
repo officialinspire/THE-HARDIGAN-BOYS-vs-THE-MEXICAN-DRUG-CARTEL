@@ -278,7 +278,8 @@ button:active,
     max-height: 55%;
     object-fit: contain;
     transition: transform 0.6s ease, opacity 0.6s ease;
-    filter: drop-shadow(2px 4px 8px rgba(0, 0, 0, 0.7));
+    filter: drop-shadow(2px 4px 6px rgba(0, 0, 0, 0.8))
+            drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
     background: transparent !important;
 }
 
@@ -714,17 +715,30 @@ body.main-menu #scene-title {
     min-height: 130px;
     display: flex;
     flex-direction: column;
+    filter: drop-shadow(3px 3px 0px rgba(0, 0, 0, 0.5));
 }
 
 /* Narrative Container - Stylish box without speech bubble */
 #dialogue-container.narrative-mode {
-    background: linear-gradient(135deg, rgba(0, 0, 0, 0.92) 0%, rgba(20, 20, 30, 0.95) 100%);
-    border: 3px solid #FFD700;
-    border-radius: 12px;
-    box-shadow: 0 0 30px rgba(255, 215, 0, 0.6),
-                inset 0 0 20px rgba(255, 215, 0, 0.1);
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.94) 0%, rgba(15, 15, 25, 0.97) 100%);
+    border: 4px solid #FFD700;
+    border-radius: 4px;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.8),
+                0 0 30px rgba(255, 215, 0, 0.4),
+                6px 6px 0px rgba(0, 0, 0, 0.6);
     padding: clamp(18px, 3vw, 28px);
     min-height: auto;
+}
+
+#dialogue-container.narrative-mode::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle, rgba(255, 215, 0, 0.03) 1px, transparent 1px);
+    background-size: 4px 4px;
+    pointer-events: none;
+    z-index: 0;
 }
 
 #dialogue-container.narrative-mode #dialogue-bubble {
@@ -732,7 +746,8 @@ body.main-menu #scene-title {
 }
 
 #dialogue-container.narrative-mode #dialogue-content {
-    position: static;
+    position: relative;
+    z-index: 1;
     padding: 0;
     display: flex;
     flex-direction: column;
@@ -908,9 +923,9 @@ body.main-menu #scene-title {
 }
 
 .dialogue-choice {
-    background: linear-gradient(135deg, rgba(30, 30, 40, 0.95) 0%, rgba(20, 20, 30, 0.98) 100%);
-    border: 2px solid #444;
-    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(20, 20, 30, 0.96) 0%, rgba(10, 10, 20, 0.98) 100%);
+    border: 3px solid #555;
+    border-radius: 4px;
     padding: 14px 22px;
     margin: 8px 0;
     min-height: 50px;
@@ -928,24 +943,50 @@ body.main-menu #scene-title {
     align-items: center;
     touch-action: manipulation;
     -webkit-tap-highlight-color: rgba(255, 215, 0, 0.3);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+    box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.5);
+    position: relative;
+    overflow: hidden;
+}
+
+.dialogue-choice::before {
+    content: '▸';
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #FFD700;
+    font-size: 18px;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .dialogue-choice:hover,
 .dialogue-choice:active {
-    background: linear-gradient(135deg, rgba(40, 40, 50, 0.98) 0%, rgba(30, 30, 40, 1) 100%);
     border-color: #FFD700;
-    transform: translateX(8px);
-    box-shadow: 0 0 25px rgba(255, 215, 0, 0.5);
+    transform: translateX(6px);
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.4), 4px 4px 0px rgba(0, 0, 0, 0.5);
+    padding-left: 34px;
+}
+
+.dialogue-choice:hover::before,
+.dialogue-choice:active::before {
+    opacity: 1;
+    transform: translateY(-50%) translateX(4px);
 }
 
 @media (max-width: 768px) {
     .dialogue-choice:hover {
         transform: none;
+        padding-left: 12px;
     }
 
     .dialogue-choice:active {
-        transform: scale(0.98);
+        transform: scale(0.97);
+        border-color: #FFD700;
+    }
+
+    .dialogue-choice::before {
+        display: none;
     }
 }
 
