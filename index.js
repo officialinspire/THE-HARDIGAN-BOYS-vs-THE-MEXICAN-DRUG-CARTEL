@@ -3602,6 +3602,33 @@ const sceneRenderer = {
         }
     },
 
+    _getPredictedNextScenes(scene) {
+        const predicted = new Set();
+
+        (scene.dialogue || []).forEach(entry => {
+            // Direct scene ID references
+            if (typeof entry.next === 'string' && entry.next !== 'NEXT_DIALOGUE' && SCENES[entry.next]) {
+                predicted.add(entry.next);
+            }
+
+            // Choice targets
+            (entry.choices || []).forEach(choice => {
+                // We can't peek into function bodies, but we can check
+                // if the choice action source mentions loadScene
+                // For now, just preload based on known scene flow
+            });
+        });
+
+        // Also check hotspot targets
+        (scene.hotspots || []).forEach(hs => {
+            if (hs.target && SCENES[hs.target]) {
+                predicted.add(hs.target);
+            }
+        });
+
+        return Array.from(predicted);
+    },
+
     async _executeSceneLoad(sceneId) {
         const scene = SCENES[sceneId];
         if (!scene) {
@@ -3687,6 +3714,19 @@ const sceneRenderer = {
 
             // Lazy-load non-critical assets for future interactions
             assetLoader.lazyLoadSceneAssets(scene);
+
+            // Predictively preload next scene's assets during dialogue reading time
+            const predictedScenes = this._getPredictedNextScenes(scene);
+            predictedScenes.forEach(nextSceneId => {
+                const nextScene = SCENES[nextSceneId];
+                if (nextScene) {
+                    assetLoader.lazyLoadSceneAssets(nextScene);
+                    // Also preload the background
+                    if (nextScene.background) {
+                        assetLoader.preloadSingleAsset(nextScene.background, { logErrors: false });
+                    }
+                }
+            });
 
             // Always play music with fade in for smooth transitions
             if (scene.music) {
@@ -4194,6 +4234,28 @@ const sceneRenderer = {
                     btn.addEventListener('click', handleInteraction);
                     choicesDiv.appendChild(btn);
                 });
+
+                // Preload assets for scenes that choices might lead to
+                // (Gives the player's reading time as preload window)
+                if (dialogueEntry.choices) {
+                    dialogueEntry.choices.forEach(choice => {
+                        // Check if the action function source mentions a scene ID
+                        if (choice.action) {
+                            const actionStr = choice.action.toString();
+                            Object.keys(SCENES).forEach(sceneId => {
+                                if (actionStr.includes(`'${sceneId}'`) || actionStr.includes(`"${sceneId}"`)) {
+                                    const targetScene = SCENES[sceneId];
+                                    if (targetScene) {
+                                        assetLoader.lazyLoadSceneAssets(targetScene);
+                                        if (targetScene.background) {
+                                            assetLoader.preloadSingleAsset(targetScene.background, { logErrors: false });
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    });
+                }
             } else if (dialogueEntry.next) {
                 continueBtn.classList.remove('hidden');
                 continueBtn.textContent = '▶';
