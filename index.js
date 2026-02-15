@@ -3679,11 +3679,24 @@ const sceneRenderer = {
             }
 
             if (dialogueEntry.bubbleLayout) {
-                const { left, top, width, height } = dialogueEntry.bubbleLayout;
-                if (Number.isFinite(left)) dialogueBox.style.left = `${left}px`;
-                if (Number.isFinite(top)) dialogueBox.style.top = `${top}px`;
-                if (Number.isFinite(width)) dialogueBox.style.width = `${width}px`;
-                if (Number.isFinite(height)) dialogueBox.style.height = `${height}px`;
+                const bl = dialogueEntry.bubbleLayout;
+                const rect = positioningSystem.getBackgroundRect();
+                if (rect) {
+                    // bubbleLayout values are in 1920x1080 native space — scale to current container
+                    const scaled = positioningSystem.calculateHotspotPosition(
+                        bl.left || 0, bl.top || 0, bl.width || 400, bl.height || 300
+                    );
+                    dialogueBox.style.left = scaled.left;
+                    dialogueBox.style.top = scaled.top;
+                    dialogueBox.style.width = scaled.width;
+                    dialogueBox.style.height = scaled.height;
+                } else {
+                    // Fallback: apply as percentages of reference dimensions
+                    if (Number.isFinite(bl.left)) dialogueBox.style.left = `${(bl.left / 1920) * 100}%`;
+                    if (Number.isFinite(bl.top)) dialogueBox.style.top = `${(bl.top / 1080) * 100}%`;
+                    if (Number.isFinite(bl.width)) dialogueBox.style.width = `${(bl.width / 1920) * 100}%`;
+                    if (Number.isFinite(bl.height)) dialogueBox.style.height = `${(bl.height / 1080) * 100}%`;
+                }
                 dialogueBox.style.right = 'auto';
                 dialogueBox.style.bottom = 'auto';
                 dialogueBox.style.transform = 'none';
@@ -4056,6 +4069,25 @@ const sceneRenderer = {
         if (isNarration || isChoice) {
             this._positionNarrativeDialogue(dialogueBox);
             this._clampDialogueToViewport(dialogueBox, { preserveCentered: true });
+            return;
+        }
+
+        if (dialogueEntry.bubbleLayout) {
+            const bl = dialogueEntry.bubbleLayout;
+            const rect = positioningSystem.getBackgroundRect();
+            if (rect) {
+                const scaled = positioningSystem.calculateHotspotPosition(
+                    bl.left || 0, bl.top || 0, bl.width || 400, bl.height || 300
+                );
+                dialogueBox.style.left = scaled.left;
+                dialogueBox.style.top = scaled.top;
+                dialogueBox.style.width = scaled.width;
+                dialogueBox.style.height = scaled.height;
+                dialogueBox.style.right = 'auto';
+                dialogueBox.style.bottom = 'auto';
+                dialogueBox.style.transform = 'none';
+            }
+            this._clampDialogueToViewport(dialogueBox);
             return;
         }
 
