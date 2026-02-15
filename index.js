@@ -3029,6 +3029,8 @@ const sceneRenderer = {
         const resolvedText = String(fullText || '');
         const charDelayMs = Number.isFinite(options.charDelayMs) ? options.charDelayMs : this.dialogueTypeSpeedMs;
         const disabled = options.disabled === true;
+        const onFinish = typeof options.onFinish === 'function' ? options.onFinish : null;
+        const onCancel = typeof options.onCancel === 'function' ? options.onCancel : null;
 
         el.textContent = '';
         el.dataset.typing = 'true';
@@ -3046,6 +3048,7 @@ const sceneRenderer = {
             el.dataset.typing = 'false';
             this.isTyping = false;
             delete el._typeTextController;
+            if (onFinish) onFinish();
         };
 
         const cancel = () => {
@@ -3055,6 +3058,7 @@ const sceneRenderer = {
             el.dataset.typing = 'false';
             this.isTyping = false;
             delete el._typeTextController;
+            if (onCancel) onCancel();
         };
 
         if (disabled || resolvedText.length === 0 || charDelayMs <= 0) {
@@ -3102,6 +3106,22 @@ const sceneRenderer = {
     _cleanupTypewriter(el = document.getElementById('dialogue-text')) {
         this.cancelTypeText(el);
         this.isTyping = false;
+    },
+
+    _measureDialogueTextHeight(textEl, fullText) {
+        if (!textEl) return 0;
+
+        const previousText = textEl.textContent;
+        const previousMinHeight = textEl.style.minHeight;
+
+        textEl.style.minHeight = '0px';
+        textEl.textContent = String(fullText || '');
+        const measuredHeight = Math.ceil(textEl.scrollHeight || 0);
+
+        textEl.textContent = previousText;
+        textEl.style.minHeight = previousMinHeight;
+
+        return measuredHeight;
     },
 
     getZoneSide(zoneName = '') {
@@ -3892,7 +3912,11 @@ const sceneRenderer = {
                 dialogueBox.style.transform = 'none';
             }
 
-            this.typeText(text, dialogueEntry.text || '');
+            const dialogueText = dialogueEntry.text || '';
+            const fullHeight = this._measureDialogueTextHeight(text, dialogueText);
+            text.style.minHeight = fullHeight > 0 ? `${fullHeight}px` : '';
+
+            this.typeText(text, dialogueText);
             dialogueBox.classList.remove('hidden');
             this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
             Dev.layout.applySavedLayouts();
