@@ -3696,7 +3696,21 @@ const sceneRenderer = {
                 });
             });
 
-            document.getElementById('scene-title').textContent = scene.title || '';
+            const titleEl = document.getElementById('scene-title');
+            titleEl.textContent = scene.title || '';
+            titleEl.classList.remove('title-visible', 'title-animate');
+
+            // Animate title after fade-from-black
+            if (scene.title && sceneId !== 'S0_MAIN_MENU') {
+                setTimeout(() => {
+                    titleEl.classList.add('title-animate');
+                    // After animation, keep visible
+                    setTimeout(() => {
+                        titleEl.classList.remove('title-animate');
+                        titleEl.classList.add('title-visible');
+                    }, 800);
+                }, 200); // Start slightly after fade completes
+            }
 
             if (scene.characters) {
                 await this.loadCharacters(scene.characters);
