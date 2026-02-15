@@ -3436,23 +3436,18 @@ const sceneRenderer = {
     async addCharacter(char, slideDelay = 100) {
         const charLayer = document.getElementById('character-layer');
 
-        // CRITICAL FIX: Wait for background to fully load before positioning
         const bg = document.getElementById('scene-background');
         if (bg && !bg.complete) {
             await new Promise(resolve => {
-                const onLoad = () => {
-                    bg.removeEventListener('load', onLoad);
-                    bg.removeEventListener('error', onLoad);
-                    resolve();
-                };
-                bg.addEventListener('load', onLoad, { once: true });
-                bg.addEventListener('error', onLoad, { once: true });
-                // Timeout fallback - position anyway after 1 second
+                bg.addEventListener('load', resolve, { once: true });
+                bg.addEventListener('error', resolve, { once: true });
                 setTimeout(resolve, 1000);
             });
         }
 
-        const existingZones = new Set(Array.from(charLayer.querySelectorAll('.character-sprite')).map(el => el.dataset.zone));
+        const existingZones = new Set(
+            Array.from(charLayer.querySelectorAll('.character-sprite')).map(el => el.dataset.zone)
+        );
         let resolvedZone = char.position || 'center';
         if (resolvedZone === 'left' && existingZones.has('left')) resolvedZone = 'left-2';
         if (resolvedZone === 'right' && existingZones.has('right')) resolvedZone = 'right-2';
@@ -3463,25 +3458,51 @@ const sceneRenderer = {
         img.dataset.zone = zoneName;
         img.dataset.characterId = char.id || '';
         img.dataset.characterName = (char.name || '').toUpperCase();
-        img.id = char.id ? `char-${char.id}` : undefined;
+        if (char.id) img.id = `char-${char.id}`;
         img.style.zIndex = charLayer.querySelectorAll('.character-sprite').length + 1;
-
-        const spriteCandidates = this.buildSpriteCandidates(char.sprite, zoneName);
         img.alt = char.name;
-        this.attachSpriteFallback(img, spriteCandidates);
 
-        // Apply calculated pixel position
+        // Position before adding to DOM
         const pos = positioningSystem.calculateCharacterPosition(zoneName);
         positioningSystem.applyPosition(img, pos);
 
-        if (this.getZoneSide(zoneName) === 'left') {
-            img.classList.add('slide-in-left');
-        } else if (this.getZoneSide(zoneName) === 'right') {
-            img.classList.add('slide-in-right');
-        }
+        // Add slide direction class (starts offscreen + transparent via CSS)
+        const side = this.getZoneSide(zoneName);
+        if (side === 'left') img.classList.add('slide-in-left');
+        else if (side === 'right') img.classList.add('slide-in-right');
 
         charLayer.appendChild(img);
 
+        // Start loading sprite via fallback chain
+        const spriteCandidates = this.buildSpriteCandidates(char.sprite, zoneName);
+
+        // Wait for sprite to load + transparency to process
+        await new Promise(resolve => {
+            let resolved = false;
+            const finish = () => {
+                if (resolved) return;
+                resolved = true;
+                resolve();
+            };
+
+            this.attachSpriteFallback(img, spriteCandidates);
+
+            // Poll briefly since attachSpriteFallback has its own onload
+            const pollInterval = setInterval(() => {
+                if (img.dataset.whiteRemoved === 'true' || (img.complete && img.src.includes('data:image'))) {
+                    clearInterval(pollInterval);
+                    requestAnimationFrame(() => requestAnimationFrame(finish));
+                }
+            }, 50);
+
+            // Safety timeout
+            setTimeout(() => {
+                clearInterval(pollInterval);
+                finish();
+            }, 2500);
+        });
+
+        // NOW trigger slide-in — sprite is fully loaded and processed
         setTimeout(() => {
             img.classList.add('visible');
         }, slideDelay);
