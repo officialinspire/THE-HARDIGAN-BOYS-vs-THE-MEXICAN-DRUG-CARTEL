@@ -4304,9 +4304,7 @@ const sceneRenderer = {
         if (!container || !dialogueBox || !zoneName) return;
 
         const characterEl = this._resolveDialogueCharacter(zoneName, dialogueEntry);
-
         if (!characterEl) {
-            // No character found — center the dialogue as fallback
             this._positionDialogueTopCenter(dialogueBox);
             return;
         }
@@ -4315,26 +4313,62 @@ const sceneRenderer = {
         const charRect = characterEl.getBoundingClientRect();
         const boxRect = dialogueBox.getBoundingClientRect();
         const isMobile = window.matchMedia('(max-width: 1024px)').matches;
+        const isSmallPhone = window.matchMedia('(max-width: 640px)').matches;
 
-        const topMargin = Math.max(10, containerRect.height * (isMobile ? 0.01 : 0.016));
-        const sideMargin = Math.max(10, containerRect.width * (isMobile ? 0.015 : 0.02));
-        const minTop = containerRect.height * (isMobile ? 0.04 : 0.06);
+        // --- Vertical: place bubble ABOVE the character's head ---
+        const headTop = charRect.top - containerRect.top;
+        const minTopMargin = containerRect.height * 0.06; // Below HUD bar
+        const idealGap = isMobile ? 8 : 14; // Gap between bubble bottom and character head
 
-        const charCenterX = ((charRect.left + charRect.right) / 2) - containerRect.left;
-        const charTop = charRect.top - containerRect.top;
+        let topPx = headTop - boxRect.height - idealGap;
 
-        // Position bubble directly above the speaker's head.
-        let topPx = charTop - boxRect.height - topMargin;
-        let leftPx = charCenterX - (boxRect.width / 2);
+        // If bubble goes above HUD, push it down and overlap character slightly
+        if (topPx < minTopMargin) {
+            topPx = minTopMargin;
+        }
 
-        const minLeft = sideMargin;
-        const maxLeft = containerRect.width - boxRect.width - sideMargin;
-        leftPx = Math.min(maxLeft, Math.max(minLeft, leftPx));
-        topPx = Math.max(minTop, topPx);
+        // On very small screens, if the bubble would cover more than 60% of the viewport,
+        // position it at a fixed top percentage instead
+        if (isSmallPhone && boxRect.height > containerRect.height * 0.4) {
+            topPx = containerRect.height * 0.08;
+        }
 
-        // Tail should face the side where the character sits relative to bubble center.
-        const bubbleCenterX = leftPx + (boxRect.width / 2);
-        dialogueBox.dataset.tail = charCenterX <= bubbleCenterX ? 'left' : 'right';
+        // --- Horizontal: align bubble so the tail points at the character ---
+        const charCenterX = (charRect.left + charRect.right) / 2 - containerRect.left;
+        const charWidth = charRect.width;
+        const bubbleWidth = boxRect.width;
+        const viewportPad = containerRect.width * 0.02;
+        const maxLeft = containerRect.width - bubbleWidth - viewportPad;
+
+        let leftPx;
+
+        if (zoneName.startsWith('left')) {
+            // LEFT-SIDE character: bubble sits to the upper-right of character
+            // Tail (right-pointing) should be near the character's head
+            // Position so ~20-30% of bubble overlaps above the character horizontally
+            const tailTargetX = charCenterX + charWidth * 0.15;
+            leftPx = tailTargetX - bubbleWidth * 0.18; // Tail is ~18% from left edge of bubble
+
+            // On mobile, bias toward center to avoid clipping
+            if (isMobile) {
+                leftPx = Math.max(leftPx, charCenterX - bubbleWidth * 0.1);
+            }
+        } else if (zoneName.startsWith('right')) {
+            // RIGHT-SIDE character: bubble sits to the upper-left of character
+            // Tail (left-pointing) should be near the character's head
+            const tailTargetX = charCenterX - charWidth * 0.15;
+            leftPx = tailTargetX - bubbleWidth * 0.82; // Tail is ~82% from left edge of bubble
+
+            if (isMobile) {
+                leftPx = Math.min(leftPx, charCenterX - bubbleWidth * 0.9);
+            }
+        } else {
+            // CENTER: center the bubble above character
+            leftPx = charCenterX - bubbleWidth / 2;
+        }
+
+        // Clamp to viewport bounds
+        leftPx = Math.min(maxLeft, Math.max(viewportPad, leftPx));
 
         dialogueBox.style.left = `${leftPx}px`;
         dialogueBox.style.right = 'auto';
@@ -4343,14 +4377,19 @@ const sceneRenderer = {
         dialogueBox.style.transform = 'none';
     },
 
-    _applyDialogueBubbleTail(dialogueBox) {
+    _applyDialogueBubbleTail(dialogueBox, zoneName) {
         const dialogueBubble = document.getElementById('dialogue-bubble');
         if (!dialogueBox || !dialogueBubble) return;
 
-        const tailSide = dialogueBox.dataset.tail === 'left' ? 'left' : 'right';
-        dialogueBubble.src = tailSide === 'left'
-            ? './assets/menu_dialogue/dialogue-bubble-large-left.png'
-            : './assets/menu_dialogue/dialogue-bubble-large-right.png';
+        const isLeftSpeaker = typeof zoneName === 'string'
+            ? zoneName.startsWith('left')
+            : dialogueBox.dataset.tail !== 'left';
+
+        // Right-pointing bubble for left speakers (tail points at them from the right).
+        // Left-pointing bubble for right speakers (tail points at them from the left).
+        dialogueBubble.src = isLeftSpeaker
+            ? './assets/menu_dialogue/dialogue-bubble-large-right.png'
+            : './assets/menu_dialogue/dialogue-bubble-large-left.png';
     },
 
     _positionDialogueTopCenter(dialogueBox) {
@@ -4475,7 +4514,7 @@ const sceneRenderer = {
 
         const zoneName = this.normalizeZoneName(dialogueEntry.position || 'left');
         this._positionDialogueNearCharacter(dialogueBox, zoneName, dialogueEntry);
-        this._applyDialogueBubbleTail(dialogueBox);
+        this._applyDialogueBubbleTail(dialogueBox, zoneName);
         this._clampDialogueToViewport(dialogueBox);
     },
 
@@ -4511,7 +4550,7 @@ const sceneRenderer = {
 
         window.setTimeout(() => {
             dialogueBox.classList.remove('dialogue-enter');
-        }, this.dialogueEnterDurationMs);
+        }, 350);
     },
 
     _closeDialogueThen(nextAction) {
