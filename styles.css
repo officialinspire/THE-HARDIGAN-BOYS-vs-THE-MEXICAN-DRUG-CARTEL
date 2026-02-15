@@ -1221,10 +1221,11 @@ body.main-menu #scene-title {
     align-items: center;
 }
 
+/* ===== PHONE PAUSE MENU — CONSOLIDATED ===== */
 .phone-ui {
     position: relative;
-    width: 500px;
-    height: 850px;
+    width: min(75vw, 500px);
+    height: min(90vh, 850px);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -1242,49 +1243,71 @@ body.main-menu #scene-title {
 .phone-buttons {
     position: absolute;
     z-index: 2;
-    top: 23%;
+    /* Center the button column in the phone screen area */
+    top: 28%;
     left: 50%;
     transform: translateX(-50%);
     width: 48%;
     max-width: 240px;
     display: flex;
     flex-direction: column;
-    gap: clamp(14px, 2.8vh, 24px);
+    gap: clamp(12px, 2.5vh, 22px);
 }
 
 .phone-buttons button {
     width: 100%;
-    padding: clamp(10px, 1.7vh, 16px) 16px;
+    min-height: 44px;
+    padding: clamp(10px, 1.8vh, 16px) clamp(12px, 2vw, 20px);
     background: rgba(30, 30, 35, 0.85);
     border: 2px solid #555;
-    border-radius: 8px;
+    border-radius: 10px;
     color: #e0e0e0;
-    font-size: clamp(14px, 1.9vh, 18px);
+    font-size: clamp(13px, 1.8vw, 18px);
     font-weight: bold;
     text-transform: uppercase;
     transition: all 0.3s ease;
-}
-
-@media (max-width: 768px) {
-    .phone-ui {
-        width: min(86vw, 500px);
-        height: min(calc(86vw * 1.7), 85vh);
-    }
-
-    .phone-buttons {
-        width: 46%;
-        top: 23.5%;
-    }
+    letter-spacing: 0.5px;
 }
 
 .phone-buttons button:hover {
     background: rgba(50, 50, 55, 0.95);
     border-color: #ffd700;
     color: #ffd700;
-    transform: scale(1.05);
+    transform: scale(1.03);
     box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
 }
 
+@media (max-width: 768px) {
+    .phone-ui {
+        width: min(88vw, 380px);
+        height: min(88vh, 640px);
+    }
+    
+    .phone-buttons {
+        width: 50%;
+        gap: clamp(10px, 2vh, 16px);
+    }
+    
+    .phone-buttons button {
+        font-size: clamp(12px, 3vw, 15px);
+        padding: clamp(8px, 1.5vh, 12px) clamp(10px, 2.5vw, 16px);
+    }
+}
+
+@media (max-width: 480px) {
+    .phone-ui {
+        width: min(92vw, 320px);
+        height: min(85vh, 540px);
+    }
+    
+    .phone-buttons {
+        width: 52%;
+    }
+    
+    .phone-buttons button {
+        font-size: clamp(11px, 3vw, 14px);
+    }
+}
 /* ===== SETTINGS - RESPONSIVE ===== */
 .settings-item {
     margin: clamp(18px, 4vw, 25px) 0;
@@ -1864,10 +1887,6 @@ body.main-menu #scene-container {
 
 /* Large tablets and small desktops */
 @media (max-width: 1200px) {
-    .phone-ui {
-        width: 420px;
-        height: 720px;
-    }
 }
 
 /* Tablets in portrait and large phones in landscape */
@@ -1900,21 +1919,8 @@ body.main-menu #scene-container {
         max-width: 95%;
     }
 
-    .phone-ui {
-        width: min(90vw, 350px);
-        height: min(75vh, 600px);
-    }
 
-    .phone-buttons {
-        gap: 15px;
-        margin-top: 50px;
-        width: 70%;
-    }
 
-    .phone-buttons button {
-        font-size: clamp(14px, 3vw, 16px);
-        padding: 12px 16px;
-    }
 }
 
 /* Small phones and iPhone SE */
@@ -1952,21 +1958,8 @@ body.main-menu #scene-container {
         margin-bottom: 20px;
     }
 
-    .phone-ui {
-        width: min(95vw, 300px);
-        height: min(80vh, 520px);
-    }
 
-    .phone-buttons {
-        gap: 12px;
-        margin-top: 40px;
-        width: 75%;
-    }
 
-    .phone-buttons button {
-        font-size: clamp(13px, 3vw, 15px);
-        padding: 10px 14px;
-    }
 
     #main-menu-content {
         width: 95%;
@@ -2044,10 +2037,6 @@ body.main-menu #scene-container {
         padding: 6px 10px;
     }
 
-    .phone-ui {
-        width: min(50vw, 320px);
-        height: min(90vh, 450px);
-    }
 }
 
 @media (max-width: 1024px) and (orientation: landscape) {
@@ -2059,10 +2048,6 @@ body.main-menu #scene-container {
         width: min(95%, calc(var(--app-height, 100vh) * 16 / 9));
     }
 
-    .phone-ui {
-        width: min(58vw, 520px);
-        height: min(92vh, 840px);
-    }
 }
 
 /* iPhone X, 11, 12, 13, 14 with notch */
@@ -2206,22 +2191,8 @@ body.main-menu #scene-container {
     height: 100%;
 }
 
-.phone-ui {
-    width: min(72vw, 620px);
-    height: min(94vh, 980px);
-}
 
-.phone-buttons {
-    width: 63%;
-    margin-top: 95px;
-    gap: 20px;
-}
 
-.phone-buttons button {
-    font-size: clamp(18px, 2vw, 22px);
-    padding: clamp(14px, 2vw, 20px) clamp(18px, 2vw, 28px);
-    letter-spacing: 1px;
-}
 
 @media (max-width: 768px) {
     #dialogue-box {
@@ -2247,20 +2218,8 @@ body.main-menu #scene-container {
         height: 96%;
     }
 
-    .phone-ui {
-        width: min(95vw, 380px);
-        height: min(92vh, 640px);
-    }
 
-    .phone-buttons {
-        width: 72%;
-        margin-top: 64px;
-        gap: 14px;
-    }
 
-    .phone-buttons button {
-        font-size: clamp(14px, 3.4vw, 18px);
-    }
 }
 
 @media (max-width: 768px) {
@@ -2293,59 +2252,16 @@ body.main-menu #scene-container {
 }
 
 /* ===== PHONE PRECISION HOTFIX: SPEECH + CHOICE + PAUSE MENU ===== */
-.phone-ui {
-    width: min(78vw, 560px);
-    height: min(94vh, 900px);
-}
 
-.phone-buttons {
-    top: 34%;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 52%;
-    height: 46%;
-    max-width: 280px;
-    margin-top: 0;
-    justify-content: space-between;
-    gap: 0;
-}
 
-.phone-buttons button {
-    min-height: 44px;
-    padding: clamp(10px, 1.5vh, 15px) clamp(12px, 1.8vw, 20px);
-    font-size: clamp(14px, 1.8vw, 19px);
-    border-radius: 10px;
-}
 
 @media (max-width: 768px) {
-    .phone-ui {
-        width: min(90vw, 370px);
-        height: min(88vh, 620px);
-    }
 
-    .phone-buttons {
-        top: 34.5%;
-        width: 54%;
-        height: 45%;
-    }
 
-    .phone-buttons button {
-        font-size: clamp(13px, 3.1vw, 16px);
-        padding: clamp(8px, 1.6vh, 12px) clamp(10px, 2.6vw, 16px);
-    }
 }
 
 @media (max-width: 480px) {
-    .phone-ui {
-        width: min(94vw, 330px);
-        height: min(86vh, 560px);
-    }
 
-    .phone-buttons {
-        top: 34.5%;
-        width: 56%;
-        height: 45%;
-    }
 }
 
 /* ===== SMALL SCREEN ADJUSTMENTS ===== */
@@ -2402,48 +2318,13 @@ body.main-menu #scene-container {
 /* ===== MOBILE COMIC LAYOUT TUNING (2026-02) ===== */
 @media (max-width: 1024px) {
     /* Phone pause menu buttons sized to stay inside phone screen */
-    .phone-ui {
-        width: min(70vw, 340px);
-        height: min(86vh, 580px);
-    }
 
-    .phone-buttons {
-        top: 35.5%;
-        width: 44%;
-        max-width: 150px;
-        height: 40%;
-        gap: clamp(6px, 1.1vh, 10px);
-        justify-content: flex-start;
-    }
 
-    .phone-buttons button {
-        min-height: 44px;
-        padding: clamp(6px, 0.95vh, 9px) clamp(8px, 1.3vw, 12px);
-        font-size: clamp(10px, 1.2vw, 13px);
-        line-height: 1.1;
-        border-width: 1px;
-        border-radius: 6px;
-        letter-spacing: 0.4px;
-    }
 }
 
 @media (max-width: 640px) {
-    .phone-ui {
-        width: min(78vw, 300px);
-        height: min(84vh, 500px);
-    }
 
-    .phone-buttons {
-        width: 45%;
-        max-width: 126px;
-        top: 35.6%;
-        height: 40%;
-    }
 
-    .phone-buttons button {
-        font-size: clamp(9px, 2.5vw, 11px);
-        padding: 6px 7px;
-    }
 }
 
 /* ===== DIALOGUE VIEWPORT PLACEMENT FIX (desktop + mobile parity) ===== */
@@ -2482,26 +2363,8 @@ body.main-menu #scene-container {
         font-size: clamp(13px, 2.2vw, 17px) !important;
     }
 
-    .phone-ui {
-        width: min(88vw, 380px) !important;
-        height: min(82vh, 600px) !important;
-    }
 
-    .phone-buttons {
-        width: 72% !important;
-        top: 23% !important;
-        left: 50% !important;
-        transform: translateX(-50%) !important;
-        margin-top: 0 !important;
-        gap: clamp(10px, 1.6vh, 14px) !important;
-    }
 
-    .phone-buttons button {
-        min-height: clamp(44px, 6.2vh, 56px);
-        border-radius: 12px;
-        font-size: clamp(14px, 2.8vw, 18px) !important;
-        padding: clamp(10px, 1.4vh, 14px) clamp(10px, 2vw, 14px) !important;
-    }
 }
 
 @media (max-width: 768px) {
@@ -2541,15 +2404,7 @@ body.main-menu #scene-container {
         height: min(82vh, 560px) !important;
     }
 
-    .phone-ui {
-        width: min(90vw, 340px) !important;
-        height: min(80vh, 540px) !important;
-    }
 
-    .phone-buttons {
-        width: 74% !important;
-        top: 24% !important;
-    }
 }
 
 /* ===== DIALOGUE SYSTEM — CONSOLIDATED RESPONSIVE RULES ===== */
