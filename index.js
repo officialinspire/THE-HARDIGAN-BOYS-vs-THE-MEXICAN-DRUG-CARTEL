@@ -2601,6 +2601,12 @@ function renderInventory() {
 }
 
 function showItemInfo(itemId) {
+    // Clicking the conspiracy notebook in inventory opens the notebook overlay
+    if (itemId === 'conspiracy_notebook') {
+        document.getElementById('inventory-overlay').classList.add('hidden');
+        notebook.show();
+        return;
+    }
     const itemName = itemId.replace(/_/g, ' ').toUpperCase();
     const infoText = getItemDescription(itemId);
     alert(`${itemName}\n\n${infoText}`);
@@ -4540,19 +4546,19 @@ const sceneRenderer = {
         // --- Vertical: place bubble ABOVE the character's head ---
         const headTop = charRect.top - containerRect.top;
         const minTopMargin = containerRect.height * 0.06; // Below HUD bar
-        const idealGap = isMobile ? 8 : 14; // Gap between bubble bottom and character head
+        const idealGap = isMobile ? 4 : 10; // Smaller gap on mobile
 
         let topPx = headTop - boxRect.height - idealGap;
 
-        // If bubble goes above HUD, push it down and overlap character slightly
+        // If bubble goes above HUD, push it down but keep it above character center
         if (topPx < minTopMargin) {
             topPx = minTopMargin;
         }
 
-        // On very small screens, if the bubble would cover more than 60% of the viewport,
+        // On very small screens, if the bubble would cover more than 35% of the viewport,
         // position it at a fixed top percentage instead
-        if (isSmallPhone && boxRect.height > containerRect.height * 0.4) {
-            topPx = containerRect.height * 0.08;
+        if (isSmallPhone && boxRect.height > containerRect.height * 0.35) {
+            topPx = containerRect.height * 0.06;
         }
 
         // --- Horizontal: align bubble so the tail points at the character ---
@@ -4565,24 +4571,21 @@ const sceneRenderer = {
         let leftPx;
 
         if (zoneName.startsWith('left')) {
-            // LEFT-SIDE character: bubble sits to the upper-right of character
-            // Tail (right-pointing) should be near the character's head
-            // Position so ~20-30% of bubble overlaps above the character horizontally
-            const tailTargetX = charCenterX + charWidth * 0.15;
-            leftPx = tailTargetX - bubbleWidth * 0.18; // Tail is ~18% from left edge of bubble
+            // LEFT-SIDE character: bubble to upper-right, tail points down-left at character
+            const tailTargetX = charCenterX + charWidth * 0.2;
+            leftPx = tailTargetX - bubbleWidth * 0.15;
 
-            // On mobile, bias toward center to avoid clipping
+            // On mobile, keep it tighter to the character
             if (isMobile) {
-                leftPx = Math.max(leftPx, charCenterX - bubbleWidth * 0.1);
+                leftPx = Math.max(leftPx, charCenterX - bubbleWidth * 0.05);
             }
         } else if (zoneName.startsWith('right')) {
-            // RIGHT-SIDE character: bubble sits to the upper-left of character
-            // Tail (left-pointing) should be near the character's head
-            const tailTargetX = charCenterX - charWidth * 0.15;
-            leftPx = tailTargetX - bubbleWidth * 0.82; // Tail is ~82% from left edge of bubble
+            // RIGHT-SIDE character: bubble to upper-left, tail points down-right at character
+            const tailTargetX = charCenterX - charWidth * 0.2;
+            leftPx = tailTargetX - bubbleWidth * 0.85;
 
             if (isMobile) {
-                leftPx = Math.min(leftPx, charCenterX - bubbleWidth * 0.9);
+                leftPx = Math.min(leftPx, charCenterX - bubbleWidth * 0.95);
             }
         } else {
             // CENTER: center the bubble above character
@@ -4672,10 +4675,11 @@ const sceneRenderer = {
         const contentEl = document.getElementById('dialogue-content');
         if (!textEl || !contentEl) return;
 
-        const defaultTextSize = textEl.classList.contains('choice-text') ? 14 : 13;
-        const minTextSize = 10;
-        const defaultSpeakerSize = speakerEl?.classList.contains('choice-speaker') ? 18 : 16;
-        const minSpeakerSize = 12;
+        const isSmallPhone = window.matchMedia('(max-width: 640px)').matches;
+        const defaultTextSize = isSmallPhone ? 10 : (textEl.classList.contains('choice-text') ? 12 : 11);
+        const minTextSize = 8;
+        const defaultSpeakerSize = isSmallPhone ? 11 : (speakerEl?.classList.contains('choice-speaker') ? 14 : 12);
+        const minSpeakerSize = 9;
 
         textEl.style.fontSize = `${defaultTextSize}px`;
         textEl.style.lineHeight = '1.25';
@@ -6097,9 +6101,18 @@ function setupUIHandlers() {
         inventory.show();
     });
     
-    // Notebook button
+    // Notebook button - only opens if the notebook has been collected from the scene
     document.getElementById('btn-notebook').addEventListener('click', () => {
         SFXGenerator.playButtonClick();
+        if (!inventory.has('conspiracy_notebook')) {
+            // Notebook not yet found - show a hint
+            sceneRenderer.showDialogue({
+                speaker: 'NARRATION',
+                text: "You haven't found anything to write in yet...",
+                next: 'NEXT_DIALOGUE'
+            });
+            return;
+        }
         notebook.show();
     });
     
