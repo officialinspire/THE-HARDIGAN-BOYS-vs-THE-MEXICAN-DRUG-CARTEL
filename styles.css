@@ -223,6 +223,27 @@ button:active,
 }
 
 /* ===== BACKGROUND IMAGE ===== */
+
+/* Cinematic vignette overlay — always on, subtle */
+#scene-container::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 3; /* Above characters, below HUD */
+    pointer-events: none;
+    background: radial-gradient(
+        ellipse at center,
+        transparent 50%,
+        rgba(0, 0, 0, 0.15) 80%,
+        rgba(0, 0, 0, 0.4) 100%
+    );
+}
+
+/* Disable vignette on main menu */
+body.main-menu #scene-container::after {
+    display: none;
+}
+
 #scene-background {
     position: absolute;
     top: 0;

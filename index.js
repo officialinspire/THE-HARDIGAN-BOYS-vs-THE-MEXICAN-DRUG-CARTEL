@@ -209,6 +209,10 @@ const SFXGenerator = {
     }
 };
 
+const DEBUG = window.location.hostname === 'localhost' ||
+              window.location.hostname === '127.0.0.1' ||
+              window.location.search.includes('debug=true');
+
 // ===== GLOBAL GAME STATE =====
 const gameState = {
     currentSceneId: 'S0_MAIN_MENU',
@@ -1576,6 +1580,28 @@ const Dev = {
 
         toggle.checked = this.toolsEnabled;
 
+        // FPS counter — only active in dev mode
+        if (Dev.enabled && !document.getElementById('dev-fps')) {
+            let frameCount = 0;
+            let lastFpsTime = performance.now();
+            const fpsEl = document.createElement('div');
+            fpsEl.id = 'dev-fps';
+            fpsEl.style.cssText = 'position:fixed;top:4px;left:4px;z-index:13000;color:#0f0;font:12px monospace;background:rgba(0,0,0,0.7);padding:2px 6px;border-radius:3px;pointer-events:none;';
+            document.body.appendChild(fpsEl);
+
+            const updateFps = () => {
+                frameCount++;
+                const now = performance.now();
+                if (now - lastFpsTime >= 1000) {
+                    fpsEl.textContent = `${frameCount} FPS`;
+                    frameCount = 0;
+                    lastFpsTime = now;
+                }
+                if (Dev.enabled) requestAnimationFrame(updateFps);
+            };
+            requestAnimationFrame(updateFps);
+        }
+
         if (!this.listenersBound) {
             this.listenersBound = true;
 
@@ -2367,7 +2393,7 @@ const saveSystem = {
             timestamp: Date.now()
         };
         localStorage.setItem(this.SAVE_KEY, JSON.stringify(saveData));
-        console.log('Game saved successfully');
+        if (DEBUG) console.log('Game saved');
         return true;
     },
     
@@ -2380,7 +2406,7 @@ const saveSystem = {
                 gameState.inventory = data.inventory || [];
                 gameState.notebook = data.notebook || [];
                 gameState.flags = { ...gameState.flags, ...data.flags };
-                console.log('Game loaded successfully');
+                if (DEBUG) console.log('Game loaded');
                 return true;
             } catch (err) {
                 console.error('Failed to load save:', err);
@@ -4066,7 +4092,7 @@ const sceneRenderer = {
                     // Debug: log tap position in native image coordinates
                     if (gameState.settings.showHotspots) {
                         const nativePoint = positioningSystem.clientToNative(touch.clientX, touch.clientY);
-                        if (nativePoint) {
+                        if (nativePoint && DEBUG) {
                             const imgX = Math.round(nativePoint.x);
                             const imgY = Math.round(nativePoint.y);
                             console.log(`[Hotspot Debug] Tap on "${hotspot.id || hotspot.label}" → native image coords: (${imgX}, ${imgY}) | screen: (${Math.round(nativePoint.localX)}, ${Math.round(nativePoint.localY)})`);
@@ -4077,7 +4103,7 @@ const sceneRenderer = {
                 // Debug: log click position in native image coordinates
                 if (e.type === 'click' && gameState.settings.showHotspots) {
                     const nativePoint = positioningSystem.clientToNative(e.clientX, e.clientY);
-                    if (nativePoint) {
+                    if (nativePoint && DEBUG) {
                         const imgX = Math.round(nativePoint.x);
                         const imgY = Math.round(nativePoint.y);
                         console.log(`[Hotspot Debug] Click on "${hotspot.id || hotspot.label}" → native image coords: (${imgX}, ${imgY}) | screen: (${Math.round(nativePoint.localX)}, ${Math.round(nativePoint.localY)})`);
@@ -4129,7 +4155,14 @@ const sceneRenderer = {
 
             // Call onShow callback if it exists (for character slide-ins, etc.)
             if (dialogueEntry.onShow) {
-                dialogueEntry.onShow();
+                try {
+                    dialogueEntry.onShow();
+                } catch (error) {
+                    errorLogger.log('dialogue-onShow', error, {
+                        sceneId: gameState.currentSceneId,
+                        speaker: dialogueEntry.speaker
+                    });
+                }
             }
 
             const dialogueBox = document.getElementById('dialogue-box');
@@ -6137,6 +6170,27 @@ function setupUIHandlers() {
             e.target.closest('.overlay').classList.add('hidden');
         });
     });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            // Close the topmost visible overlay
+            const overlays = ['settings-overlay', 'inventory-overlay', 'notebook-overlay', 'pause-menu'];
+            for (const id of overlays) {
+                const el = document.getElementById(id);
+                if (el && !el.classList.contains('hidden')) {
+                    SFXGenerator.playButtonClick();
+                    el.classList.add('hidden');
+                    // If closing pause menu, resume music
+                    if (id === 'pause-menu') {
+                        const currentScene = SCENES[gameState.currentSceneId];
+                        if (currentScene?.music) audioManager.playMusic(currentScene.music);
+                    }
+                    e.preventDefault();
+                    return;
+                }
+            }
+        }
+    });
     
     // Music volume slider
     const musicVol = document.getElementById('music-volume');
@@ -6260,7 +6314,7 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
         if (!gameState.settings.showHotspots) return;
         const rect = positioningSystem.getBackgroundRect();
         const nativePoint = positioningSystem.clientToNative(e.clientX, e.clientY);
-        if (!rect || !nativePoint) return;
+        if (!rect || !nativePoint || !DEBUG) return;
         const imgX = Math.round(nativePoint.x);
         const imgY = Math.round(nativePoint.y);
         const pctX = ((nativePoint.x / positioningSystem.REF_WIDTH) * 100).toFixed(1);
