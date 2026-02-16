@@ -4338,7 +4338,7 @@ const sceneRenderer = {
                 }
             } else if (dialogueEntry.next) {
                 continueBtn.classList.remove('hidden');
-                continueBtn.textContent = '▶';
+                continueBtn.textContent = 'continue';
                 continueBtn.setAttribute('aria-label', 'Continue dialogue');
                 continueBtn.onclick = () => {
                     if (this.isTyping) {
