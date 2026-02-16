@@ -4241,10 +4241,8 @@ const sceneRenderer = {
                 speaker.textContent = dialogueEntry.speaker;
 
                 this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
-                if (!dialogueBox.dataset.tail) {
-                    dialogueBox.dataset.tail = isLeft ? 'left' : 'right';
-                }
-                this._applyDialogueBubbleTail(dialogueBox);
+                dialogueBox.dataset.tail = isLeft ? 'left' : 'right';
+                this._applyDialogueBubbleTail(dialogueBox, pos);
             }
 
             const useBubbleLayout = Boolean(dialogueEntry.bubbleLayout) && (isNarration || isChoice);
@@ -4424,9 +4422,10 @@ const sceneRenderer = {
         if (!container) return;
         const containerRect = container.getBoundingClientRect();
         const boxRect = dialogueBox.getBoundingClientRect();
-        const marginX = containerRect.width * 0.02;
+        const isMobile = window.matchMedia('(max-width: 1024px)').matches;
+        const marginX = containerRect.width * (isMobile ? 0.015 : 0.02);
         const minTop = containerRect.top + containerRect.height * 0.06;
-        const maxBottom = containerRect.bottom - containerRect.height * 0.02;
+        const maxBottom = containerRect.bottom - containerRect.height * (isMobile ? 0.01 : 0.02);
 
         if (preserveCentered) {
             const centeredLeft = (containerRect.width - boxRect.width) / 2;
@@ -4542,26 +4541,31 @@ const sceneRenderer = {
         const boxRect = dialogueBox.getBoundingClientRect();
         const isMobile = window.matchMedia('(max-width: 1024px)').matches;
         const isSmallPhone = window.matchMedia('(max-width: 640px)').matches;
+        const isLandscape = window.matchMedia('(orientation: landscape)').matches;
 
         // --- Vertical: place bubble ABOVE the character's head ---
         const headTop = charRect.top - containerRect.top;
         const minTopMargin = containerRect.height * 0.06; // Below HUD bar
-        const idealGap = isMobile ? 4 : 10; // Smaller gap on mobile
+        const idealGap = isMobile ? 2 : 8; // Tighter gap on mobile
 
         let topPx = headTop - boxRect.height - idealGap;
 
-        // If bubble goes above HUD, push it down but keep it above character center
+        // If bubble goes above HUD, push it down but keep above character head
         if (topPx < minTopMargin) {
             topPx = minTopMargin;
         }
 
-        // On very small screens, if the bubble would cover more than 35% of the viewport,
-        // position it at a fixed top percentage instead
-        if (isSmallPhone && boxRect.height > containerRect.height * 0.35) {
+        // On very small screens, if bubble would cover >25% of viewport, cap it
+        if (isSmallPhone && boxRect.height > containerRect.height * 0.25) {
             topPx = containerRect.height * 0.06;
         }
 
-        // --- Horizontal: align bubble so the tail points at the character ---
+        // In landscape with tight vertical space, keep bubble at top
+        if (isMobile && isLandscape && boxRect.height > containerRect.height * 0.30) {
+            topPx = containerRect.height * 0.06;
+        }
+
+        // --- Horizontal: place bubble to the upper-left/right of character head ---
         const charCenterX = (charRect.left + charRect.right) / 2 - containerRect.left;
         const charWidth = charRect.width;
         const bubbleWidth = boxRect.width;
@@ -4571,21 +4575,24 @@ const sceneRenderer = {
         let leftPx;
 
         if (zoneName.startsWith('left')) {
-            // LEFT-SIDE character: bubble to upper-right, tail points down-left at character
-            const tailTargetX = charCenterX + charWidth * 0.2;
-            leftPx = tailTargetX - bubbleWidth * 0.15;
+            // LEFT-SIDE character: bubble above and slightly to the right of head
+            // Tail should point down-left toward the character
+            const charRightEdge = charRect.right - containerRect.left;
+            leftPx = charRightEdge - bubbleWidth * 0.3;
 
-            // On mobile, keep it tighter to the character
+            // On mobile, offset further right so bubble doesn't cover character
             if (isMobile) {
-                leftPx = Math.max(leftPx, charCenterX - bubbleWidth * 0.05);
+                leftPx = Math.max(charCenterX, charRightEdge - bubbleWidth * 0.2);
             }
         } else if (zoneName.startsWith('right')) {
-            // RIGHT-SIDE character: bubble to upper-left, tail points down-right at character
-            const tailTargetX = charCenterX - charWidth * 0.2;
-            leftPx = tailTargetX - bubbleWidth * 0.85;
+            // RIGHT-SIDE character: bubble above and slightly to the left of head
+            // Tail should point down-right toward the character
+            const charLeftEdge = charRect.left - containerRect.left;
+            leftPx = charLeftEdge - bubbleWidth * 0.7;
 
+            // On mobile, offset further left so bubble doesn't cover character
             if (isMobile) {
-                leftPx = Math.min(leftPx, charCenterX - bubbleWidth * 0.95);
+                leftPx = Math.min(charCenterX - bubbleWidth, charLeftEdge - bubbleWidth * 0.8);
             }
         } else {
             // CENTER: center the bubble above character
@@ -4676,13 +4683,30 @@ const sceneRenderer = {
         if (!textEl || !contentEl) return;
 
         const isSmallPhone = window.matchMedia('(max-width: 640px)').matches;
-        const defaultTextSize = isSmallPhone ? 10 : (textEl.classList.contains('choice-text') ? 12 : 11);
-        const minTextSize = 8;
-        const defaultSpeakerSize = isSmallPhone ? 11 : (speakerEl?.classList.contains('choice-speaker') ? 14 : 12);
-        const minSpeakerSize = 9;
+        const isVerySmall = window.matchMedia('(max-width: 480px)').matches;
+        const isLandscape = window.matchMedia('(orientation: landscape)').matches;
+
+        let defaultTextSize, defaultSpeakerSize;
+
+        if (isVerySmall) {
+            defaultTextSize = textEl.classList.contains('choice-text') ? 8 : 7;
+            defaultSpeakerSize = speakerEl?.classList.contains('choice-speaker') ? 9 : 8;
+        } else if (isSmallPhone) {
+            defaultTextSize = textEl.classList.contains('choice-text') ? 9 : 8;
+            defaultSpeakerSize = speakerEl?.classList.contains('choice-speaker') ? 10 : 9;
+        } else if (isLandscape) {
+            defaultTextSize = textEl.classList.contains('choice-text') ? 9 : 8;
+            defaultSpeakerSize = speakerEl?.classList.contains('choice-speaker') ? 10 : 9;
+        } else {
+            defaultTextSize = textEl.classList.contains('choice-text') ? 10 : 9;
+            defaultSpeakerSize = speakerEl?.classList.contains('choice-speaker') ? 12 : 10;
+        }
+
+        const minTextSize = isVerySmall ? 6 : 7;
+        const minSpeakerSize = isVerySmall ? 7 : 8;
 
         textEl.style.fontSize = `${defaultTextSize}px`;
-        textEl.style.lineHeight = '1.25';
+        textEl.style.lineHeight = isSmallPhone ? '1.15' : '1.2';
         if (speakerEl) {
             speakerEl.style.fontSize = `${defaultSpeakerSize}px`;
             speakerEl.style.lineHeight = '1.1';
