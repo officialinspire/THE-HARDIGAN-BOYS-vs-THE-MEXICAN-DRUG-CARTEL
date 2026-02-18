@@ -4194,7 +4194,7 @@ const sceneRenderer = {
             dialogueBox.classList.add('dialogue-positioning');
 
             // Clear previous position classes and inline overrides from bounds clamping
-            dialogueBox.classList.remove('dialogue-left', 'dialogue-right', 'dialogue-center', 'dialogue-offscreen');
+            dialogueBox.classList.remove('dialogue-left', 'dialogue-right', 'dialogue-center', 'dialogue-offscreen', 'dialogue-anchored');
             dialogueBox.style.left = '';
             dialogueBox.style.right = '';
             dialogueBox.style.top = '';
@@ -4243,6 +4243,7 @@ const sceneRenderer = {
                 this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
                 dialogueBox.dataset.tail = isLeft ? 'left' : 'right';
                 this._applyDialogueBubbleTail(dialogueBox, pos);
+                dialogueBox.classList.add('dialogue-anchored');
             }
 
             const useBubbleLayout = Boolean(dialogueEntry.bubbleLayout) && (isNarration || isChoice);
@@ -4272,8 +4273,16 @@ const sceneRenderer = {
             }
 
             const dialogueText = dialogueEntry.text || '';
-            const fullHeight = this._measureDialogueTextHeight(text, dialogueText);
-            text.style.minHeight = fullHeight > 0 ? `${fullHeight}px` : '';
+
+            // Fit text into stable bubble container (speech-bubble mode only, all screen sizes)
+            this._fitSpeechBubbleText(dialogueBox, dialogueText);
+
+            // Re-anchor position now that box size is final
+            if (!isNarration && !isChoice) {
+                const pos = this.normalizeZoneName(dialogueEntry.position || 'left');
+                this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
+            }
+            this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
 
             this.typeText(text, dialogueText, {
                 onFinish: () => this._updateDialogueOverflowIndicator(text)
@@ -4676,6 +4685,8 @@ const sceneRenderer = {
     _fitMobileDialogueText(dialogueBox) {
         // Run on any screen under 1024px, not just 768px
         if (!window.matchMedia('(max-width: 1024px)').matches || !dialogueBox) return;
+        // Speech-bubble mode is handled by _fitSpeechBubbleText
+        if (dialogueBox.dataset.layoutPanel === 'speech-bubble') return;
 
         const textEl = document.getElementById('dialogue-text');
         const speakerEl = document.getElementById('dialogue-speaker');
@@ -4735,6 +4746,47 @@ const sceneRenderer = {
         }
     },
 
+    _fitSpeechBubbleText(dialogueBox, fullText) {
+        if (!dialogueBox) return;
+        if (dialogueBox.dataset.layoutPanel !== 'speech-bubble') return;
+
+        const textEl = document.getElementById('dialogue-text');
+        const speakerEl = document.getElementById('dialogue-speaker');
+        const contentEl = document.getElementById('dialogue-content');
+        if (!textEl || !contentEl) return;
+
+        // Set full text temporarily for measurement (typewriter will reuse computed sizes)
+        const prev = textEl.textContent;
+        textEl.textContent = fullText || '';
+
+        // Reset to CSS defaults so repeated calls don't keep shrinking
+        textEl.style.fontSize = '';
+        if (speakerEl) speakerEl.style.fontSize = '';
+
+        const minText = 10;     // floor: readable on desktop + Android
+        const minSpeaker = 11;
+
+        let guard = 0;
+        while (guard < 18 && (textEl.scrollHeight > textEl.clientHeight || contentEl.scrollHeight > contentEl.clientHeight)) {
+            guard++;
+            const csT = parseFloat(getComputedStyle(textEl).fontSize) || 16;
+            const csS = speakerEl ? (parseFloat(getComputedStyle(speakerEl).fontSize) || 16) : 0;
+
+            if (csT > minText) textEl.style.fontSize = (csT - 0.5) + 'px';
+            if (speakerEl && csS > minSpeaker && contentEl.scrollHeight > contentEl.clientHeight) {
+                speakerEl.style.fontSize = (csS - 0.5) + 'px';
+            }
+
+            if ((parseFloat(getComputedStyle(textEl).fontSize) <= minText) &&
+                (!speakerEl || parseFloat(getComputedStyle(speakerEl).fontSize) <= minSpeaker)) {
+                break;
+            }
+        }
+
+        // Restore for typewriter (computed sizes stay in place via inline style)
+        textEl.textContent = prev;
+    },
+
     repositionActiveDialogue() {
         const dialogueBox = document.getElementById('dialogue-box');
         if (!dialogueBox || dialogueBox.classList.contains('hidden')) return;
@@ -4747,6 +4799,7 @@ const sceneRenderer = {
         const isChoice = dialogueEntry.speaker === 'CHOICE' || dialogueEntry.speaker === 'FINAL CHOICE';
 
         if (isNarration || isChoice) {
+            dialogueBox.classList.remove('dialogue-anchored');
             this._positionNarrativeDialogue(dialogueBox);
             this._clampDialogueToViewport(dialogueBox, { preserveCentered: true });
             return;
@@ -4774,8 +4827,11 @@ const sceneRenderer = {
         }
 
         const zoneName = this.normalizeZoneName(dialogueEntry.position || 'left');
+        // Re-fit text first so box height is stable before positioning
+        this._fitSpeechBubbleText(dialogueBox, dialogueEntry.text || '');
         this._positionDialogueNearCharacter(dialogueBox, zoneName, dialogueEntry);
         this._applyDialogueBubbleTail(dialogueBox, zoneName);
+        dialogueBox.classList.add('dialogue-anchored');
         this._clampDialogueToViewport(dialogueBox);
     },
 
