@@ -4625,15 +4625,22 @@ const sceneRenderer = {
         const dialogueBubble = document.getElementById('dialogue-bubble');
         if (!dialogueBox || !dialogueBubble) return;
 
-        const isLeftSpeaker = typeof zoneName === 'string'
-            ? zoneName.startsWith('left')
-            : dialogueBox.dataset.tail !== 'left';
+        // Determine which SIDE the tail should be on (left tail for left speaker, right tail for right speaker)
+        let tailSide = dialogueBox.dataset.tail || 'left';
 
-        // Right-pointing bubble for left speakers (tail points at them from the right).
-        // Left-pointing bubble for right speakers (tail points at them from the left).
-        dialogueBubble.src = isLeftSpeaker
-            ? './assets/menu_dialogue/dialogue-bubble-large-right.png'
-            : './assets/menu_dialogue/dialogue-bubble-large-left.png';
+        if (typeof zoneName === 'string') {
+            if (zoneName.startsWith('left')) tailSide = 'left';
+            if (zoneName.startsWith('right')) tailSide = 'right';
+        }
+
+        dialogueBox.dataset.tail = tailSide;
+
+        // Correct mapping:
+        // - left tail => dialogue-bubble-large-left.png
+        // - right tail => dialogue-bubble-large-right.png
+        dialogueBubble.src = (tailSide === 'left')
+            ? './assets/menu_dialogue/dialogue-bubble-large-left.png'
+            : './assets/menu_dialogue/dialogue-bubble-large-right.png';
     },
 
     _positionDialogueTopCenter(dialogueBox) {
