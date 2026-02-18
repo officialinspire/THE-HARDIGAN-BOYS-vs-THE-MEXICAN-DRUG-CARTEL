@@ -4695,6 +4695,63 @@ const sceneRenderer = {
         return !!dialogueBox && dialogueBox.dataset?.layoutPanel === 'speech-bubble';
     },
 
+    _measureSpeechBubbleFit(dialogueBox, candidateText) {
+        const textEl = document.getElementById('dialogue-text');
+        const contentEl = document.getElementById('dialogue-content');
+        if (!textEl || !contentEl) return { fits: true };
+
+        const prev = textEl.textContent;
+        textEl.textContent = candidateText || '';
+
+        const fitsNow = !(textEl.scrollHeight > textEl.clientHeight || contentEl.scrollHeight > contentEl.clientHeight);
+
+        textEl.textContent = prev;
+        return { fits: fitsNow };
+    },
+
+    _splitIntoBubblePages(dialogueBox, fullText, maxPages = 3) {
+        const txt = String(fullText || '').replace(/\s+/g, ' ').trim();
+        if (!txt) return [''];
+
+        // Prefer sentence-ish splits
+        let chunks = txt.split(/(?<=[.!?])\s+/);
+
+        // fallback: word chunking
+        if (chunks.length === 1) {
+            const words = txt.split(' ');
+            chunks = [];
+            for (let i = 0; i < words.length; i += 12) {
+                chunks.push(words.slice(i, i + 12).join(' '));
+            }
+        }
+
+        const pages = [];
+        let cur = '';
+
+        const ok = (s) => this._measureSpeechBubbleFit(dialogueBox, s).fits;
+
+        for (let i = 0; i < chunks.length; i++) {
+            const next = cur ? (cur + ' ' + chunks[i]) : chunks[i];
+
+            if (ok(next)) {
+                cur = next;
+                continue;
+            }
+
+            if (cur) pages.push(cur);
+            cur = chunks[i];
+
+            if (pages.length >= maxPages - 1) {
+                const rest = [cur].concat(chunks.slice(i + 1)).join(' ').trim();
+                pages.push(rest);
+                return pages.filter(Boolean);
+            }
+        }
+
+        if (cur) pages.push(cur);
+        return pages.filter(Boolean);
+    },
+
     _setBubblePagingUI(dialogueBox, enabled) {
         const hint = document.getElementById('bubble-continue-hint');
         const ind = document.getElementById('bubble-page-indicator');
