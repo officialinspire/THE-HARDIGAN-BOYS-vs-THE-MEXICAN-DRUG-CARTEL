@@ -3017,6 +3017,13 @@ const sceneRenderer = {
     validZones: new Set(['left', 'left-2', 'center', 'right-2', 'right']),
     isTyping: false,
 
+    // Bubble pagination state
+    _bubblePages: null,
+    _bubblePageIndex: 0,
+    _bubblePagingActive: false,
+    _bubbleFullText: '',
+    _bubbleTypingDone: true,
+
     _bindDialogueTapHandlers() {
         const dialogueBox = document.getElementById('dialogue-box');
         if (!dialogueBox || dialogueBox.dataset.tapHandlerBound === 'true') return;
@@ -4682,6 +4689,34 @@ const sceneRenderer = {
         } else {
             textEl.classList.remove('has-overflow');
         }
+    },
+
+    _isSpeechBubble(dialogueBox) {
+        return !!dialogueBox && dialogueBox.dataset?.layoutPanel === 'speech-bubble';
+    },
+
+    _setBubblePagingUI(dialogueBox, enabled) {
+        const hint = document.getElementById('bubble-continue-hint');
+        const ind = document.getElementById('bubble-page-indicator');
+        if (!dialogueBox) return;
+        if (enabled) {
+            dialogueBox.classList.add('is-paginated');
+            if (hint) hint.style.display = 'block';
+        } else {
+            dialogueBox.classList.remove('is-paginated');
+            if (hint) hint.style.display = 'none';
+            if (ind) ind.textContent = '';
+        }
+    },
+
+    _updateBubblePageIndicator() {
+        const ind = document.getElementById('bubble-page-indicator');
+        if (!ind) return;
+        if (!this._bubblePagingActive || !this._bubblePages?.length) {
+            ind.textContent = '';
+            return;
+        }
+        ind.textContent = `${this._bubblePageIndex + 1}/${this._bubblePages.length}`;
     },
 
     _fitMobileDialogueText(dialogueBox) {
