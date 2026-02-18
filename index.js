@@ -2743,6 +2743,32 @@ const positioningSystem = {
         };
     },
 
+    getDialogueSafeRect(padPx = 12) {
+        const rect = this.getBackgroundRect();
+        const container = document.getElementById('scene-container');
+        if (!container) return null;
+
+        // Fallback if background rect isn't available yet
+        if (!rect) {
+            return {
+                left: padPx,
+                top: padPx,
+                right: container.clientWidth - padPx,
+                bottom: container.clientHeight - padPx
+            };
+        }
+
+        const hudPx = this.HUD_TOP * rect.nativeScaleY;
+        const dialoguePx = this.DIALOGUE_BOTTOM * rect.nativeScaleY;
+
+        return {
+            left: rect.offsetX + padPx,
+            right: rect.offsetX + rect.renderedW - padPx,
+            top: rect.offsetY + hudPx + padPx,
+            bottom: rect.offsetY + rect.renderedH - dialoguePx - padPx
+        };
+    },
+
     clientToNative(clientX, clientY) {
         const container = document.getElementById('scene-container');
         if (!container) return null;
