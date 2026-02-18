@@ -4192,6 +4192,10 @@ const sceneRenderer = {
             continueBtn.classList.add('hidden');
             dialogueBox.classList.remove('dialogue-enter', 'dialogue-exit');
             dialogueBox.classList.add('dialogue-positioning');
+            // Make the box layout-visible (but opacity-hidden) before measurements.
+            // .hidden uses display:none !important which makes getBoundingClientRect()
+            // return all-zeros, breaking _fitSpeechBubbleText and positioning logic.
+            dialogueBox.classList.remove('hidden');
 
             // Clear previous position classes and inline overrides from bounds clamping
             dialogueBox.classList.remove('dialogue-left', 'dialogue-right', 'dialogue-center', 'dialogue-offscreen', 'dialogue-anchored');
@@ -4291,7 +4295,6 @@ const sceneRenderer = {
             requestAnimationFrame(() => {
                 this._updateDialogueOverflowIndicator(text);
             });
-            dialogueBox.classList.remove('hidden');
             this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
             Dev.layout.applySavedLayouts();
             this._fitMobileDialogueText(dialogueBox);
