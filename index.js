@@ -4577,74 +4577,46 @@ const sceneRenderer = {
         const containerRect = container.getBoundingClientRect();
         const charRect = characterEl.getBoundingClientRect();
         const boxRect = dialogueBox.getBoundingClientRect();
+
         const isMobile = window.matchMedia('(max-width: 1024px)').matches;
-        const isSmallPhone = window.matchMedia('(max-width: 640px)').matches;
-        const isLandscape = window.matchMedia('(orientation: landscape)').matches;
+        const gap = isMobile ? 2 : 8;
 
-        // --- Vertical: place bubble ABOVE the character's head ---
-        const headTop = charRect.top - containerRect.top;
-        const minTopMargin = containerRect.height * 0.06; // Below HUD bar
-        const idealGap = isMobile ? 2 : 8; // Tighter gap on mobile
+        // Safe placement area (inside rendered background & below HUD)
+        const safe = positioningSystem.getDialogueSafeRect(isMobile ? 10 : 12);
+        if (!safe) return;
 
-        let topPx = headTop - boxRect.height - idealGap;
+        // Anchor point: above character head (scene-container local coords)
+        const anchorX = (charRect.left + charRect.right) / 2 - containerRect.left;
+        const headY = (charRect.top - containerRect.top);
+        let topPx = headY - boxRect.height - gap;
 
-        // If bubble goes above HUD, push it down but keep above character head
-        if (topPx < minTopMargin) {
-            topPx = minTopMargin;
-        }
+        // Decide which tail side to use
+        let tailSide = 'left';
+        if (zoneName.startsWith('right')) tailSide = 'right';
+        if (zoneName.startsWith('left')) tailSide = 'left';
+        dialogueBox.dataset.tail = tailSide;
 
-        // On very small screens, if bubble would cover >25% of viewport, cap it
-        if (isSmallPhone && boxRect.height > containerRect.height * 0.25) {
-            topPx = containerRect.height * 0.06;
-        }
+        // Tail "x" position within the bubble (tuned for your bubble PNGs)
+        // (tail isn't at the extreme corner; it's inset a bit)
+        const TAIL_X_LEFT = 0.14;
+        const TAIL_X_RIGHT = 0.86;
+        const tailX = (tailSide === 'left') ? TAIL_X_LEFT : TAIL_X_RIGHT;
 
-        // In landscape with tight vertical space, keep bubble at top
-        if (isMobile && isLandscape && boxRect.height > containerRect.height * 0.30) {
-            topPx = containerRect.height * 0.06;
-        }
+        // Place bubble so tail aligns near anchorX
+        let leftPx = anchorX - (boxRect.width * tailX);
 
-        // --- Horizontal: place bubble to the upper-left/right of character head ---
-        const charCenterX = (charRect.left + charRect.right) / 2 - containerRect.left;
-        const charWidth = charRect.width;
-        const bubbleWidth = boxRect.width;
-        const viewportPad = containerRect.width * 0.02;
-        const maxLeft = containerRect.width - bubbleWidth - viewportPad;
-
-        let leftPx;
-
-        if (zoneName.startsWith('left')) {
-            // LEFT-SIDE character: bubble above and slightly to the right of head
-            // Tail should point down-left toward the character
-            const charRightEdge = charRect.right - containerRect.left;
-            leftPx = charRightEdge - bubbleWidth * 0.3;
-
-            // On mobile, offset further right so bubble doesn't cover character
-            if (isMobile) {
-                leftPx = Math.max(charCenterX, charRightEdge - bubbleWidth * 0.2);
-            }
-        } else if (zoneName.startsWith('right')) {
-            // RIGHT-SIDE character: bubble above and slightly to the left of head
-            // Tail should point down-right toward the character
-            const charLeftEdge = charRect.left - containerRect.left;
-            leftPx = charLeftEdge - bubbleWidth * 0.7;
-
-            // On mobile, offset further left so bubble doesn't cover character
-            if (isMobile) {
-                leftPx = Math.min(charCenterX - bubbleWidth, charLeftEdge - bubbleWidth * 0.8);
-            }
-        } else {
-            // CENTER: center the bubble above character
-            leftPx = charCenterX - bubbleWidth / 2;
-        }
-
-        // Clamp to viewport bounds
-        leftPx = Math.min(maxLeft, Math.max(viewportPad, leftPx));
+        // Clamp to safe rect
+        leftPx = Math.max(safe.left, Math.min(leftPx, safe.right - boxRect.width));
+        topPx = Math.max(safe.top, Math.min(topPx, safe.bottom - boxRect.height));
 
         dialogueBox.style.left = `${leftPx}px`;
         dialogueBox.style.right = 'auto';
         dialogueBox.style.top = `${topPx}px`;
         dialogueBox.style.bottom = 'auto';
         dialogueBox.style.transform = 'none';
+
+        // Ensure bubble image matches the chosen tail side
+        this._applyDialogueBubbleTail(dialogueBox, zoneName);
     },
 
     _applyDialogueBubbleTail(dialogueBox, zoneName) {
