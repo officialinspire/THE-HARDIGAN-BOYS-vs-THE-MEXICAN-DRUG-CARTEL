@@ -604,18 +604,39 @@ body.main-menu #scene-title {
     transform: translate(-50%, -50%);
 }
 
-/* Mobile portrait: compact speech bubbles above characters */
+/* --- SPEECH BUBBLE: stable comic size (matches example images) --- */
+#dialogue-box[data-layout-panel="speech-bubble"] {
+    width: clamp(320px, 36vw, 560px);
+    max-width: calc(100% - 24px);
+}
+#dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container {
+    height: clamp(150px, 20vh, 260px);
+    min-height: clamp(150px, 20vh, 260px);
+}
+#dialogue-box[data-layout-panel="speech-bubble"] #dialogue-content {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+#dialogue-box[data-layout-panel="speech-bubble"] #dialogue-text {
+    flex: 1;
+    overflow: hidden;      /* never scroll inside bubble */
+}
+
+/* Mobile portrait: keep dialogue positioned above characters */
 @media (max-width: 768px) and (orientation: portrait) {
     #dialogue-box {
         bottom: auto;
-        width: clamp(120px, 28vw, 200px);
-        min-width: 110px;
+    }
+    #dialogue-box[data-layout-panel="speech-bubble"] {
+        width: clamp(280px, 92vw, 520px);
     }
 }
 
 /* Very small screens */
 @media (max-width: 480px) {
-    #dialogue-box {
+    #dialogue-box:not([data-layout-panel="speech-bubble"]) {
         bottom: auto;
         width: clamp(100px, 26vw, 170px);
     }
@@ -897,11 +918,11 @@ body.main-menu #scene-title {
 
 /* Mobile: adjust dialogue box positioning and spacing */
 @media (max-width: 768px) {
-    #dialogue-box.dialogue-left {
+    #dialogue-box.dialogue-left:not(.dialogue-anchored) {
         left: 3%;
     }
 
-    #dialogue-box.dialogue-right {
+    #dialogue-box.dialogue-right:not(.dialogue-anchored) {
         right: 3%;
     }
 
@@ -2140,15 +2161,15 @@ body.main-menu #scene-container {
         object-position: center;
     }
 
-    #dialogue-box {
+    #dialogue-box:not([data-layout-panel="speech-bubble"]) {
         width: min(22%, 200px);
     }
 
-    #dialogue-box.dialogue-left {
+    #dialogue-box.dialogue-left:not(.dialogue-anchored) {
         left: 2%;
     }
 
-    #dialogue-box.dialogue-right {
+    #dialogue-box.dialogue-right:not(.dialogue-anchored) {
         right: 2%;
     }
 
@@ -2352,15 +2373,15 @@ body.main-menu #scene-container {
 
 
 @media (max-width: 768px) {
-    #dialogue-box {
+    #dialogue-box:not([data-layout-panel="speech-bubble"]) {
         width: min(36%, 200px);
     }
 
-    #dialogue-box.dialogue-left {
+    #dialogue-box.dialogue-left:not(.dialogue-anchored) {
         left: 3%;
     }
 
-    #dialogue-box.dialogue-right {
+    #dialogue-box.dialogue-right:not(.dialogue-anchored) {
         right: 3%;
     }
 
