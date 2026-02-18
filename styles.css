@@ -1128,6 +1128,27 @@ body.main-menu #scene-title {
     border-color: rgba(255, 215, 0, 0.5);
 }
 
+/* ===== BUBBLE CONTINUE HINT & PAGE INDICATOR ===== */
+#dialogue-box .bubble-continue-hint{
+  position:absolute;
+  right:18px;
+  bottom:14px;
+  font-size:12px;
+  opacity:0.75;
+  user-select:none;
+  pointer-events:none;
+  display:none;
+  z-index:5;
+}
+#dialogue-box.is-paginated .bubble-continue-hint{ display:block; }
+#dialogue-box .bubble-page-indicator{
+  margin-left:8px;
+  opacity:0.85;
+}
+
+#dialogue-box[data-layout-panel="speech-bubble"]{ cursor:pointer; }
+#dialogue-box[data-layout-panel="speech-bubble"] *{ -webkit-tap-highlight-color: transparent; }
+
 /* ===== OVERLAYS ===== */
 .overlay {
     position: absolute;
