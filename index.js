@@ -4881,6 +4881,46 @@ const sceneRenderer = {
         return pages.filter(Boolean);
     },
 
+    _showBubblePage(dialogueBox, pos, dialogueEntry){
+        if(!this._bubblePages?.length) return;
+
+        const pageText = this._bubblePages[this._bubblePageIndex] || '';
+        const textEl = document.getElementById('dialogue-text');
+
+        // clear immediately
+        if(textEl) textEl.textContent = '';
+
+        // Fit then position
+        if(this._fitSpeechBubbleText) this._fitSpeechBubbleText(dialogueBox, pageText);
+        if(this._positionDialogueNearCharacter) this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
+        if(this._clampDialogueToViewport) this._clampDialogueToViewport(dialogueBox);
+
+        // Track typing state
+        this._bubbleTypingDone = false;
+
+        this.typeText(textEl, pageText, {
+            onFinish: () => {
+                this._bubbleTypingDone = true;
+                this._updateDialogueOverflowIndicator?.(textEl);
+            }
+        });
+    },
+
+    _finishTypewriterInstant(){
+        if(!this._bubblePages?.length) return;
+        const textEl = document.getElementById('dialogue-text');
+        if(!textEl) return;
+
+        // use existing finish mechanism if active
+        if(this.isTyping){
+            this.finishTypeText(textEl);
+        }
+        const pageText = this._bubblePages[this._bubblePageIndex] || '';
+        textEl.textContent = pageText;
+
+        this._bubbleTypingDone = true;
+    },
+
     repositionActiveDialogue() {
         const dialogueBox = document.getElementById('dialogue-box');
         if (!dialogueBox || dialogueBox.classList.contains('hidden')) return;
