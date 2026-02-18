@@ -4461,19 +4461,24 @@ const sceneRenderer = {
         const containerRect = container.getBoundingClientRect();
         const boxRect = dialogueBox.getBoundingClientRect();
         const isMobile = window.matchMedia('(max-width: 1024px)').matches;
-        const marginX = containerRect.width * (isMobile ? 0.015 : 0.02);
-        const minTop = containerRect.top + containerRect.height * 0.06;
-        const maxBottom = containerRect.bottom - containerRect.height * (isMobile ? 0.01 : 0.02);
+
+        const safe = positioningSystem.getDialogueSafeRect(isMobile ? 10 : 12);
+        if (!safe) return;
+
+        const minLeft = safe.left;
+        const maxRight = safe.right;
+        const minTop = safe.top;
+        const maxBottom = safe.bottom;
 
         if (preserveCentered) {
             const centeredLeft = (containerRect.width - boxRect.width) / 2;
             let centeredTop = (containerRect.height - boxRect.height) / 2;
-            centeredTop = Math.max(minTop - containerRect.top, centeredTop);
-            centeredTop = Math.min(maxBottom - containerRect.top - boxRect.height, centeredTop);
+            centeredTop = Math.max(minTop, centeredTop);
+            centeredTop = Math.min(maxBottom - boxRect.height, centeredTop);
 
-            dialogueBox.style.left = `${Math.max(marginX, centeredLeft)}px`;
+            dialogueBox.style.left = `${Math.max(minLeft, centeredLeft)}px`;
             dialogueBox.style.right = 'auto';
-            dialogueBox.style.top = `${Math.max(containerRect.height * 0.06, centeredTop)}px`;
+            dialogueBox.style.top = `${Math.max(minTop, centeredTop)}px`;
             dialogueBox.style.bottom = 'auto';
             dialogueBox.style.transform = 'none';
             return;
@@ -4482,29 +4487,18 @@ const sceneRenderer = {
         let left = boxRect.left - containerRect.left;
         let top = boxRect.top - containerRect.top;
 
-        if (boxRect.left < containerRect.left + marginX) {
-            left = marginX;
-        }
-
-        if (boxRect.right > containerRect.right - marginX) {
-            left = containerRect.width - boxRect.width - marginX;
-        }
-
-        if (boxRect.top < minTop) {
-            top = minTop - containerRect.top;
-        }
-
-        if (boxRect.bottom > maxBottom) {
-            top = maxBottom - containerRect.top - boxRect.height;
-        }
+        if (left < minLeft) left = minLeft;
+        if (left + boxRect.width > maxRight) left = maxRight - boxRect.width;
+        if (top < minTop) top = minTop;
+        if (top + boxRect.height > maxBottom) top = maxBottom - boxRect.height;
 
         const shouldAdjust = Math.abs((boxRect.left - containerRect.left) - left) > 1
             || Math.abs((boxRect.top - containerRect.top) - top) > 1;
 
         if (shouldAdjust) {
-            dialogueBox.style.left = `${Math.max(marginX, left)}px`;
+            dialogueBox.style.left = `${Math.max(minLeft, left)}px`;
             dialogueBox.style.right = 'auto';
-            dialogueBox.style.top = `${Math.max(containerRect.height * 0.06, top)}px`;
+            dialogueBox.style.top = `${Math.max(minTop, top)}px`;
             dialogueBox.style.bottom = 'auto';
             dialogueBox.style.transform = 'none';
         }
