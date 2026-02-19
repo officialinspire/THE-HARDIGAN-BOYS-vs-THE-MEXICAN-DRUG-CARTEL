@@ -242,6 +242,7 @@ const gameState = {
         showHotspots: true
     },
     currentDialogueIndex: 0,
+    currentDialogueEntry: null,
     objectsClicked: new Set(),
     dialogueLock: false,
     actionLock: false,
@@ -3042,29 +3043,44 @@ const sceneRenderer = {
                 return;
             }
 
+            // If paging active, tapping should advance pages (or finish typing)
+            if (this._bubblePagingActive && this._isSpeechBubble(dialogueBox)) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (!this._bubbleTypingDone || this.isTyping) {
+                    this._finishTypewriterInstant();
+                    return;
+                }
+
+                // Next page
+                if (this._bubblePageIndex < this._bubblePages.length - 1) {
+                    this._bubblePageIndex++;
+                    this._updateBubblePageIndicator();
+                    const activeEntry = gameState.currentDialogueEntry || null;
+                    const pos = this.normalizeZoneName((activeEntry?.position) || 'left');
+                    this._showBubblePage(dialogueBox, pos, activeEntry || {});
+                    return;
+                }
+
+                // Last page finished: turn paging off and trigger normal continue behavior
+                this._bubblePagingActive = false;
+                this._setBubblePagingUI(dialogueBox, false);
+
+                // If a continue button exists, click it. Otherwise do your fallback.
+                if (continueBtn && !continueBtn.classList.contains('hidden') && typeof continueBtn.onclick === 'function') {
+                    continueBtn.click();
+                } else {
+                    this._closeDialogueThen(() => this.nextDialogue());
+                }
+                return;
+            }
+
             if (this.isTyping) {
                 e.preventDefault();
                 e.stopPropagation();
                 this.finishTypeText(textEl);
                 return;
-            }
-
-            if (this._bubblePagingActive && this._bubblePages?.length) {
-                e.preventDefault();
-                e.stopPropagation();
-
-                if (!this._bubbleTypingDone) {
-                    this.finishTypeText(textEl);
-                    this._bubbleTypingDone = true;
-                    return;
-                }
-
-                if (this._bubblePageIndex < this._bubblePages.length - 1) {
-                    this._bubblePageIndex += 1;
-                    this._updateBubblePageIndicator();
-                    this._showBubblePage(dialogueBox, dialogueBox?.dataset?.zone || 'left', this._activeDialogueEntry);
-                    return;
-                }
             }
 
             const hasChoices = choicesDiv.children.length > 0;
@@ -3212,6 +3228,13 @@ const sceneRenderer = {
         if (!el?._typeTextController) return false;
         el._typeTextController.finish();
         return true;
+    },
+
+    _finishTypewriterInstant() {
+        const textEl = document.getElementById('dialogue-text');
+        if (!textEl) return;
+        this.finishTypeText(textEl);
+        this._bubbleTypingDone = true;
     },
 
     cancelTypeText(el) {
@@ -4187,6 +4210,7 @@ const sceneRenderer = {
     showDialogue(dialogueEntry) {
         try {
             this._bindDialogueTapHandlers();
+            gameState.currentDialogueEntry = dialogueEntry;
 
             // Block dialogue during scene transitions
             if (this.isTransitioning) {
