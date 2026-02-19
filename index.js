@@ -3035,6 +3035,7 @@ const sceneRenderer = {
             const textEl = document.getElementById('dialogue-text');
             const continueBtn = document.getElementById('dialogue-continue');
             const choicesDiv = document.getElementById('dialogue-choices');
+            const dialogueBox = document.getElementById('dialogue-box');
             if (!textEl || !continueBtn || !choicesDiv) return;
 
             if (e.target.closest('#dialogue-choices') || e.target.closest('#dialogue-continue')) {
@@ -3046,6 +3047,24 @@ const sceneRenderer = {
                 e.stopPropagation();
                 this.finishTypeText(textEl);
                 return;
+            }
+
+            if (this._bubblePagingActive && this._bubblePages?.length) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (!this._bubbleTypingDone) {
+                    this.finishTypeText(textEl);
+                    this._bubbleTypingDone = true;
+                    return;
+                }
+
+                if (this._bubblePageIndex < this._bubblePages.length - 1) {
+                    this._bubblePageIndex += 1;
+                    this._updateBubblePageIndicator();
+                    this._showBubblePage(dialogueBox, dialogueBox?.dataset?.zone || 'left', this._activeDialogueEntry);
+                    return;
+                }
             }
 
             const hasChoices = choicesDiv.children.length > 0;
@@ -4240,6 +4259,7 @@ const sceneRenderer = {
 
             const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
             const isChoice = dialogueEntry.speaker === 'CHOICE' || dialogueEntry.speaker === 'FINAL CHOICE';
+            let speechPos = 'left';
 
             if (isNarration) {
                 dialogueBox.dataset.layoutPanel = 'narrative-box';
@@ -4262,6 +4282,7 @@ const sceneRenderer = {
                 dialogueContainer.classList.remove('narrative-mode');
 
                 const pos = this.normalizeZoneName(dialogueEntry.position || 'left');
+                speechPos = pos;
                 const isLeft = pos === 'left' || pos === 'left-2';
                 const isRight = pos === 'right' || pos === 'right-2';
 
@@ -4279,6 +4300,7 @@ const sceneRenderer = {
 
                 this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
                 dialogueBox.dataset.tail = isLeft ? 'left' : 'right';
+                dialogueBox.dataset.zone = pos;
                 this._applyDialogueBubbleTail(dialogueBox, pos);
                 dialogueBox.classList.add('dialogue-anchored');
             }
@@ -4311,6 +4333,15 @@ const sceneRenderer = {
 
             const dialogueText = dialogueEntry.text || '';
 
+            this._activeDialogueEntry = dialogueEntry;
+
+            this._bubblePagingActive = false;
+            this._bubblePages = null;
+            this._bubblePageIndex = 0;
+            this._bubbleFullText = '';
+            this._bubbleTypingDone = true;
+            this._setBubblePagingUI?.(dialogueBox, false);
+
             // Fit text into stable bubble container (speech-bubble mode only, all screen sizes)
             this._fitSpeechBubbleText(dialogueBox, dialogueText);
 
@@ -4320,6 +4351,24 @@ const sceneRenderer = {
                 this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
             }
             this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
+
+            const isSpeech = dialogueBox.dataset.layoutPanel === 'speech-bubble';
+            const hasChoices = dialogueEntry.choices && dialogueEntry.choices.length > 0;
+            if (isSpeech && !hasChoices) {
+                const pages = this._splitIntoBubblePages(dialogueBox, dialogueText, 3);
+                if (pages.length > 1) {
+                    this._bubblePages = pages;
+                    this._bubblePageIndex = 0;
+                    this._bubbleFullText = dialogueText;
+                    this._bubblePagingActive = true;
+
+                    this._setBubblePagingUI(dialogueBox, true);
+                    this._updateBubblePageIndicator();
+                    this._showBubblePage(dialogueBox, speechPos, dialogueEntry);
+                    continueBtn.classList.add('hidden');
+                    return;
+                }
+            }
 
             this.typeText(text, dialogueText, {
                 onFinish: () => this._updateDialogueOverflowIndicator(text)
@@ -4419,29 +4468,7 @@ const sceneRenderer = {
                     });
                 }
             } else if (dialogueEntry.next) {
-                continueBtn.classList.remove('hidden');
-                continueBtn.textContent = 'continue';
-                continueBtn.setAttribute('aria-label', 'Continue dialogue');
-                continueBtn.onclick = () => {
-                    if (this.isTyping) {
-                        this.finishTypeText(text);
-                        return;
-                    }
-                    if (gameState.actionLock || this.isTransitioning) return;
-                    gameState.actionLock = true;
-                    gameState.dialogueLock = false;
-                    SFXGenerator.playContinueButton();
-                    this._closeDialogueThen(() => {
-                        if (dialogueEntry.next === 'NEXT_DIALOGUE') {
-                            this.nextDialogue();
-                        } else if (typeof dialogueEntry.next === 'function') {
-                            dialogueEntry.next();
-                        } else {
-                            this.loadScene(dialogueEntry.next);
-                        }
-                        gameState.actionLock = false;
-                    });
-                };
+                this._setupDialogueContinueButton(continueBtn, text, dialogueEntry);
             } else {
                 setTimeout(() => {
                     gameState.dialogueLock = false;
@@ -4458,6 +4485,66 @@ const sceneRenderer = {
             gameState.dialogueLock = false;
             setTimeout(() => this.nextDialogue(), 500);
         }
+    },
+
+    _setupDialogueContinueButton(continueBtn, textEl, dialogueEntry) {
+        continueBtn.classList.remove('hidden');
+        continueBtn.textContent = 'continue';
+        continueBtn.setAttribute('aria-label', 'Continue dialogue');
+        continueBtn.onclick = () => {
+            if (this.isTyping) {
+                this.finishTypeText(textEl);
+                return;
+            }
+            if (gameState.actionLock || this.isTransitioning) return;
+            gameState.actionLock = true;
+            gameState.dialogueLock = false;
+            SFXGenerator.playContinueButton();
+            this._closeDialogueThen(() => {
+                if (dialogueEntry.next === 'NEXT_DIALOGUE') {
+                    this.nextDialogue();
+                } else if (typeof dialogueEntry.next === 'function') {
+                    dialogueEntry.next();
+                } else {
+                    this.loadScene(dialogueEntry.next);
+                }
+                gameState.actionLock = false;
+            });
+        };
+    },
+
+    _showBubblePage(dialogueBox, pos, dialogueEntry) {
+        const textEl = document.getElementById('dialogue-text');
+        const continueBtn = document.getElementById('dialogue-continue');
+        if (!dialogueBox || !textEl || !continueBtn || !this._bubblePages?.length) return;
+
+        const pageText = this._bubblePages[this._bubblePageIndex] || '';
+        this._bubbleTypingDone = false;
+        continueBtn.classList.add('hidden');
+
+        this._fitSpeechBubbleText(dialogueBox, pageText);
+        this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
+        this._applyDialogueBubbleTail(dialogueBox, pos);
+        this._clampDialogueToViewport(dialogueBox);
+
+        this.typeText(textEl, pageText, {
+            onFinish: () => {
+                this._bubbleTypingDone = true;
+                this._updateDialogueOverflowIndicator(textEl);
+                if (this._bubblePageIndex === this._bubblePages.length - 1) {
+                    this._bubblePagingActive = false;
+                    this._setBubblePagingUI(dialogueBox, false);
+                    if (dialogueEntry?.next) {
+                        this._setupDialogueContinueButton(continueBtn, textEl, dialogueEntry);
+                    } else {
+                        setTimeout(() => {
+                            gameState.dialogueLock = false;
+                            this._closeDialogueThen(() => this.nextDialogue());
+                        }, 3000);
+                    }
+                }
+            }
+        });
     },
 
     _clampDialogueToViewport(dialogueBox, options = {}) {
