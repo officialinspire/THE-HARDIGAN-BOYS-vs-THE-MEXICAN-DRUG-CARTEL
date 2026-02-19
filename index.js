@@ -4745,12 +4745,13 @@ const sceneRenderer = {
 
         dialogueBox.dataset.tail = tailSide;
 
-        // Correct mapping:
-        // - left tail => dialogue-bubble-large-left.png
-        // - right tail => dialogue-bubble-large-right.png
-        dialogueBubble.src = (tailSide === 'left')
-            ? './assets/menu_dialogue/dialogue-bubble-large-left.png'
-            : './assets/menu_dialogue/dialogue-bubble-large-right.png';
+        // Keep explicit mapping so we don't accidentally regress to swapped tails.
+        const TAIL_IMAGE_BY_SIDE = {
+            left: './assets/menu_dialogue/dialogue-bubble-large-left.png',
+            right: './assets/menu_dialogue/dialogue-bubble-large-right.png',
+        };
+
+        dialogueBubble.src = TAIL_IMAGE_BY_SIDE[tailSide] || TAIL_IMAGE_BY_SIDE.left;
     },
 
     _positionDialogueTopCenter(dialogueBox) {
