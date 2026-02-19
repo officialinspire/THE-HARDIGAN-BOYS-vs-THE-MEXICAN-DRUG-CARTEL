@@ -5413,7 +5413,7 @@ const SCENES = {
                 speaker: 'MOM',
                 text: "If either of you used this much energy on school, we'd be rich by now!",
                 position: 'right',
-                bubbleLayout: { left: 798, top: 286, width: 704, height: 438 },
+                bubbleLayout: { left: 700, top: 286, width: 704, height: 438 },
                 next: () => {
                     // Slide out Mom after her dialogue for a smoother handoff back to scene interactions
                     sceneRenderer.removeCharacter('mom', true);
