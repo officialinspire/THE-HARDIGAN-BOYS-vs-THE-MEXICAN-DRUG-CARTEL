@@ -562,8 +562,8 @@ Examples:
 Collectible item images: `item_house_key.png`, `item_conspiracy_notebook.png`, etc.
 
 ### menu_dialogue/
-- `dialogue-bubble-large-left.png` — Speech bubble pointing left (for right-side speakers)
-- `dialogue-bubble-large-right.png` — Speech bubble pointing right (for left-side speakers)
+- `dialogue-bubble-large-left.png` — Speech bubble pointing left (for left-side speakers)
+- `dialogue-bubble-large-right.png` — Speech bubble pointing right (for right-side speakers)
 - `speech-bubbles-sprite-sheet.png` — Unused spritesheet of multiple bubble styles
 
 ### ui/
