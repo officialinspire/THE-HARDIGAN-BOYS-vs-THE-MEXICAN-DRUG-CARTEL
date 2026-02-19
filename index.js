@@ -4238,7 +4238,15 @@ const sceneRenderer = {
             // Call onShow callback if it exists (for character slide-ins, etc.)
             if (dialogueEntry.onShow) {
                 try {
-                    dialogueEntry.onShow();
+                    const onShowResult = dialogueEntry.onShow();
+                    if (onShowResult && typeof onShowResult.catch === 'function') {
+                        onShowResult.catch(error => {
+                            errorLogger.log('dialogue-onShow-async', error, {
+                                sceneId: gameState.currentSceneId,
+                                speaker: dialogueEntry.speaker
+                            });
+                        });
+                    }
                 } catch (error) {
                     errorLogger.log('dialogue-onShow', error, {
                         sceneId: gameState.currentSceneId,
@@ -4373,6 +4381,13 @@ const sceneRenderer = {
             if (!isNarration && !isChoice) {
                 const pos = this.normalizeZoneName(dialogueEntry.position || 'left');
                 this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
+
+                clearTimeout(this._dialogueReanchorTimer);
+                this._dialogueReanchorTimer = setTimeout(() => {
+                    if (this._activeDialogueEntry !== dialogueEntry || dialogueBox.classList.contains('hidden')) return;
+                    this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
+                    this._clampDialogueToViewport(dialogueBox);
+                }, 180);
             }
             this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
 
@@ -5400,19 +5415,17 @@ const SCENES = {
                 position: 'right',
                 bubbleLayout: { left: 798, top: 286, width: 704, height: 438 },
                 next: () => {
-                    // Slide out Mom after her dialogue
-                    sceneRenderer.removeCharacter('mom');
-                    sceneRenderer._cleanupTypewriter(document.getElementById('dialogue-text'));
-                    document.getElementById('dialogue-box').classList.add('hidden');
+                    // Slide out Mom after her dialogue for a smoother handoff back to scene interactions
+                    sceneRenderer.removeCharacter('mom', true);
                 },
                 onShow: () => {
-                    // Slide in Mom when her dialogue appears (use right-2 so she doesn't overlap with Jonah)
+                    // Add Mom immediately so the speech bubble anchors to her on the first frame.
                     sceneRenderer.addCharacter({
                         id: 'mom',
                         name: 'MOM',
                         sprite: 'char_mom_worried-right.png',
                         position: 'right-2'
-                    }, 100);
+                    }, 0);
                 }
             }
         ],
