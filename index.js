@@ -4712,10 +4712,19 @@ const sceneRenderer = {
         const safe = positioningSystem.getDialogueSafeRect(isMobile ? 10 : 12);
         if (!safe) return;
 
+        const isLeftZone = zoneName.startsWith('left');
+        const isRightZone = zoneName.startsWith('right');
+        const isSecondaryZone = zoneName.endsWith('-2');
+
         // Anchor point: above character head (scene-container local coords)
-        const anchorX = (charRect.left + charRect.right) / 2 - containerRect.left;
+        // Secondary speakers get a slight inward bias so the bubble reads like the examples.
+        const innerAnchorRatio = isLeftZone ? 0.58 : 0.42;
+        const defaultAnchorRatio = 0.5;
+        const anchorRatio = isSecondaryZone ? innerAnchorRatio : defaultAnchorRatio;
+        const anchorX = charRect.left - containerRect.left + (charRect.width * anchorRatio);
         const headY = (charRect.top - containerRect.top);
-        let topPx = headY - boxRect.height - gap;
+        const extraLift = isSecondaryZone ? (isMobile ? 8 : 14) : 0;
+        let topPx = headY - boxRect.height - gap - extraLift;
 
         // Decide which tail side to use
         let tailSide = 'left';
@@ -4725,12 +4734,16 @@ const sceneRenderer = {
 
         // Tail "x" position within the bubble (tuned for your bubble PNGs)
         // (tail isn't at the extreme corner; it's inset a bit)
-        const TAIL_X_LEFT = 0.14;
-        const TAIL_X_RIGHT = 0.86;
+        const TAIL_X_LEFT = isSecondaryZone ? 0.18 : 0.14;
+        const TAIL_X_RIGHT = isSecondaryZone ? 0.82 : 0.86;
         const tailX = (tailSide === 'left') ? TAIL_X_LEFT : TAIL_X_RIGHT;
 
         // Place bubble so tail aligns near anchorX
         let leftPx = anchorX - (boxRect.width * tailX);
+
+        // Push secondary bubbles inward from screen edges for cleaner composition.
+        if (isSecondaryZone && isLeftZone) leftPx += boxRect.width * 0.05;
+        if (isSecondaryZone && isRightZone) leftPx -= boxRect.width * 0.05;
 
         // Clamp to safe rect
         leftPx = Math.max(safe.left, Math.min(leftPx, safe.right - boxRect.width));
