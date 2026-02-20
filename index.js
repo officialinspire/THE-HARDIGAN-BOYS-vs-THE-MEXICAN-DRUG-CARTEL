@@ -5927,62 +5927,86 @@ const SCENES = {
         dialogue: [
             {
                 speaker: 'SOFIA',
-                text: "I didn't come to you just because of the drive. I came because I know who put the Riveras on the radar.",
-                position: 'right',
-                next: 'NEXT_DIALOGUE'
-            },
-            {
-                speaker: 'HANK',
-                text: "Who?",
-                position: 'left',
-                next: 'NEXT_DIALOGUE'
-            },
-            {
-                speaker: 'SOFIA',
-                text: "Someone inside. A tip that went up the chain fast — too fast to be coincidence.",
+                text: "I cracked the drive last night. Four hours, two energy drinks, and one very concerning moment where I thought the NSA was watching my webcam.",
                 position: 'right',
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'JONAH',
-                text: "So somebody set them up? Like, on purpose?",
+                text: "Were they?",
                 position: 'left-2',
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'SOFIA',
-                text: "I've been sitting on this for weeks. Didn't know who to trust.",
+                text: "Probably. But that's not the point.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'SOFIA',
+                text: "The drive has two things on it. A DEA informant list — active witnesses against the Villarreal cartel. And a payment ledger: shell companies, routing numbers, and names of U.S. officials who've been taking cartel money for six years.",
                 position: 'right',
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'HANK',
-                text: "And now you trust us? Two guys who found a USB in a trash can?",
+                text: "So the ICE raid wasn't about your dad's immigration status.",
                 position: 'left',
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'SOFIA',
-                text: "You're still here, aren't you? Most people ran.",
+                text: "Someone fed ICE a tip that my dad was hiding cartel assets — a lie, designed to get armed agents inside our house to recover this drive before anyone could read what's on it.",
                 position: 'right',
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'JONAH',
-                text: "For the record, I did try to run. Hank wouldn't let me.",
+                text: "So your dad got deported... over a USB drive.",
                 position: 'left-2',
                 next: 'NEXT_DIALOGUE'
             },
             {
+                speaker: 'SOFIA',
+                text: "My dad got disappeared over what's ON the drive. Big difference.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
                 speaker: 'HANK',
-                text: "What do you need from us, Sofia?",
+                text: "(quiet) That's not paranoia. That's a conspiracy with a budget.",
                 position: 'left',
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'SOFIA',
-                text: "There's someone who can verify everything on that drive. Someone with clearance. I know where she works.",
+                text: "There's a CIA analyst named Gray who's been building an independent case against the Villarreal operation for two years. She's the only person who can authenticate this data without it getting buried by the same people who are on the ledger.",
                 position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "You want us to walk into a CIA office.",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'SOFIA',
+                text: "It's technically a 'federal research annex.' The parking lot smells like burnt coffee and bad decisions. You'll fit right in.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'JONAH',
+                text: "I just want to state, for the record, that I am a minor.",
+                position: 'left-2',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "So are we. Let's go.",
+                position: 'left',
                 next: () => {
                     sceneRenderer.loadScene('S6_INTEL_ENTANGLEMENT');
                 }
