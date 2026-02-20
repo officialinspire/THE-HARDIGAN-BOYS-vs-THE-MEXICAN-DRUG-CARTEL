@@ -212,6 +212,7 @@ const SFXGenerator = {
 const DEBUG = window.location.hostname === 'localhost' ||
               window.location.hostname === '127.0.0.1' ||
               window.location.search.includes('debug=true');
+const DEV_FORCE_WHITE_STRIP = false;
 
 // ===== GLOBAL GAME STATE =====
 const gameState = {
@@ -1908,7 +1909,7 @@ const spriteTransparencyProcessor = {
     makeWhitePixelsTransparent(imageEl) {
         if (!imageEl || imageEl.dataset.whiteRemoved === 'true') return;
 
-        if (imageEl.complete && this._imageHasAnyAlpha(imageEl)) {
+        if (!DEV_FORCE_WHITE_STRIP && imageEl.complete && this._imageHasAnyAlpha(imageEl)) {
             imageEl.dataset.whiteRemoved = 'true';
             return;
         }
