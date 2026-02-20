@@ -5903,7 +5903,7 @@ const SCENES = {
                 text: "Good. Because you're not the only ones who want it.",
                 position: 'right',
                 next: () => {
-                    sceneRenderer.loadScene('S6_INTEL_ENTANGLEMENT');
+                    sceneRenderer.loadScene('S5_SOFIA_INTEL');
                 }
             }
         ]
