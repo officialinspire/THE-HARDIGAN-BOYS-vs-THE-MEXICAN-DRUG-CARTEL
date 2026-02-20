@@ -262,6 +262,8 @@ const errorLogger = {
 };
 
 
+const BUILTIN_HOTSPOT_PATCHES = {};
+
 const Dev = {
     storageKeys: {
         enabled: 'DEV_MODE_ENABLED',
@@ -584,8 +586,10 @@ const Dev = {
         },
 
         getScenePatch(sceneId) {
+            const builtinOps = (BUILTIN_HOTSPOT_PATCHES[sceneId] && BUILTIN_HOTSPOT_PATCHES[sceneId].ops) || [];
             const patches = this.loadAllPatches();
-            return patches[sceneId] || { ops: [] };
+            const localOps = (patches[sceneId] && patches[sceneId].ops) || [];
+            return { ops: [...builtinOps, ...localOps] };
         },
 
         setScenePatch(sceneId, patch) {
