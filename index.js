@@ -262,7 +262,14 @@ const errorLogger = {
 };
 
 
-const BUILTIN_HOTSPOT_PATCHES = {};
+const BUILTIN_HOTSPOT_PATCHES = {
+    S1_LIVING_ROOM_INTRO: {
+        ops: [
+            // TODO: Replace x/y/w/h with values exported from Dev Hotspot Editor
+            { op: 'upsert', hotspot: { id: 'window', x: 0, y: 0, w: 0, h: 0, type: 'scene', target: '', z: 0 } }
+        ]
+    }
+};
 
 const Dev = {
     storageKeys: {
