@@ -214,6 +214,8 @@ const DEBUG = window.location.hostname === 'localhost' ||
               window.location.search.includes('debug=true');
 const DEV_FORCE_WHITE_STRIP = false;
 
+const SETTINGS_STORAGE_KEY = 'HB_SETTINGS_V1';
+
 // ===== GLOBAL GAME STATE =====
 const gameState = {
     currentSceneId: 'S0_MAIN_MENU',
@@ -6582,6 +6584,35 @@ const sceneIntegrity = {
     }
 };
 
+// ===== SETTINGS PERSISTENCE =====
+function loadSettingsFromStorage() {
+    try {
+        const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (typeof parsed !== 'object' || parsed === null) return;
+        if (typeof parsed.musicVolume === 'number') {
+            gameState.settings.musicVolume = Math.min(100, Math.max(0, parsed.musicVolume));
+        }
+        if (typeof parsed.sfxVolume === 'number') {
+            gameState.settings.sfxVolume = Math.min(100, Math.max(0, parsed.sfxVolume));
+        }
+        if (typeof parsed.showHotspots === 'boolean') {
+            gameState.settings.showHotspots = parsed.showHotspots;
+        }
+    } catch (e) {
+        // Corrupt storage — silently ignore, defaults remain
+    }
+}
+
+function saveSettingsToStorage() {
+    try {
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(gameState.settings));
+    } catch (e) {
+        // Storage unavailable — silently ignore
+    }
+}
+
 // ===== UI EVENT HANDLERS =====
 function setupUIHandlers() {
     // Inventory button
@@ -6652,6 +6683,17 @@ function setupUIHandlers() {
     document.getElementById('btn-settings').addEventListener('click', () => {
         SFXGenerator.playButtonClick();
         document.getElementById('pause-menu').classList.add('hidden');
+        // Sync UI controls to current (possibly loaded) settings before showing
+        const _musicVol = document.getElementById('music-volume');
+        const _musicDisplay = document.getElementById('music-volume-display');
+        const _sfxVol = document.getElementById('sfx-volume');
+        const _sfxDisplay = document.getElementById('sfx-volume-display');
+        const _showHotspots = document.getElementById('show-hotspots');
+        if (_musicVol) { _musicVol.value = gameState.settings.musicVolume; }
+        if (_musicDisplay) { _musicDisplay.textContent = gameState.settings.musicVolume + '%'; }
+        if (_sfxVol) { _sfxVol.value = gameState.settings.sfxVolume; }
+        if (_sfxDisplay) { _sfxDisplay.textContent = gameState.settings.sfxVolume + '%'; }
+        if (_showHotspots) { _showHotspots.checked = gameState.settings.showHotspots; }
         document.getElementById('settings-overlay').classList.remove('hidden');
     });
     
@@ -6701,8 +6743,9 @@ function setupUIHandlers() {
         gameState.settings.musicVolume = parseInt(e.target.value);
         musicDisplay.textContent = e.target.value + '%';
         audioManager.updateVolumes();
+        saveSettingsToStorage();
     });
-    
+
     // SFX volume slider
     const sfxVol = document.getElementById('sfx-volume');
     const sfxDisplay = document.getElementById('sfx-volume-display');
@@ -6710,8 +6753,9 @@ function setupUIHandlers() {
         gameState.settings.sfxVolume = parseInt(e.target.value);
         sfxDisplay.textContent = e.target.value + '%';
         audioManager.updateVolumes();
+        saveSettingsToStorage();
     });
-    
+
     // Show hotspots checkbox
     const showHotspots = document.getElementById('show-hotspots');
     showHotspots.addEventListener('change', (e) => {
@@ -6721,6 +6765,7 @@ function setupUIHandlers() {
         } else {
             document.body.classList.remove('show-hotspots');
         }
+        saveSettingsToStorage();
     });
 }
 
@@ -6786,6 +6831,9 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
     console.log('🎮 Initializing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL...');
 
     setupViewportHeightHandlers();
+
+    // Restore persisted settings before audio/UI init so volumes apply immediately
+    loadSettingsFromStorage();
 
     // Initialize audio
     audioManager.init();
