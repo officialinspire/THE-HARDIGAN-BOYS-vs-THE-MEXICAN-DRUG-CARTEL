@@ -1880,8 +1880,38 @@ const spriteTransparencyProcessor = {
     whiteThreshold: 235,
     _cache: new Map(),
 
+    _imageHasAnyAlpha(imageEl) {
+        try {
+            const width = imageEl.naturalWidth || imageEl.width;
+            const height = imageEl.naturalHeight || imageEl.height;
+            if (!width || !height) return false;
+
+            const sampleSize = 12;
+            const canvas = document.createElement('canvas');
+            canvas.width = sampleSize;
+            canvas.height = sampleSize;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            if (!ctx) return false;
+
+            ctx.drawImage(imageEl, 0, 0, sampleSize, sampleSize);
+            const pixels = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
+
+            for (let i = 3; i < pixels.length; i += 4) {
+                if (pixels[i] < 255) return true;
+            }
+            return false;
+        } catch (e) {
+            return false;
+        }
+    },
+
     makeWhitePixelsTransparent(imageEl) {
         if (!imageEl || imageEl.dataset.whiteRemoved === 'true') return;
+
+        if (imageEl.complete && this._imageHasAnyAlpha(imageEl)) {
+            imageEl.dataset.whiteRemoved = 'true';
+            return;
+        }
 
         const originalSrc = imageEl.dataset.spriteCandidate || imageEl.src;
 
