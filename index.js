@@ -5908,7 +5908,88 @@ const SCENES = {
             }
         ]
     },
-    
+
+    // ===== S5: SOFIA'S INTEL =====
+    S5_SOFIA_INTEL: {
+        id: 'S5_SOFIA_INTEL',
+        title: 'Sofia\'s Intel',
+        background: './assets/backgrounds/bg_s5_sofia_intel.png',
+        music: 'Classified Silence.mp3',
+
+        characters: [
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
+            { id: 'sofia', name: 'SOFIA', sprite: 'char_sofia_neutral.png', position: 'right' }
+        ],
+
+        hotspots: [],
+
+        dialogue: [
+            {
+                speaker: 'SOFIA',
+                text: "I didn't come to you just because of the drive. I came because I know who put the Riveras on the radar.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "Who?",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'SOFIA',
+                text: "Someone inside. A tip that went up the chain fast — too fast to be coincidence.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'JONAH',
+                text: "So somebody set them up? Like, on purpose?",
+                position: 'left-2',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'SOFIA',
+                text: "I've been sitting on this for weeks. Didn't know who to trust.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "And now you trust us? Two guys who found a USB in a trash can?",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'SOFIA',
+                text: "You're still here, aren't you? Most people ran.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'JONAH',
+                text: "For the record, I did try to run. Hank wouldn't let me.",
+                position: 'left-2',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "What do you need from us, Sofia?",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'SOFIA',
+                text: "There's someone who can verify everything on that drive. Someone with clearance. I know where she works.",
+                position: 'right',
+                next: () => {
+                    sceneRenderer.loadScene('S6_INTEL_ENTANGLEMENT');
+                }
+            }
+        ]
+    },
+
     // ===== S6: INTEL ENTANGLEMENT =====
     S6_INTEL_ENTANGLEMENT: {
         id: 'S6_INTEL_ENTANGLEMENT',
