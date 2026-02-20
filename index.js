@@ -2642,6 +2642,37 @@ function renderInventory() {
     });
 }
 
+// ===== UI MODAL HELPER =====
+const uiModal = {
+    show({ title, bodyHtml, bodyText }) {
+        const overlay = document.getElementById('modal-overlay');
+        const titleEl = document.getElementById('modal-title');
+        const bodyEl = document.getElementById('modal-body');
+
+        titleEl.textContent = title;
+        if (bodyHtml) {
+            bodyEl.innerHTML = bodyHtml;
+        } else {
+            bodyEl.textContent = bodyText || '';
+        }
+
+        overlay.classList.remove('hidden');
+
+        const hide = () => this.hide();
+
+        const okBtn = document.getElementById('modal-ok');
+        const closeBtn = document.getElementById('modal-close');
+
+        okBtn.onclick = hide;
+        closeBtn.onclick = hide;
+        overlay.onclick = (e) => { if (e.target === overlay) hide(); };
+    },
+
+    hide() {
+        document.getElementById('modal-overlay').classList.add('hidden');
+    }
+};
+
 function showItemInfo(itemId) {
     // Clicking the conspiracy notebook in inventory opens the notebook overlay
     if (itemId === 'conspiracy_notebook') {
@@ -2651,7 +2682,7 @@ function showItemInfo(itemId) {
     }
     const itemName = itemId.replace(/_/g, ' ').toUpperCase();
     const infoText = getItemDescription(itemId);
-    alert(`${itemName}\n\n${infoText}`);
+    uiModal.show({ title: itemName, bodyText: infoText });
 }
 
 function getItemDescription(itemId) {
@@ -6613,7 +6644,7 @@ function setupUIHandlers() {
     document.getElementById('btn-save').addEventListener('click', () => {
         SFXGenerator.playButtonClick();
         if (saveSystem.save()) {
-            alert('Game saved successfully!');
+            uiModal.show({ title: 'Saved', bodyText: 'Game saved successfully!' });
         }
     });
     
