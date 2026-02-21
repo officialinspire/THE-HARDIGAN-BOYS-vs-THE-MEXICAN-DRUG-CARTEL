@@ -311,7 +311,6 @@ body.main-menu #scene-container::after {
     transition: transform 0.6s ease, opacity 0.6s ease;
     filter: drop-shadow(2px 4px 6px rgba(0, 0, 0, 0.8))
             drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
-    background: transparent !important;
 }
 
 /* Slide-in animations */
