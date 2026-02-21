@@ -5912,10 +5912,10 @@ const SCENES = {
         title: 'Good Citizens',
         background: './assets/backgrounds/bg_hardigan_livingroom_night_03.png',
         music: 'Empty Hallways (Ambient Mix).mp3',
-        
+
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
-            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_excited.png', position: 'left-2' },
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused-left.png', position: 'left-2' },
             { id: 'mom', name: 'MOM', sprite: 'char_mom_worried.png', position: 'right' }
         ],
         
@@ -6098,11 +6098,11 @@ const SCENES = {
         music: 'Empty Hallways (Ambient Mix).mp3',
         
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
-            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'right' }
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused-left.png', position: 'left-2' }
         ],
         hotspots: [],
-        
+
         dialogue: [
             {
                 speaker: 'NARRATION',
@@ -6188,9 +6188,9 @@ const SCENES = {
         music: 'Classified Silence.mp3',
 
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
-            { id: 'sofia', name: 'SOFIA', sprite: 'char_sofia_neutral.png', position: 'right' }
+            { id: 'sofia', name: 'SOFIA', sprite: 'char_sofia_hacker.png', position: 'right' }
         ],
 
         hotspots: [],
@@ -6293,7 +6293,7 @@ const SCENES = {
         music: 'Classified Silence.mp3',
         
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
             { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_amused.png', position: 'right' }
         ],
@@ -6362,7 +6362,7 @@ const SCENES = {
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' },
-            { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_calm.png', position: 'right-2' },
+            { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk.png', position: 'right-2' },
             { id: 'cartel_boss', name: 'EL LICENCIADO', sprite: 'char_cartel_boss_menacing-right.png', position: 'right' }
         ],
         
@@ -6480,7 +6480,7 @@ const SCENES = {
         
         characters: [
             { id: 'cartel_boss', name: 'EL LICENCIADO', sprite: 'char_cartel_boss_menacing.png', position: 'left' },
-            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_threatening.png', position: 'right' }
+            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_threatening-right.png', position: 'right' }
         ],
         
         hotspots: [],
