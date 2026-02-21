@@ -3090,6 +3090,12 @@ const sceneRenderer = {
     onTransitionStart: null,
     onTransitionComplete: null,
     validZones: new Set(['left', 'left-2', 'center', 'right-2', 'right']),
+    DEFAULT_SPEECH_BUBBLE_SLOTS: {
+        'left':    { left: 120,  top: 120, width: 720, height: 420 },
+        'left-2':  { left: 160,  top: 270, width: 720, height: 420 },
+        'right':   { left: 1080, top: 120, width: 720, height: 420 },
+        'right-2': { left: 1040, top: 270, width: 720, height: 420 },
+    },
     isTyping: false,
 
     // Bubble pagination state
