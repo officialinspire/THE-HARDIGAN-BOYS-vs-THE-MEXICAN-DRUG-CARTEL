@@ -5415,7 +5415,42 @@ const sceneRenderer = {
                 }, 50); // Tiny delay lets new content settle before revealing
             }
         });
-    }
+    },
+
+    async _fadeOverlay(on) {
+        const el = this.transition.overlayEl;
+        if (!el) return;
+        el.classList.toggle('is-on', !!on);
+        await this._waitMs(240); // match CSS
+    },
+
+    _showSceneTitleFx(titleText) {
+        const fx = this.transition.titleFxEl;
+        const hudTitle = document.querySelector('#hud-scene-title') || document.querySelector('.hud-title') || null;
+
+        if (!fx) return;
+
+        // copy position from existing HUD title (no layout changes)
+        if (hudTitle) {
+            const r = hudTitle.getBoundingClientRect();
+            fx.style.left = r.left + 'px';
+            fx.style.top = r.top + 'px';
+            fx.style.width = r.width + 'px';
+            fx.style.height = r.height + 'px';
+        }
+
+        fx.textContent = titleText || '';
+        fx.classList.remove('is-show');
+        // force reflow
+        void fx.offsetWidth;
+        fx.classList.add('is-show');
+
+        // auto-hide after ~1.2s
+        clearTimeout(fx._t);
+        fx._t = setTimeout(() => fx.classList.remove('is-show'), 1200);
+    },
+
+    _waitMs(ms) { return new Promise(r => setTimeout(r, ms)); },
 };
 
 
@@ -7031,6 +7066,13 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
 
     // Restore persisted settings before audio/UI init so volumes apply immediately
     loadSettingsFromStorage();
+
+    // Initialize scene transition state
+    sceneRenderer.transition = {
+        overlayEl: document.getElementById('scene-transition-overlay'),
+        titleFxEl: document.getElementById('scene-title-fx'),
+        isRunning: false,
+    };
 
     // Initialize audio
     audioManager.init();
