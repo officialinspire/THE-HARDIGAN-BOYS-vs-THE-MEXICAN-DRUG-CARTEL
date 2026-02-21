@@ -5788,7 +5788,7 @@ const SCENES = {
 
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
-            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused-left.png', position: 'left-2' }
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' }
         ],
 
         hotspots: [],
@@ -6041,7 +6041,7 @@ const SCENES = {
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
-            { id: 'agent_smith', name: 'AGENT SMITH', sprite: 'char_ice_smith_smirk-right.png', position: 'right' }
+            { id: 'agent_smith', name: 'AGENT SMITH', sprite: 'char_ice_smith_smirk.png', position: 'right' }
         ],
         
         hotspots: [],
@@ -6295,7 +6295,7 @@ const SCENES = {
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
-            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_amused-right.png', position: 'right' }
+            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_amused.png', position: 'right' }
         ],
         
         hotspots: [],
@@ -6450,7 +6450,7 @@ const SCENES = {
         music: 'Covert Investigation.mp3',
         
         characters: [
-            { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk-left.png', position: 'center' }
+            { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk.png', position: 'center' }
         ],
         
         hotspots: [],
@@ -6480,7 +6480,7 @@ const SCENES = {
         
         characters: [
             { id: 'cartel_boss', name: 'EL LICENCIADO', sprite: 'char_cartel_boss_menacing.png', position: 'left' },
-            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_threatening-right.png', position: 'right' }
+            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_threatening.png', position: 'right' }
         ],
         
         hotspots: [],
@@ -6630,7 +6630,7 @@ const SCENES = {
         
         characters: [
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left' },
-            { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk-left.png', position: 'right' }
+            { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk.png', position: 'right' }
         ],
         hotspots: [],
         
