@@ -4411,7 +4411,7 @@ const sceneRenderer = {
                 dialogueBox.classList.add('dialogue-anchored');
             }
 
-            const useBubbleLayout = Boolean(dialogueEntry.bubbleLayout) && (isNarration || isChoice);
+            const useBubbleLayout = Boolean(dialogueEntry.bubbleLayout);
 
             if (useBubbleLayout) {
                 const bl = dialogueEntry.bubbleLayout;
@@ -5113,7 +5113,7 @@ const sceneRenderer = {
             return;
         }
 
-        const useBubbleLayout = Boolean(dialogueEntry.bubbleLayout) && (isNarration || isChoice);
+        const useBubbleLayout = Boolean(dialogueEntry.bubbleLayout);
 
         if (useBubbleLayout) {
             const bl = dialogueEntry.bubbleLayout;
