@@ -4015,7 +4015,16 @@ const sceneRenderer = {
             showTransitionLoader();
         }
 
+        const alreadyRunning = this.transition?.isRunning;
+        if (!alreadyRunning) {
+            this.transition.isRunning = true;
+        }
+
         try {
+            if (!alreadyRunning) {
+                await this._fadeOverlay(true);
+            }
+
             // Set transitioning state
             this.isTransitioning = true;
             gameState.sceneTransitioning = true;
@@ -4080,6 +4089,8 @@ const sceneRenderer = {
                     }, 800);
                 }, 200); // Start slightly after fade completes
             }
+
+            this._showSceneTitleFx(scene.title || sceneId);
 
             if (scene.characters) {
                 await this.loadCharacters(scene.characters);
@@ -4159,6 +4170,11 @@ const sceneRenderer = {
 
             // Unblock interactions
             this._setInteractionBlocking(false);
+
+            if (!alreadyRunning) {
+                await this._fadeOverlay(false);
+                this.transition.isRunning = false;
+            }
         }
     },
 
