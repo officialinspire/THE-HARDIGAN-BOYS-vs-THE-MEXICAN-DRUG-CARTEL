@@ -4862,6 +4862,44 @@ const sceneRenderer = {
         dialogueBubble.src = TAIL_IMAGE_BY_SIDE[tailSide] || TAIL_IMAGE_BY_SIDE.left;
     },
 
+    _positionDialogueInSlot(dialogueBox, zoneName, dialogueEntry) {
+        if (!dialogueBox || !dialogueEntry) return;
+
+        // 1. Normalize zone, falling back through available values to ensure a valid string
+        const zone = this.normalizeZoneName(zoneName || dialogueEntry.position || 'left');
+
+        // If positioningSystem cannot report a background rect, use the legacy character-relative method
+        if (!positioningSystem.getBackgroundRect()) {
+            this._positionDialogueNearCharacter(dialogueBox, zone, dialogueEntry);
+            return;
+        }
+
+        // 2 & 3. Determine source rect in 1920×1080 reference space
+        let rect;
+        if (dialogueEntry.bubbleLayout) {
+            rect = dialogueEntry.bubbleLayout;
+        } else {
+            rect = this.DEFAULT_SPEECH_BUBBLE_SLOTS[zone] || this.DEFAULT_SPEECH_BUBBLE_SLOTS['left'];
+        }
+
+        // 4. Convert reference coords to current screen coordinates
+        const pos = positioningSystem.calculateHotspotPosition(rect.left, rect.top, rect.width, rect.height);
+
+        // 5. Apply position styles, clearing any centering overrides
+        dialogueBox.style.left      = pos.left;
+        dialogueBox.style.top       = pos.top;
+        dialogueBox.style.width     = pos.width;
+        dialogueBox.style.height    = pos.height;
+        dialogueBox.style.right     = 'auto';
+        dialogueBox.style.bottom    = 'auto';
+        dialogueBox.style.transform = 'none';
+
+        // 6. Tail side: left-side zones get a left tail, right-side zones get a right tail
+        const tailSide = zone.startsWith('right') ? 'right' : 'left';
+        dialogueBox.dataset.tail = tailSide;
+        this._applyDialogueBubbleTail(dialogueBox, zone);
+    },
+
     _positionDialogueTopCenter(dialogueBox) {
         const container = document.getElementById('scene-container');
         if (!container || !dialogueBox) return;
