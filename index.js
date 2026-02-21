@@ -4287,7 +4287,34 @@ const sceneRenderer = {
         });
     },
     
-    showDialogue(dialogueEntry) {
+    async _ensureSpeakerPresent(dialogueEntry) {
+        const speaker = dialogueEntry.speaker;
+        if (!speaker || speaker === 'NARRATION' || speaker === 'SYSTEM' || speaker === 'CHOICE' || speaker === 'FINAL CHOICE') {
+            return;
+        }
+        const speakerUpper = speaker.toUpperCase();
+        const existing = Array.from(document.querySelectorAll('#character-layer .character-sprite'))
+            .find(el => (el.dataset.characterName || '').toUpperCase() === speakerUpper);
+        if (existing) return;
+
+        const chars = this.currentScene?.characters || [];
+        const found = chars.find(c =>
+            (c.name || '').toUpperCase() === speakerUpper ||
+            (c.id || '').toLowerCase() === speaker.toLowerCase()
+        );
+        if (found) {
+            await this.addCharacter(found, 0);
+        } else {
+            if (!this._ensureSpeakerWarned) this._ensureSpeakerWarned = new Set();
+            const warnKey = `${this.currentScene?.id}:${speaker}`;
+            if (!this._ensureSpeakerWarned.has(warnKey)) {
+                this._ensureSpeakerWarned.add(warnKey);
+                console.warn(`[sceneRenderer] Speaker "${speaker}" not found in scene "${this.currentScene?.id}"`);
+            }
+        }
+    },
+
+    async showDialogue(dialogueEntry) {
         try {
             this._bindDialogueTapHandlers();
             gameState.currentDialogueEntry = dialogueEntry;
@@ -4390,6 +4417,8 @@ const sceneRenderer = {
                 text.className = 'choice-text';
                 speaker.textContent = dialogueEntry.speaker;
             } else {
+                await this._ensureSpeakerPresent(dialogueEntry);
+
                 dialogueBox.dataset.layoutPanel = 'speech-bubble';
                 dialogueContainer.classList.remove('narrative-mode');
 
