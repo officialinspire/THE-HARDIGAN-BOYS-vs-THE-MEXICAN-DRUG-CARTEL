@@ -1876,6 +1876,74 @@ const Dev = {
             'nextSteps:',
             ...actions.map(action => `- ${action}`)
         ].join('\n');
+    },
+
+    validateScenes() {
+        const NON_CHARACTER_SPEAKERS = new Set(['NARRATION', 'SYSTEM', 'CHOICE', 'FINAL CHOICE']);
+        const lines = [];
+
+        Object.values(SCENES).forEach(scene => {
+            if (!scene || typeof scene !== 'object') return;
+            const sceneId = scene.id || '(unknown)';
+            const issues = [];
+
+            const dialogue = scene.dialogue;
+            if (!Array.isArray(dialogue) || dialogue.length === 0) {
+                issues.push('no dialogue array or empty');
+            } else {
+                const charKeys = new Set(
+                    (scene.characters || []).flatMap(c => {
+                        const entries = [];
+                        if (c.name) entries.push(String(c.name).toUpperCase());
+                        if (c.id) entries.push(String(c.id).toUpperCase());
+                        return entries;
+                    })
+                );
+
+                dialogue.forEach((entry, idx) => {
+                    if (!entry || typeof entry !== 'object') return;
+                    const speaker = entry.speaker;
+                    const prefix = `dialogue[${idx}]`;
+
+                    if (speaker === 'CHOICE' || speaker === 'FINAL CHOICE') {
+                        if (!Array.isArray(entry.choices) || entry.choices.length === 0) {
+                            issues.push(`${prefix} (${speaker}): no choices array or empty`);
+                        } else {
+                            entry.choices.forEach((choice, ci) => {
+                                if (!choice.text) {
+                                    issues.push(`${prefix} (${speaker}) choice[${ci}]: missing text`);
+                                }
+                                if (!choice.action && !choice.next) {
+                                    issues.push(`${prefix} (${speaker}) choice[${ci}]: no action or next`);
+                                }
+                            });
+                        }
+                    } else if (!NON_CHARACTER_SPEAKERS.has(speaker)) {
+                        if (!entry.position || !sceneRenderer.validZones.has(entry.position)) {
+                            issues.push(`${prefix} (${speaker}): missing/invalid position`);
+                        }
+                        if (speaker && !charKeys.has(String(speaker).toUpperCase())) {
+                            issues.push(`${prefix}: speaker "${speaker}" not in scene.characters`);
+                        }
+                    }
+
+                    if (!entry.text && entry.text !== 0) {
+                        issues.push(`${prefix}: missing/empty text`);
+                    }
+                });
+            }
+
+            if (issues.length > 0) {
+                lines.push(`${sceneId}:`);
+                issues.forEach(issue => lines.push(`  • ${issue}`));
+            }
+        });
+
+        if (lines.length === 0) {
+            console.log('[Dev.validateScenes] All scenes OK.');
+        } else {
+            console.log('[Dev.validateScenes]\n' + lines.join('\n'));
+        }
     }
 };
 
@@ -6916,6 +6984,10 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
     sceneIntegrity.validateAndNormalize();
 
     Dev.kernel.initOnce();
+
+    if (Dev.toolsEnabled) {
+        Dev.validateScenes();
+    }
 
     // Clear stale dev patches now that coordinates are baked into source
     try { localStorage.removeItem('DEV_PATCHES'); } catch(e) {}
