@@ -373,6 +373,7 @@ const Dev = {
 
             Dev.hotspots.render();
             Dev.layout.render();
+            Dev.bubbleSlots.render();
             Dev.updateStatus();
         }
     },
@@ -1566,6 +1567,56 @@ const Dev = {
         }
     },
 
+    bubbleSlots: {
+        _overlayEls: null,
+
+        isActive() {
+            return Dev.toolsEnabled && (Dev.activeTool === 'layout' || Dev.activeTool === 'bubbleSlots');
+        },
+
+        _ensureOverlayEls() {
+            const container = document.getElementById('scene-container');
+            if (!container) return null;
+            if (this._overlayEls && this._overlayEls.every(el => el.isConnected)) return this._overlayEls;
+            if (this._overlayEls) {
+                this._overlayEls.forEach(el => el.remove());
+            }
+            const slots = sceneRenderer.DEFAULT_SPEECH_BUBBLE_SLOTS;
+            this._overlayEls = Object.entries(slots).map(([zone]) => {
+                const el = document.createElement('div');
+                el.className = 'dev-bubble-slot-overlay';
+                el.dataset.bubbleSlot = zone;
+                const label = document.createElement('span');
+                label.className = 'dev-bubble-slot-label';
+                label.textContent = zone;
+                el.appendChild(label);
+                container.appendChild(el);
+                return el;
+            });
+            return this._overlayEls;
+        },
+
+        render() {
+            if (!this.isActive()) {
+                if (this._overlayEls) {
+                    this._overlayEls.forEach(el => el.remove());
+                    this._overlayEls = null;
+                }
+                return;
+            }
+            const els = this._ensureOverlayEls();
+            if (!els) return;
+            const slotEntries = Object.entries(sceneRenderer.DEFAULT_SPEECH_BUBBLE_SLOTS);
+            els.forEach((el, i) => {
+                const [, rect] = slotEntries[i];
+                const pos = positioningSystem.calculateHotspotPosition(rect.left, rect.top, rect.width, rect.height);
+                el.style.left = pos.left;
+                el.style.top = pos.top;
+                el.style.width = pos.width;
+                el.style.height = pos.height;
+            });
+        }
+    },
 
     listenersBound: false,
 
@@ -1686,6 +1737,9 @@ const Dev = {
                     }
                     if (event.currentTarget.dataset.devAction === 'ui-layout-editor') {
                         this.setActiveTool('layout');
+                    }
+                    if (event.currentTarget.dataset.devAction === 'bubble-slots-overlay') {
+                        this.setActiveTool('bubbleSlots');
                     }
                     if (event.currentTarget.dataset.devAction === 'validate') {
                         this.runValidationNow();
@@ -1837,7 +1891,8 @@ const Dev = {
             const action = button.dataset.devAction;
             const isActive = (action === 'click-trace' && this.activeTool === 'trace')
                 || (action === 'hotspot-editor' && this.activeTool === 'hotspots')
-                || (action === 'ui-layout-editor' && this.activeTool === 'layout');
+                || (action === 'ui-layout-editor' && this.activeTool === 'layout')
+                || (action === 'bubble-slots-overlay' && this.activeTool === 'bubbleSlots');
             button.classList.toggle('active', isActive);
         });
 
@@ -1852,6 +1907,7 @@ const Dev = {
         this.ui.updateFloatingButton();
         this.hotspots.render();
         this.layout.render();
+        this.bubbleSlots.render();
     },
 
     runValidationNow() {
