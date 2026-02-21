@@ -4410,7 +4410,7 @@ const sceneRenderer = {
                 text.className = '';
                 speaker.textContent = dialogueEntry.speaker;
 
-                this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
+                this._positionDialogueInSlot(dialogueBox, pos, dialogueEntry);
                 dialogueBox.dataset.tail = isLeft ? 'left' : 'right';
                 dialogueBox.dataset.zone = pos;
                 this._applyDialogueBubbleTail(dialogueBox, pos);
