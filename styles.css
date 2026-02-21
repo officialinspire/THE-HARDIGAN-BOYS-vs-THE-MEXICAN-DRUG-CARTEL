@@ -2932,3 +2932,82 @@ body.main-menu #scene-container {
         margin-top: clamp(2px, 0.5vh, 5px);
     }
 }
+
+/* ===== SCENE TRANSITION OVERLAY ===== */
+/*
+ * Full-screen black curtain used during scene transitions.
+ * z-index 500: above HUD (4), dialogue (5), fade-overlay (50), .overlay (100).
+ */
+#scene-transition-overlay {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 500;
+    transition: opacity 220ms ease;
+}
+
+#scene-transition-overlay.is-on {
+    opacity: 1;
+}
+
+/* ===== SCENE TITLE FX ===== */
+/*
+ * Animated title that mirrors the HUD #scene-title visually but lives
+ * above the transition overlay (z-index 600) so it can be shown while
+ * the overlay is fading out.
+ */
+#scene-title-fx {
+    position: fixed;
+    top: max(30px, calc(env(safe-area-inset-top) + 20px));
+    left: 50%;
+    transform: translateX(-50%) translateY(6px) scale(0.98);
+
+    /* Match #scene-title font / colour exactly */
+    font-family: 'Courier New', 'Consolas', monospace;
+    font-size: clamp(14px, 3vw, 18px);
+    font-weight: bold;
+    color: #FFD700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-align: center;
+    text-shadow:
+        0 0 15px rgba(255, 215, 0, 0.9),
+        2px 2px 6px rgba(0, 0, 0, 0.95),
+        0 2px 10px rgba(0, 0, 0, 0.55);
+
+    max-width: 50%;
+    padding: 8px 12px;
+
+    pointer-events: none;
+    z-index: 600;
+    opacity: 0;
+    transition: opacity 260ms ease, transform 260ms ease;
+}
+
+#scene-title-fx.is-show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+}
+
+/* ===== REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+    #scene-transition-overlay {
+        transition: none;
+    }
+
+    #scene-title-fx {
+        transition: none;
+    }
+
+    /* Instant show/hide — skip intermediate states */
+    #scene-transition-overlay.is-on {
+        opacity: 1;
+    }
+
+    #scene-title-fx.is-show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+}
