@@ -5286,7 +5286,50 @@ const sceneRenderer = {
         return { fits: fitsNow };
     },
 
-    _splitIntoBubblePages(dialogueBox, fullText, maxPages = 3) {
+    _splitChunkToFitBubble(dialogueBox, chunkText) {
+        const normalized = String(chunkText || '').replace(/\s+/g, ' ').trim();
+        if (!normalized) return [''];
+
+        if (this._measureSpeechBubbleFit(dialogueBox, normalized).fits) {
+            return [normalized];
+        }
+
+        const words = normalized.split(' ');
+        if (words.length <= 1) return [normalized];
+
+        const pages = [];
+        let index = 0;
+
+        while (index < words.length) {
+            let candidate = words[index];
+            let lastFit = this._measureSpeechBubbleFit(dialogueBox, candidate).fits ? candidate : '';
+            let lastFitIndex = lastFit ? index : index - 1;
+
+            for (let i = index + 1; i < words.length; i++) {
+                const next = `${candidate} ${words[i]}`;
+                if (this._measureSpeechBubbleFit(dialogueBox, next).fits) {
+                    candidate = next;
+                    lastFit = next;
+                    lastFitIndex = i;
+                    continue;
+                }
+                break;
+            }
+
+            if (!lastFit) {
+                // If even a single token doesn't fit (extremely unlikely), emit it to avoid loops.
+                pages.push(words[index]);
+                index += 1;
+            } else {
+                pages.push(lastFit);
+                index = lastFitIndex + 1;
+            }
+        }
+
+        return pages.filter(Boolean);
+    },
+
+    _splitIntoBubblePages(dialogueBox, fullText, maxPages = 6) {
         const txt = String(fullText || '').replace(/\s+/g, ' ').trim();
         if (!txt) return [''];
 
@@ -5318,14 +5361,26 @@ const sceneRenderer = {
             if (cur) pages.push(cur);
             cur = chunks[i];
 
+            if (!ok(cur)) {
+                const forcedPages = this._splitChunkToFitBubble(dialogueBox, cur);
+                if (forcedPages.length > 1) {
+                    pages.push(...forcedPages.slice(0, -1));
+                    cur = forcedPages[forcedPages.length - 1] || '';
+                }
+            }
+
             if (pages.length >= maxPages - 1) {
                 const rest = [cur].concat(chunks.slice(i + 1)).join(' ').trim();
-                pages.push(rest);
+                const remainderPages = this._splitChunkToFitBubble(dialogueBox, rest);
+                pages.push(...remainderPages);
                 return pages.filter(Boolean);
             }
         }
 
-        if (cur) pages.push(cur);
+        if (cur) {
+            const tailPages = this._splitChunkToFitBubble(dialogueBox, cur);
+            pages.push(...tailPages);
+        }
         return pages.filter(Boolean);
     },
 
