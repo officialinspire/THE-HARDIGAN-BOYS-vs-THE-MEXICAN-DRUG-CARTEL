@@ -4648,7 +4648,7 @@ const sceneRenderer = {
             const isSpeech = dialogueBox.dataset.layoutPanel === 'speech-bubble';
             const hasChoices = dialogueEntry.choices && dialogueEntry.choices.length > 0;
             if (isSpeech && !hasChoices) {
-                const pages = this._splitIntoBubblePages(dialogueBox, dialogueText, 3);
+                const pages = this._splitIntoBubblePages(dialogueBox, dialogueText, 6);
                 if (pages.length > 1) {
                     this._bubblePages = pages;
                     this._bubblePageIndex = 0;
@@ -4825,6 +4825,7 @@ const sceneRenderer = {
                 this._bubbleTypingDone = true;
                 this._updateDialogueOverflowIndicator(textEl);
                 if (this._bubblePageIndex === this._bubblePages.length - 1) {
+                    // Last page: disable paging and show the normal continue button
                     this._bubblePagingActive = false;
                     this._setBubblePagingUI(dialogueBox, false);
                     if (dialogueEntry?.next) {
@@ -4835,6 +4836,21 @@ const sceneRenderer = {
                             this._closeDialogueThen(() => this.nextDialogue());
                         }, 3000);
                     }
+                } else {
+                    // Intermediate page: show a visible "more..." button so the player
+                    // can advance without having to know to tap the bubble.
+                    continueBtn.textContent = 'more...';
+                    continueBtn.setAttribute('aria-label', 'Show more dialogue');
+                    continueBtn.classList.remove('hidden');
+                    continueBtn.onclick = () => {
+                        if (gameState.actionLock || this.isTransitioning) return;
+                        SFXGenerator.playContinueButton();
+                        this._bubblePageIndex++;
+                        this._updateBubblePageIndicator();
+                        const activeEntry = gameState.currentDialogueEntry || null;
+                        const p = this.normalizeZoneName((activeEntry?.position) || 'left');
+                        this._showBubblePage(dialogueBox, p, activeEntry || {});
+                    };
                 }
             }
         });
@@ -6360,7 +6376,7 @@ const SCENES = {
             },
             {
                 speaker: 'SOFIA',
-                text: "The drive has two things on it. A DEA informant list — active witnesses against the Villarreal cartel. And a payment ledger: shell companies, routing numbers, and names of U.S. officials who've been taking cartel money for six years.",
+                text: "The drive has two things on it. A DEA informant list — active witnesses against the MENDOZA cartel. And a payment ledger: shell companies, routing numbers, and names of U.S. officials who've been taking cartel money for six years.",
                 position: 'right',
                 next: 'NEXT_DIALOGUE'
             },
@@ -6396,7 +6412,7 @@ const SCENES = {
             },
             {
                 speaker: 'SOFIA',
-                text: "There's a CIA analyst named Gray who's been building an independent case against the Villarreal operation for two years. She's the only person who can authenticate this data without it getting buried by the same people who are on the ledger.",
+                text: "There's a CIA analyst named Gray who's been building an independent case against the MENDOZA operation for two years. She's the only person who can authenticate this data without it getting buried by the same people who are on the ledger.",
                 position: 'right',
                 next: 'NEXT_DIALOGUE'
             },
@@ -6507,14 +6523,14 @@ const SCENES = {
             { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' },
             { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk.png', position: 'right-2' },
-            { id: 'cartel_boss', name: 'EL LICENCIADO', sprite: 'char_cartel_boss_menacing-right.png', position: 'right' }
+            { id: 'cartel_boss', name: 'ANDREAS "THE BUTCHER" MENDOZA', sprite: 'char_cartel_boss_menacing-right.png', position: 'right' }
         ],
-        
+
         hotspots: [],
-        
+
         dialogue: [
             {
-                speaker: 'EL LICENCIADO',
+                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
                 text: "So. Two suburban boys with the one USB everyone wants.",
                 position: 'right',
                 next: 'NEXT_DIALOGUE'
@@ -6623,12 +6639,12 @@ const SCENES = {
         music: 'Warehouse Night Suspense.mp3',
         
         characters: [
-            { id: 'cartel_boss', name: 'EL LICENCIADO', sprite: 'char_cartel_boss_menacing.png', position: 'left' },
+            { id: 'cartel_boss', name: 'ANDREAS "THE BUTCHER" MENDOZA', sprite: 'char_cartel_boss_menacing.png', position: 'left' },
             { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_threatening-right.png', position: 'right' }
         ],
-        
+
         hotspots: [],
-        
+
         dialogue: [
             {
                 speaker: 'NARRATION',
@@ -6636,7 +6652,7 @@ const SCENES = {
                 next: 'NEXT_DIALOGUE'
             },
             {
-                speaker: 'EL LICENCIADO',
+                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
                 text: "So who gets the USB, boys?",
                 position: 'left',
                 next: 'NEXT_DIALOGUE'
