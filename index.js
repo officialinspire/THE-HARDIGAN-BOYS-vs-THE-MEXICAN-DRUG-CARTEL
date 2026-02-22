@@ -6641,7 +6641,10 @@ const SCENES = {
         background: './assets/backgrounds/bg_street_suburb_hardigan_house.png',
         music: 'Covert Investigation.mp3',
         
-        characters: [],
+        characters: [
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' }
+        ],
         hotspots: [],
         
         dialogue: [
