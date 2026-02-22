@@ -5946,7 +5946,7 @@ const SCENES = {
                         sceneRenderer.addCharacter({
                             id: 'mrs_rivera',
                             name: 'MRS. RIVERA',
-                            sprite: 'char_luisa_pleading-left.png',
+                            sprite: 'char_luisa_pleading.png',
                             position: 'right'
                         }, 100);
                     }, 200);
@@ -5964,18 +5964,16 @@ const SCENES = {
                 text: "Away from the window. NOW! Both of you.",
                 position: 'left',
                 bubbleLayout: { left: 821, top: 221, width: 898, height: 518 },
-                bubbleDelay: 900,
+                bubbleDelay: 1300,
                 next: 'NEXT_DIALOGUE',
                 onShow: () => {
                     sceneRenderer.removeCharacter('hank', false);
-                    setTimeout(() => {
-                        sceneRenderer.addCharacter({
-                            id: 'mom',
-                            name: 'MOM',
-                            sprite: 'char_mom_worried-left.png',
-                            position: 'left'
-                        }, 60);
-                    }, 180);
+                    sceneRenderer.addCharacter({
+                        id: 'mom',
+                        name: 'MOM',
+                        sprite: 'char_mom_worried-left.png',
+                        position: 'left'
+                    }, 60);
                 }
             },
             {
@@ -5995,7 +5993,7 @@ const SCENES = {
                         }, 60);
                     }, 180);
 
-                    // Wait for Hank's slide-in to complete before showing the choice box
+                    // Wait for Hank's slide-in to complete before showing the choice box.
                     setTimeout(() => {
                         sceneRenderer.showDialogue({
                         speaker: 'CHOICE',
