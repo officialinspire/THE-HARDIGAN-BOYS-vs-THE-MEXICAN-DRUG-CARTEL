@@ -4501,6 +4501,12 @@ const sceneRenderer = {
                 }
             }
 
+            // bubbleDelay: hold off showing the dialogue box so a character can
+            // finish sliding in before the speech bubble pops in.
+            if (dialogueEntry.bubbleDelay > 0) {
+                await new Promise(resolve => setTimeout(resolve, dialogueEntry.bubbleDelay));
+            }
+
             const dialogueBox = document.getElementById('dialogue-box');
             const dialogueContainer = document.getElementById('dialogue-container');
             const dialogueBubble = document.getElementById('dialogue-bubble');
@@ -5618,7 +5624,7 @@ const SCENES = {
                 id: 'television',
                 label: 'Television',
                 coordSystem: 'native',
-                x: 24, y: 376, width: 272, height: 216,
+                x: 112, y: 416, width: 272, height: 216,
                 onClick() {
                     gameState.objectsClicked.add('television');
                     lightingEffects.toggleTV();
@@ -5749,18 +5755,35 @@ const SCENES = {
                 text: "If either of you used this much energy on school, we'd be rich by now!",
                 position: 'right',
                 bubbleLayout: { left: 700, top: 286, width: 704, height: 438 },
+                // Wait for Mom's slide-in animation to finish before the speech bubble pops in.
+                bubbleDelay: 900,
                 next: () => {
-                    // Slide out Mom after her dialogue for a smoother handoff back to scene interactions
+                    // Slide Mom out, then auto-play Jonah's transitional lights dialogue.
                     sceneRenderer.removeCharacter('mom', true);
+                    setTimeout(() => {
+                        // Pre-flag so the window hotspot onClick doesn't repeat this line.
+                        gameState.objectsClicked.add('window_dialogue_shown');
+                        sceneRenderer.showDialogue({
+                            speaker: 'JONAH',
+                            text: "Uh. Hank? There's like... a lot of lights outside.",
+                            position: 'right',
+                            bubbleLayout: { left: 1016, top: 348, width: 836, height: 429 },
+                            next: () => {
+                                sceneRenderer._cleanupTypewriter(document.getElementById('dialogue-text'));
+                                document.getElementById('dialogue-box').classList.add('hidden');
+                                gameState.dialogueLock = false;
+                            }
+                        });
+                    }, 700);
                 },
                 onShow: () => {
-                    // Add Mom immediately so the speech bubble anchors to her on the first frame.
+                    // Add Mom so she slides in from the right before her bubble appears.
                     sceneRenderer.addCharacter({
                         id: 'mom',
                         name: 'MOM',
                         sprite: 'char_mom_worried-right.png',
                         position: 'right-2'
-                    }, 0);
+                    }, 100);
                 }
             }
         ],
