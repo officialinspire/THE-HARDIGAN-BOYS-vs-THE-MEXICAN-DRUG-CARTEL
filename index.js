@@ -5589,8 +5589,10 @@ const SCENES = {
         background: './assets/backgrounds/bg_hardigan_livingroom_night_02.png',
         music: 'Hardigan Noir Tension.mp3',
         checkProgression(delay = 0) {
+            // Only transition after window_dialogue_shown is set, which happens
+            // inside the window onClick once all other clickables have been explored.
             const attemptTransition = () => {
-                if (gameState.objectsClicked.has('window') && gameState.objectsClicked.size >= 3) {
+                if (gameState.objectsClicked.has('window_dialogue_shown')) {
                     sceneRenderer.loadScene('S2_ICE_RAID_WINDOW');
                 }
             };
@@ -5664,12 +5666,16 @@ const SCENES = {
                 onClick() {
                     gameState.objectsClicked.add('window');
 
-                    SCENES.S1_LIVING_ROOM_INTRO.checkProgression();
-                    if (gameState.objectsClicked.has('window') && gameState.objectsClicked.size >= 3) {
-                        return;
-                    }
+                    // All non-window clickables must be explored before Jonah's
+                    // transition dialogue is unlocked.
+                    const allOthersClicked =
+                        gameState.objectsClicked.has('remote') &&
+                        gameState.objectsClicked.has('television') &&
+                        gameState.objectsClicked.has('lamp') &&
+                        gameState.objectsClicked.has('notebook');
 
-                    if (!gameState.objectsClicked.has('window_dialogue_shown')) {
+                    if (allOthersClicked && !gameState.objectsClicked.has('window_dialogue_shown')) {
+                        // Unlock: play Jonah's lights line then transition to Scene 2.
                         gameState.objectsClicked.add('window_dialogue_shown');
                         sceneRenderer.showDialogue({
                             speaker: 'JONAH',
@@ -5683,18 +5689,22 @@ const SCENES = {
                                     position: 'left',
                                     bubbleLayout: { left: 820, top: 412, width: 704, height: 438 },
                                     next: () => {
-                                        if (gameState.objectsClicked.has('window') && gameState.objectsClicked.size >= 3) {
-                                            SCENES.S1_LIVING_ROOM_INTRO.checkProgression();
-                                        } else {
-                                            sceneRenderer._cleanupTypewriter(document.getElementById('dialogue-text'));
-                                            document.getElementById('dialogue-box').classList.add('hidden');
-                                            gameState.dialogueLock = false;
-                                        }
+                                        sceneRenderer.loadScene('S2_ICE_RAID_WINDOW');
                                     }
                                 });
                             }
                         });
+                    } else if (!allOthersClicked) {
+                        // Generic prompt while the room hasn't been fully explored yet.
+                        sceneRenderer.showDialogue({
+                            speaker: 'HANK',
+                            text: "Hmm. Something feels off out there... let me get my bearings first.",
+                            position: 'left',
+                            next: 'NEXT_DIALOGUE'
+                        });
                     }
+                    // If window_dialogue_shown is already set the transition is already
+                    // underway — do nothing.
                 }
             },
             {
@@ -5774,22 +5784,13 @@ const SCENES = {
                 // Wait for Mom's slide-in animation to finish before the speech bubble pops in.
                 bubbleDelay: 900,
                 next: () => {
-                    // Slide Mom out, then auto-play Jonah's transitional lights dialogue.
+                    // Slide Mom out, then unlock explore phase — Jonah's lights line
+                    // is gated behind the window hotspot after all other clickables are done.
                     sceneRenderer.removeCharacter('mom', true);
                     setTimeout(() => {
-                        // Pre-flag so the window hotspot onClick doesn't repeat this line.
-                        gameState.objectsClicked.add('window_dialogue_shown');
-                        sceneRenderer.showDialogue({
-                            speaker: 'JONAH',
-                            text: "Uh. Hank? There's like... a lot of lights outside.",
-                            position: 'right',
-                            bubbleLayout: { left: 1016, top: 348, width: 836, height: 429 },
-                            next: () => {
-                                sceneRenderer._cleanupTypewriter(document.getElementById('dialogue-text'));
-                                document.getElementById('dialogue-box').classList.add('hidden');
-                                gameState.dialogueLock = false;
-                            }
-                        });
+                        sceneRenderer._cleanupTypewriter(document.getElementById('dialogue-text'));
+                        document.getElementById('dialogue-box').classList.add('hidden');
+                        gameState.dialogueLock = false;
                     }, 700);
                 },
                 onShow: () => {
