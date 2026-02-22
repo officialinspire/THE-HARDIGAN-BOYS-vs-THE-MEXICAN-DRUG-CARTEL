@@ -6254,8 +6254,8 @@ const SCENES = {
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
-            { id: 'student_1', name: 'RANDOM STUDENT', sprite: 'char_lupita_annoyed-right.png', position: 'right-2' },
-            { id: 'student_2', name: 'ANOTHER STUDENT', sprite: 'char_carlos_normal-right.png', position: 'right' }
+            { id: 'student_1', name: 'RANDOM STUDENT', sprite: 'char_random-student-01.png', position: 'right-2' },
+            { id: 'student_2', name: 'ANOTHER STUDENT', sprite: 'char_random-student-02.png', position: 'right' }
         ],
 
         hotspots: [],
