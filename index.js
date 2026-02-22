@@ -6235,24 +6235,27 @@ const SCENES = {
         title: 'Aftermath',
         background: './assets/backgrounds/bg_school_hallway_day.png',
         music: 'Empty Hallways (Ambient Mix).mp3',
-        
+
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
-            { id: 'sofia', name: 'SOFIA', sprite: 'char_sofia_neutral.png', position: 'right' }
+            { id: 'student_1', name: 'RANDOM STUDENT', sprite: 'char_lupita_annoyed-right.png', position: 'right-2' },
+            { id: 'student_2', name: 'ANOTHER STUDENT', sprite: 'char_carlos_normal-right.png', position: 'right' }
         ],
-        
+
         hotspots: [],
-        
+
         dialogue: [
             {
                 speaker: 'RANDOM STUDENT',
                 text: "I heard the dad was totally cartel.",
+                position: 'right-2',
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'ANOTHER STUDENT',
                 text: "My cousin's friend said ICE only hits houses if you're like, super guilty.",
+                position: 'right',
                 next: 'NEXT_DIALOGUE'
             },
             {
@@ -6265,7 +6268,20 @@ const SCENES = {
                 speaker: 'SOFIA',
                 text: "You still have the drive?",
                 position: 'right',
-                next: 'NEXT_DIALOGUE'
+                bubbleDelay: 600,
+                next: 'NEXT_DIALOGUE',
+                onShow: () => {
+                    sceneRenderer.removeCharacter('student_1', true);
+                    sceneRenderer.removeCharacter('student_2', true);
+                    setTimeout(() => {
+                        sceneRenderer.addCharacter({
+                            id: 'sofia',
+                            name: 'SOFIA',
+                            sprite: 'char_sofia_annoyed-right.png',
+                            position: 'right'
+                        }, 100);
+                    }, 300);
+                }
             },
             {
                 speaker: 'HANK',
@@ -6277,6 +6293,30 @@ const SCENES = {
                 speaker: 'SOFIA',
                 text: "Good. Because you're not the only ones who want it.",
                 position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'SOFIA',
+                text: "Come to my place tonight — both of you. Around eight.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'JONAH',
+                text: "Your place? Why can't we just talk here?",
+                position: 'left-2',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'SOFIA',
+                text: "Because what I have to show you isn't something you discuss in a hallway.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "Fine. We'll be there.",
+                position: 'left',
                 next: () => {
                     sceneRenderer.loadScene('S5_SOFIA_INTEL');
                 }
