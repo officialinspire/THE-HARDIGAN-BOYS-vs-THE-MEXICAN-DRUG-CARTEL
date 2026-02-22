@@ -2570,18 +2570,17 @@ const saveSystem = {
         if (saveData) {
             try {
                 const data = JSON.parse(saveData);
-                gameState.currentSceneId = data.currentSceneId;
                 gameState.inventory = data.inventory || [];
                 gameState.notebook = data.notebook || [];
                 gameState.flags = { ...gameState.flags, ...data.flags };
                 if (DEBUG) console.log('Game loaded');
-                return true;
+                return data.currentSceneId || null;
             } catch (err) {
                 console.error('Failed to load save:', err);
-                return false;
+                return null;
             }
         }
-        return false;
+        return null;
     },
     
     hasSave() {
@@ -5531,9 +5530,10 @@ const SCENES = {
             } else {
                 continueBtn.addEventListener('click', () => {
                     SFXGenerator.playButtonClick();
-                    if (saveSystem.load()) {
+                    const savedSceneId = saveSystem.load();
+                    if (savedSceneId) {
                         document.body.classList.remove('main-menu');
-                        sceneRenderer.loadScene(gameState.currentSceneId);
+                        sceneRenderer.loadScene(savedSceneId);
                     }
                 });
             }
