@@ -5916,10 +5916,38 @@ const SCENES = {
                 }
             },
             {
+                speaker: 'MRS. RIVERA',
+                text: "Please! Don't take him — he hasn't done anything wrong!",
+                position: 'right',
+                bubbleLayout: { left: 1050, top: 280, width: 836, height: 429 },
+                bubbleDelay: 800,
+                next: 'NEXT_DIALOGUE',
+                onShow: () => {
+                    // Remove ICE agent to make room, then slide Mrs. Rivera in from the right
+                    sceneRenderer.removeCharacter('ice_agent', false);
+                    setTimeout(() => {
+                        sceneRenderer.addCharacter({
+                            id: 'mrs_rivera',
+                            name: 'MRS. RIVERA',
+                            sprite: 'char_luisa_pleading-left.png',
+                            position: 'right'
+                        }, 100);
+                    }, 200);
+                }
+            },
+            {
+                speaker: 'MR. RIVERA',
+                text: "I'm innocent! I swear — I have nothing to do with any of this!",
+                position: 'right-2',
+                bubbleLayout: { left: 1050, top: 280, width: 836, height: 429 },
+                next: 'NEXT_DIALOGUE'
+            },
+            {
                 speaker: 'MOM',
-                text: "Away from the window. Now. Both of you.",
+                text: "Away from the window. NOW! Both of you.",
                 position: 'left',
                 bubbleLayout: { left: 821, top: 221, width: 898, height: 518 },
+                bubbleDelay: 900,
                 next: 'NEXT_DIALOGUE',
                 onShow: () => {
                     sceneRenderer.removeCharacter('hank', false);
@@ -5939,7 +5967,8 @@ const SCENES = {
                 position: 'left',
                 bubbleLayout: { left: 821, top: 221, width: 898, height: 518 },
                 next: () => {
-                    sceneRenderer.removeCharacter('mom', false);
+                    // Mom slides out to the left, then Hank slides in from the left to replace her
+                    sceneRenderer.removeCharacter('mom', true);
                     setTimeout(() => {
                         sceneRenderer.addCharacter({
                             id: 'hank',
@@ -5949,6 +5978,7 @@ const SCENES = {
                         }, 60);
                     }, 180);
 
+                    // Wait for Hank's slide-in to complete before showing the choice box
                     setTimeout(() => {
                         sceneRenderer.showDialogue({
                         speaker: 'CHOICE',
@@ -5974,12 +6004,12 @@ const SCENES = {
                             }
                         ]
                         });
-                    }, 720);
+                    }, 1100);
                 }
             }
         ]
     },
-    
+
     // ===== S3A: GOOD CITIZENS PATH =====
     S3A_FRONT_YARD_FROM_DISTANCE: {
         id: 'S3A_FRONT_YARD_FROM_DISTANCE',
