@@ -2444,6 +2444,9 @@ const audioManager = {
     musicPlayer: null,
     sfxPlayer: null,
     currentTrack: null,
+    musicTrackVolumeMultipliers: {
+        'The Briefing Room (Somber Ambient).mp3': 0.45
+    },
     maxConcurrentSfx: 2,
     activeSfx: 0,
     
@@ -2481,7 +2484,8 @@ const audioManager = {
 
             fadeOut().then(() => {
                 this.musicPlayer.src = `./audio/${filename}`;
-                const targetVol = gameState.settings.musicVolume / 100;
+                const volumeMultiplier = this.musicTrackVolumeMultipliers[filename] ?? 1;
+                const targetVol = (gameState.settings.musicVolume / 100) * volumeMultiplier;
 
                 // Always fade in music for smooth transitions
                 this.musicPlayer.volume = 0;
@@ -2540,7 +2544,8 @@ const audioManager = {
     
     updateVolumes() {
         if (this.musicPlayer) {
-            this.musicPlayer.volume = gameState.settings.musicVolume / 100;
+            const volumeMultiplier = this.musicTrackVolumeMultipliers[this.currentTrack] ?? 1;
+            this.musicPlayer.volume = (gameState.settings.musicVolume / 100) * volumeMultiplier;
         }
         if (this.sfxPlayer) {
             this.sfxPlayer.volume = gameState.settings.sfxVolume / 100;
@@ -6504,7 +6509,7 @@ const SCENES = {
         id: 'S6_INTEL_ENTANGLEMENT',
         title: 'Ms. Gray Enters the Chat',
         background: './assets/backgrounds/bg_cia_office.png',
-        music: 'Classified Silence.mp3',
+        music: 'The Briefing Room (Somber Ambient).mp3',
         
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking-left.png', position: 'left' },
