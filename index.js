@@ -6672,7 +6672,8 @@ const SCENES = {
         music: 'Covert Investigation.mp3',
         
         characters: [
-            { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk.png', position: 'center' }
+            { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk.png', position: 'right' },
+            { id: 'elgato', name: 'EL GATO', sprite: 'char_elgato_neutral-right.png', position: 'right-2' }
         ],
         
         hotspots: [],
@@ -6702,7 +6703,8 @@ const SCENES = {
         
         characters: [
             { id: 'cartel_boss', name: 'ANDREAS "THE BUTCHER" MENDOZA', sprite: 'char_cartel_boss_menacing.png', position: 'left' },
-            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_threatening-right.png', position: 'right' }
+            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_threatening-right.png', position: 'right' },
+            { id: 'elgato', name: 'EL GATO', sprite: 'char_elgato_intense-right.png', position: 'right-2' }
         ],
 
         hotspots: [],
