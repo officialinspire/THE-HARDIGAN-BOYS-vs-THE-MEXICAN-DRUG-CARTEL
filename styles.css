@@ -605,12 +605,12 @@ body.main-menu #scene-title {
 
 /* --- SPEECH BUBBLE: stable comic size (matches example images) --- */
 #dialogue-box[data-layout-panel="speech-bubble"] {
-    width: clamp(320px, 36vw, 560px);
+    width: clamp(340px, 40vw, 620px);
     max-width: calc(100% - 24px);
 }
 #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container {
-    height: clamp(150px, 20vh, 260px);
-    min-height: clamp(150px, 20vh, 260px);
+    height: clamp(180px, 25vh, 320px);
+    min-height: clamp(180px, 25vh, 320px);
 }
 #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-content {
     height: 100%;
@@ -629,7 +629,12 @@ body.main-menu #scene-title {
         bottom: auto;
     }
     #dialogue-box[data-layout-panel="speech-bubble"] {
-        width: clamp(280px, 92vw, 520px);
+        width: clamp(300px, 94vw, 620px);
+    }
+
+    #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container {
+        height: clamp(190px, 30vh, 360px);
+        min-height: clamp(190px, 30vh, 360px);
     }
 }
 
@@ -876,7 +881,7 @@ body.main-menu #scene-title {
 }
 
 #dialogue-speaker {
-    font-size: clamp(20px, 2.8vw, 32px);
+    font-size: clamp(24px, 3vw, 36px);
     font-weight: 900;
     color: #1a1a1a;
     text-transform: uppercase;
@@ -893,8 +898,8 @@ body.main-menu #scene-title {
 }
 
 #dialogue-text {
-    font-size: clamp(16px, 2.1vw, 24px);
-    line-height: 1.52;
+    font-size: clamp(20px, 2.5vw, 30px);
+    line-height: 1.45;
     color: #000;
     margin-bottom: clamp(8px, 1.5vw, 12px);
     font-family: 'Comic Sans MS', 'Chalkboard SE', 'Trebuchet MS', sans-serif;
@@ -926,12 +931,12 @@ body.main-menu #scene-title {
     }
 
     #dialogue-speaker {
-        font-size: clamp(9px, 1.8vw, 12px);
+        font-size: clamp(18px, 4.2vw, 28px);
     }
 
     #dialogue-text {
-        font-size: clamp(7px, 1.5vw, 10px);
-        line-height: 1.2;
+        font-size: clamp(16px, 3.8vw, 24px);
+        line-height: 1.4;
     }
 }
 
@@ -950,11 +955,11 @@ body.main-menu #scene-title {
     }
 
     #dialogue-speaker {
-        font-size: clamp(7px, 1.6vw, 10px);
+        font-size: clamp(16px, 4.8vw, 22px);
     }
 
     #dialogue-text {
-        font-size: clamp(6px, 1.4vw, 9px);
+        font-size: clamp(15px, 4.4vw, 20px);
         overflow: hidden;
     }
 }
@@ -971,7 +976,7 @@ body.main-menu #scene-title {
 
 #dialogue-text.narration {
     font-family: 'Comic Sans MS', 'Trebuchet MS', sans-serif;
-    font-size: clamp(10px, 1.8vw, 17px);
+    font-size: clamp(18px, 2.2vw, 24px);
     color: #FFD700;
     text-shadow: 2px 2px 6px rgba(0, 0, 0, 1),
                  0 0 10px rgba(255, 215, 0, 0.7);
@@ -992,7 +997,7 @@ body.main-menu #scene-title {
 
 #dialogue-text.choice-text {
     font-family: 'Comic Sans MS', 'Trebuchet MS', sans-serif;
-    font-size: clamp(10px, 2.2vw, 20px);
+    font-size: clamp(18px, 2.4vw, 26px);
     color: #FFD700;
     text-shadow: 2px 2px 6px rgba(0, 0, 0, 1),
                  0 0 12px rgba(255, 215, 0, 0.8);
@@ -1091,10 +1096,10 @@ body.main-menu #scene-title {
     font-family: 'Bangers', 'Comic Sans MS', 'Trebuchet MS', sans-serif;
     cursor: pointer;
     touch-action: manipulation;
-    align-self: flex-end;
+    align-self: center;
     display: block;
     margin-left: auto;
-    margin-right: 0;
+    margin-right: auto;
     letter-spacing: 1px;
     text-transform: uppercase;
     line-height: 1.2;

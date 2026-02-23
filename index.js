@@ -5253,8 +5253,9 @@ const sceneRenderer = {
         textEl.style.fontSize = '';
         if (speakerEl) speakerEl.style.fontSize = '';
 
-        const minText = 10;     // floor: readable on desktop + Android
-        const minSpeaker = 11;
+        const isSmallViewport = window.matchMedia('(max-width: 768px)').matches;
+        const minText = isSmallViewport ? 15 : 17;
+        const minSpeaker = isSmallViewport ? 16 : 18;
 
         let guard = 0;
         while (guard < 18 && (textEl.scrollHeight > textEl.clientHeight || contentEl.scrollHeight > contentEl.clientHeight)) {
@@ -5338,15 +5339,21 @@ const sceneRenderer = {
         const txt = String(fullText || '').replace(/\s+/g, ' ').trim();
         if (!txt) return [''];
 
-        // Prefer sentence-ish splits
-        let chunks = txt.split(/(?<=[.!?])\s+/);
+        const sentenceUnits = txt
+            .split(/(?<=[.!?])\s+/)
+            .map(part => part.trim())
+            .filter(Boolean);
 
-        // fallback: word chunking
-        if (chunks.length === 1) {
+        // Keep each page to 1-2 sentences when possible for readability.
+        let chunks = [];
+        if (sentenceUnits.length > 1) {
+            for (let i = 0; i < sentenceUnits.length; i += 2) {
+                chunks.push(sentenceUnits.slice(i, i + 2).join(' '));
+            }
+        } else {
             const words = txt.split(' ');
-            chunks = [];
-            for (let i = 0; i < words.length; i += 12) {
-                chunks.push(words.slice(i, i + 12).join(' '));
+            for (let i = 0; i < words.length; i += 10) {
+                chunks.push(words.slice(i, i + 10).join(' '));
             }
         }
 
@@ -5356,7 +5363,7 @@ const sceneRenderer = {
         const ok = (s) => this._measureSpeechBubbleFit(dialogueBox, s).fits;
 
         for (let i = 0; i < chunks.length; i++) {
-            const next = cur ? (cur + ' ' + chunks[i]) : chunks[i];
+            const next = cur ? `${cur} ${chunks[i]}` : chunks[i];
 
             if (ok(next)) {
                 cur = next;
