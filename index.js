@@ -221,6 +221,12 @@ const gameState = {
     currentSceneId: 'S0_MAIN_MENU',
     inventory: [],
     notebook: [],
+    journalSeen: {},
+    storyProgress: {
+        currentChapter: null,
+        lastSceneTitle: null,
+        lastObjective: null
+    },
     flags: {
         HELPED_ICE: false,
         HELPED_NEIGHBORS: false,
@@ -2562,6 +2568,8 @@ const saveSystem = {
             currentSceneId: gameState.currentSceneId,
             inventory: gameState.inventory,
             notebook: gameState.notebook,
+            journalSeen: gameState.journalSeen,
+            storyProgress: gameState.storyProgress,
             flags: gameState.flags,
             timestamp: Date.now()
         };
@@ -2577,6 +2585,11 @@ const saveSystem = {
                 const data = JSON.parse(saveData);
                 gameState.inventory = data.inventory || [];
                 gameState.notebook = data.notebook || [];
+                gameState.journalSeen = data.journalSeen || {};
+                gameState.storyProgress = {
+                    ...gameState.storyProgress,
+                    ...(data.storyProgress || {})
+                };
                 gameState.flags = { ...gameState.flags, ...data.flags };
                 if (DEBUG) console.log('Game loaded');
                 return data.currentSceneId || null;
@@ -2698,6 +2711,17 @@ const ITEM_DISPLAY_NAMES = {
     tv_remote: 'TV REMOTE'
 };
 
+const ITEM_JOURNAL_HINTS = {
+    neighbors_usb: 'This USB probably matters at the school computers or when talking to Ortega.',
+    burner_phone: 'Keep this close. CIA contacts may expect updates or proof before making their next move.',
+    house_key: 'The house key may unlock side paths when the family needs to move quickly or secretly.',
+    moms_nurse_badge: 'A real hospital badge could open staff-only areas and build trust with medical contacts.',
+    fake_fbi_badge: 'Use the fake badge sparingly—best for intimidation when no real agents are around.',
+    cartel_usb: 'This drive could expose cartel operations. Try pairing it with allies who can decrypt data safely.',
+    mysterious_passport: 'This passport hints at an escape route or a false identity option in high-risk moments.',
+    tv_remote: 'The remote might reveal news clues or hidden broadcasts tied to the investigation.'
+};
+
 let statusToastTimerId = null;
 
 function getPrettyItemName(itemId) {
@@ -2724,12 +2748,30 @@ function showStatusToast(msg, ms = 1400) {
     }, ms);
 }
 
+function addJournalOnce(key, title, content) {
+    if (!key || gameState.journalSeen[key]) return;
+
+    notebook.add(title, content);
+    gameState.journalSeen[key] = true;
+    saveSystem.save();
+}
+
 // ===== INVENTORY SYSTEM =====
 const inventory = {
     add(itemId) {
         if (!gameState.inventory.includes(itemId)) {
             gameState.inventory.push(itemId);
             console.log(`Added to inventory: ${itemId}`);
+
+            const hintContent = ITEM_JOURNAL_HINTS[itemId];
+            if (hintContent) {
+                addJournalOnce(
+                    `itemhint_${itemId}`,
+                    `ITEM CLUE: ${getPrettyItemName(itemId)}`,
+                    hintContent
+                );
+            }
+
             SFXGenerator.playMenuOpen();
             saveSystem.save();
             showStatusToast(`ITEM ACQUIRED: ${getPrettyItemName(itemId)}`);
@@ -4070,6 +4112,17 @@ const sceneRenderer = {
 
             this.currentScene = scene;
             gameState.currentSceneId = sceneId;
+            gameState.storyProgress.currentChapter = scene.chapter || scene.chapterId || null;
+            gameState.storyProgress.lastSceneTitle = scene.title || sceneId;
+            gameState.storyProgress.lastObjective = scene.objective || null;
+
+            if (Array.isArray(scene.journal)) {
+                scene.journal.forEach(entry => {
+                    if (!entry) return;
+                    addJournalOnce(entry.key, entry.title, entry.content);
+                });
+            }
+
             Dev.updateStatus();
             gameState.currentDialogueIndex = 0;
             gameState.objectsClicked.clear();
@@ -5852,6 +5905,12 @@ const SCENES = {
                 SFXGenerator.playButtonClick();
                 gameState.inventory = [];
                 gameState.notebook = [];
+                gameState.journalSeen = {};
+                gameState.storyProgress = {
+                    currentChapter: null,
+                    lastSceneTitle: null,
+                    lastObjective: null
+                };
                 gameState.objectsClicked.clear();
                 for (let key in gameState.flags) {
                     gameState.flags[key] = false;
