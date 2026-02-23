@@ -308,9 +308,14 @@ body.main-menu #scene-container::after {
     max-width: 35%;
     max-height: 55%;
     object-fit: contain;
-    transition: transform 0.6s ease, opacity 0.6s ease;
+    transition: filter 180ms ease, transform 180ms ease, opacity 0.6s ease;
     filter: drop-shadow(2px 4px 6px rgba(0, 0, 0, 0.8))
             drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+}
+
+.character-sprite.is-speaking {
+    filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.55))
+            drop-shadow(0 0 16px rgba(255, 215, 0, 0.35));
 }
 
 /* Slide-in animations */
