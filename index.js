@@ -6210,9 +6210,10 @@ const SCENES = {
         music: 'Empty Hallways (Ambient Mix).mp3',
         
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
-            { id: 'agent_smith', name: 'AGENT SMITH', sprite: 'char_ice_smith_smirk.png', position: 'right' }
+            { id: 'agent_smith', name: 'AGENT SMITH', sprite: 'char_ice_smith_smirk.png', position: 'right' },
+            { id: 'ice_generic_1', name: 'ICE AGENT', sprite: 'char_ice_generic_1-right.png', position: 'right-2' }
         ],
         
         hotspots: [],
@@ -6270,7 +6271,9 @@ const SCENES = {
         
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
-            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused-left.png', position: 'left-2' }
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused-left.png', position: 'left-2' },
+            { id: 'student_1', name: 'RANDOM STUDENT', sprite: 'char_random-student-01.png', position: 'right' },
+            { id: 'student_2', name: 'ANOTHER STUDENT', sprite: 'char_random-student-02-right.png', position: 'right-2' }
         ],
         hotspots: [],
 
@@ -6283,6 +6286,7 @@ const SCENES = {
             {
                 speaker: 'RANDOM STUDENT',
                 text: "I heard the dad was totally cartel.",
+                position: 'right',
                 next: 'NEXT_DIALOGUE'
             },
             {
@@ -6307,7 +6311,7 @@ const SCENES = {
             { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
             { id: 'student_1', name: 'RANDOM STUDENT', sprite: 'char_random-student-01.png', position: 'right-2' },
-            { id: 'student_2', name: 'ANOTHER STUDENT', sprite: 'char_random-student-02.png', position: 'right' }
+            { id: 'student_2', name: 'ANOTHER STUDENT', sprite: 'char_random-student-02-right.png', position: 'right' }
         ],
 
         hotspots: [],
