@@ -617,6 +617,7 @@ body.main-menu #scene-title {
     display: flex;
     flex-direction: column;
     justify-content: center;
+    overflow: hidden;
 }
 #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-text {
     flex: 1;
@@ -843,6 +844,7 @@ body.main-menu #scene-title {
     justify-content: center;
     gap: clamp(8px, 1.2vw, 14px);
     min-height: 100%;
+    overflow: hidden;
 }
 
 #dialogue-bubble {

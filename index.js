@@ -3233,6 +3233,12 @@ const sceneRenderer = {
     _bubbleFullText: '',
     _bubbleTypingDone: true,
 
+    _dialoguePages: null,
+    _dialoguePageIndex: 0,
+    _dialoguePagingActive: false,
+    _dialogueFullText: '',
+    _dialoguePagingMeta: { speaker: '', position: 'left', entryRef: null },
+
     _bindDialogueTapHandlers() {
         const dialogueBox = document.getElementById('dialogue-box');
         if (!dialogueBox || dialogueBox.dataset.tapHandlerBound === 'true') return;
@@ -3251,35 +3257,13 @@ const sceneRenderer = {
                 return;
             }
 
-            // If paging active, tapping should advance pages (or finish typing)
-            if (this._bubblePagingActive && this._isSpeechBubble(dialogueBox)) {
+            // If paging active, tapping should route through Continue button action.
+            if (this._isDialoguePagingActive()) {
                 e.preventDefault();
                 e.stopPropagation();
 
-                if (!this._bubbleTypingDone || this.isTyping) {
-                    this._finishTypewriterInstant();
-                    return;
-                }
-
-                // Next page
-                if (this._bubblePageIndex < this._bubblePages.length - 1) {
-                    this._bubblePageIndex++;
-                    this._updateBubblePageIndicator();
-                    const activeEntry = gameState.currentDialogueEntry || null;
-                    const pos = this.normalizeZoneName((activeEntry?.position) || 'left');
-                    this._showBubblePage(dialogueBox, pos, activeEntry || {});
-                    return;
-                }
-
-                // Last page finished: turn paging off and trigger normal continue behavior
-                this._bubblePagingActive = false;
-                this._setBubblePagingUI(dialogueBox, false);
-
-                // If a continue button exists, click it. Otherwise do your fallback.
-                if (continueBtn && !continueBtn.classList.contains('hidden') && typeof continueBtn.onclick === 'function') {
+                if (continueBtn && !continueBtn.classList.contains('hidden')) {
                     continueBtn.click();
-                } else {
-                    this._closeDialogueThen(() => this.nextDialogue());
                 }
                 return;
             }
@@ -3458,6 +3442,56 @@ const sceneRenderer = {
     _cleanupTypewriter(el = document.getElementById('dialogue-text')) {
         this.cancelTypeText(el);
         this.isTyping = false;
+    },
+
+    _resetDialoguePaging() {
+        this._dialoguePages = null;
+        this._dialoguePageIndex = 0;
+        this._dialoguePagingActive = false;
+        this._dialogueFullText = '';
+        this._dialoguePagingMeta = { speaker: '', position: 'left', entryRef: null };
+
+        this._bubblePages = null;
+        this._bubblePageIndex = 0;
+        this._bubblePagingActive = false;
+        this._bubbleFullText = '';
+        this._bubbleTypingDone = true;
+
+        const dialogueBox = document.getElementById('dialogue-box');
+        this._setBubblePagingUI(dialogueBox, false);
+        this._updateBubblePageIndicator();
+    },
+
+    _isDialoguePagingActive() {
+        return this._dialoguePagingActive && Array.isArray(this._dialoguePages) && this._dialoguePages.length > 1;
+    },
+
+    _showDialoguePage(pageText, dialogueEntry) {
+        const dialogueBox = document.getElementById('dialogue-box');
+        const textEl = document.getElementById('dialogue-text');
+        const continueBtn = document.getElementById('dialogue-continue');
+        if (!dialogueBox || !textEl || !continueBtn) return;
+
+        const pos = this.normalizeZoneName((dialogueEntry?.position) || this._dialoguePagingMeta.position || 'left');
+
+        textEl.textContent = '';
+        this._bubbleTypingDone = false;
+
+        if (this._isSpeechBubble(dialogueBox)) {
+            this._fitSpeechBubbleText(dialogueBox, pageText);
+            this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry || this._dialoguePagingMeta.entryRef || {});
+            this._applyDialogueBubbleTail(dialogueBox, pos);
+            this._clampDialogueToViewport(dialogueBox);
+        }
+
+        this.typeText(textEl, pageText, {
+            onFinish: () => {
+                this._bubbleTypingDone = true;
+                this._updateDialogueOverflowIndicator(textEl);
+            }
+        });
+
+        this._updateBubblePageIndicator();
     },
 
     _parseEmphasisMarkup(fullText) {
@@ -4626,12 +4660,7 @@ const sceneRenderer = {
 
             this._activeDialogueEntry = dialogueEntry;
 
-            this._bubblePagingActive = false;
-            this._bubblePages = null;
-            this._bubblePageIndex = 0;
-            this._bubbleFullText = '';
-            this._bubbleTypingDone = true;
-            this._setBubblePagingUI?.(dialogueBox, false);
+            this._resetDialoguePaging();
 
             // Fit text into stable bubble container (speech-bubble mode only, all screen sizes)
             this._fitSpeechBubbleText(dialogueBox, dialogueText);
@@ -4650,20 +4679,31 @@ const sceneRenderer = {
             }
             this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
 
-            const isSpeech = dialogueBox.dataset.layoutPanel === 'speech-bubble';
             const hasChoices = dialogueEntry.choices && dialogueEntry.choices.length > 0;
-            if (isSpeech && !hasChoices) {
-                const pages = this._splitIntoBubblePages(dialogueBox, dialogueText, 6);
+            if (!hasChoices) {
+                const pages = this._splitIntoDialoguePages(dialogueBox, dialogueText, 6);
                 if (pages.length > 1) {
+                    this._dialoguePages = pages;
+                    this._dialoguePageIndex = 0;
+                    this._dialoguePagingActive = true;
+                    this._dialogueFullText = dialogueText;
+                    this._dialoguePagingMeta = {
+                        speaker: dialogueEntry.speaker || '',
+                        position: speechPos,
+                        entryRef: dialogueEntry
+                    };
+
                     this._bubblePages = pages;
                     this._bubblePageIndex = 0;
                     this._bubbleFullText = dialogueText;
                     this._bubblePagingActive = true;
 
                     this._setBubblePagingUI(dialogueBox, true);
-                    this._updateBubblePageIndicator();
-                    this._showBubblePage(dialogueBox, speechPos, dialogueEntry);
-                    continueBtn.classList.add('hidden');
+                    continueBtn.classList.remove('hidden');
+                    continueBtn.textContent = 'continue';
+                    continueBtn.setAttribute('aria-label', 'Continue dialogue page');
+                    continueBtn.onclick = () => this._handleContinueAction(continueBtn, text, dialogueEntry);
+                    this._showDialoguePage(pages[0], dialogueEntry);
                     return;
                 }
             }
@@ -4785,80 +4825,63 @@ const sceneRenderer = {
         }
     },
 
+    _runDialogueContinueBehavior(dialogueEntry) {
+        if (gameState.actionLock || this.isTransitioning) return;
+        gameState.actionLock = true;
+        gameState.dialogueLock = false;
+        SFXGenerator.playContinueButton();
+        this._closeDialogueThen(() => {
+            if (dialogueEntry.next === 'NEXT_DIALOGUE') {
+                this.nextDialogue();
+            } else if (typeof dialogueEntry.next === 'function') {
+                dialogueEntry.next();
+            } else if (dialogueEntry?.next) {
+                this.loadScene(dialogueEntry.next);
+            } else {
+                this.nextDialogue();
+            }
+            gameState.actionLock = false;
+        });
+    },
+
+    _handleContinueAction(continueBtn, textEl, dialogueEntry) {
+        if (this._isDialoguePagingActive()) {
+            if (this.isTyping || !this._bubbleTypingDone) {
+                this._finishTypewriterInstant();
+                return;
+            }
+
+            if (this._dialoguePageIndex < this._dialoguePages.length - 1) {
+                this._dialoguePageIndex += 1;
+                this._bubblePageIndex = this._dialoguePageIndex;
+                this._showDialoguePage(this._dialoguePages[this._dialoguePageIndex] || '', dialogueEntry);
+                return;
+            }
+
+            this._resetDialoguePaging();
+            this._runDialogueContinueBehavior(dialogueEntry);
+            return;
+        }
+
+        if (this.isTyping) {
+            this.finishTypeText(textEl);
+            return;
+        }
+
+        this._runDialogueContinueBehavior(dialogueEntry);
+    },
+
     _setupDialogueContinueButton(continueBtn, textEl, dialogueEntry) {
         continueBtn.classList.remove('hidden');
         continueBtn.textContent = 'continue';
         continueBtn.setAttribute('aria-label', 'Continue dialogue');
-        continueBtn.onclick = () => {
-            if (this.isTyping) {
-                this.finishTypeText(textEl);
-                return;
-            }
-            if (gameState.actionLock || this.isTransitioning) return;
-            gameState.actionLock = true;
-            gameState.dialogueLock = false;
-            SFXGenerator.playContinueButton();
-            this._closeDialogueThen(() => {
-                if (dialogueEntry.next === 'NEXT_DIALOGUE') {
-                    this.nextDialogue();
-                } else if (typeof dialogueEntry.next === 'function') {
-                    dialogueEntry.next();
-                } else {
-                    this.loadScene(dialogueEntry.next);
-                }
-                gameState.actionLock = false;
-            });
-        };
+        continueBtn.onclick = () => this._handleContinueAction(continueBtn, textEl, dialogueEntry);
     },
 
     _showBubblePage(dialogueBox, pos, dialogueEntry) {
-        const textEl = document.getElementById('dialogue-text');
-        const continueBtn = document.getElementById('dialogue-continue');
-        if (!dialogueBox || !textEl || !continueBtn || !this._bubblePages?.length) return;
-
+        if (!this._bubblePages?.length) return;
         const pageText = this._bubblePages[this._bubblePageIndex] || '';
-        this._bubbleTypingDone = false;
-        continueBtn.classList.add('hidden');
-
-        this._fitSpeechBubbleText(dialogueBox, pageText);
-        this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
-        this._applyDialogueBubbleTail(dialogueBox, pos);
-        this._clampDialogueToViewport(dialogueBox);
-
-        this.typeText(textEl, pageText, {
-            onFinish: () => {
-                this._bubbleTypingDone = true;
-                this._updateDialogueOverflowIndicator(textEl);
-                if (this._bubblePageIndex === this._bubblePages.length - 1) {
-                    // Last page: disable paging and show the normal continue button
-                    this._bubblePagingActive = false;
-                    this._setBubblePagingUI(dialogueBox, false);
-                    if (dialogueEntry?.next) {
-                        this._setupDialogueContinueButton(continueBtn, textEl, dialogueEntry);
-                    } else {
-                        setTimeout(() => {
-                            gameState.dialogueLock = false;
-                            this._closeDialogueThen(() => this.nextDialogue());
-                        }, 3000);
-                    }
-                } else {
-                    // Intermediate page: show a visible "more..." button so the player
-                    // can advance without having to know to tap the bubble.
-                    continueBtn.textContent = 'more...';
-                    continueBtn.setAttribute('aria-label', 'Show more dialogue');
-                    continueBtn.classList.remove('hidden');
-                    continueBtn.onclick = () => {
-                        if (gameState.actionLock || this.isTransitioning) return;
-                        SFXGenerator.playContinueButton();
-                        this._bubblePageIndex++;
-                        this._updateBubblePageIndicator();
-                        const activeEntry = gameState.currentDialogueEntry || null;
-                        const p = this.normalizeZoneName((activeEntry?.position) || 'left');
-                        this._showBubblePage(dialogueBox, p, activeEntry || {});
-                    };
-                }
-            }
-        });
+        this._showDialoguePage(pageText, dialogueEntry || this._dialoguePagingMeta.entryRef || {});
     },
 
     _clampDialogueToViewport(dialogueBox, options = {}) {
@@ -5154,7 +5177,7 @@ const sceneRenderer = {
         if (!dialogueBox) return;
         if (enabled) {
             dialogueBox.classList.add('is-paginated');
-            if (hint) hint.style.display = 'block';
+            if (hint) hint.style.display = 'none';
         } else {
             dialogueBox.classList.remove('is-paginated');
             if (hint) hint.style.display = 'none';
@@ -5165,11 +5188,11 @@ const sceneRenderer = {
     _updateBubblePageIndicator() {
         const ind = document.getElementById('bubble-page-indicator');
         if (!ind) return;
-        if (!this._bubblePagingActive || !this._bubblePages?.length) {
+        if (!this._isDialoguePagingActive() || !this._dialoguePages?.length) {
             ind.textContent = '';
             return;
         }
-        ind.textContent = `${this._bubblePageIndex + 1}/${this._bubblePages.length}`;
+        ind.textContent = `${this._dialoguePageIndex + 1}/${this._dialoguePages.length}`;
     },
 
     _fitMobileDialogueText(dialogueBox) {
@@ -5291,11 +5314,25 @@ const sceneRenderer = {
         return { fits: fitsNow };
     },
 
-    _splitChunkToFitBubble(dialogueBox, chunkText) {
+    _measureDialogueContainerFit(dialogueBox, candidateText) {
+        const textEl = document.getElementById('dialogue-text');
+        const contentEl = document.getElementById('dialogue-content');
+        if (!textEl || !contentEl) return { fits: true };
+
+        const prev = textEl.textContent;
+        textEl.textContent = candidateText || '';
+
+        const fitsNow = !(textEl.scrollHeight > textEl.clientHeight || contentEl.scrollHeight > contentEl.clientHeight);
+
+        textEl.textContent = prev;
+        return { fits: fitsNow };
+    },
+
+    _splitChunkToFitByMeasure(dialogueBox, chunkText, measureFit) {
         const normalized = String(chunkText || '').replace(/\s+/g, ' ').trim();
         if (!normalized) return [''];
 
-        if (this._measureSpeechBubbleFit(dialogueBox, normalized).fits) {
+        if (measureFit(normalized)) {
             return [normalized];
         }
 
@@ -5307,12 +5344,12 @@ const sceneRenderer = {
 
         while (index < words.length) {
             let candidate = words[index];
-            let lastFit = this._measureSpeechBubbleFit(dialogueBox, candidate).fits ? candidate : '';
+            let lastFit = measureFit(candidate) ? candidate : '';
             let lastFitIndex = lastFit ? index : index - 1;
 
             for (let i = index + 1; i < words.length; i++) {
                 const next = `${candidate} ${words[i]}`;
-                if (this._measureSpeechBubbleFit(dialogueBox, next).fits) {
+                if (measureFit(next)) {
                     candidate = next;
                     lastFit = next;
                     lastFitIndex = i;
@@ -5322,7 +5359,6 @@ const sceneRenderer = {
             }
 
             if (!lastFit) {
-                // If even a single token doesn't fit (extremely unlikely), emit it to avoid loops.
                 pages.push(words[index]);
                 index += 1;
             } else {
@@ -5334,14 +5370,16 @@ const sceneRenderer = {
         return pages.filter(Boolean);
     },
 
-    _splitIntoBubblePages(dialogueBox, fullText, maxPages = 6) {
+    _splitIntoDialoguePages(dialogueBox, fullText, maxPages = 6) {
         const txt = String(fullText || '').replace(/\s+/g, ' ').trim();
         if (!txt) return [''];
 
-        // Prefer sentence-ish splits
+        const measureFit = this._isSpeechBubble(dialogueBox)
+            ? (candidate) => this._measureSpeechBubbleFit(dialogueBox, candidate).fits
+            : (candidate) => this._measureDialogueContainerFit(dialogueBox, candidate).fits;
+
         let chunks = txt.split(/(?<=[.!?])\s+/);
 
-        // fallback: word chunking
         if (chunks.length === 1) {
             const words = txt.split(' ');
             chunks = [];
@@ -5353,12 +5391,10 @@ const sceneRenderer = {
         const pages = [];
         let cur = '';
 
-        const ok = (s) => this._measureSpeechBubbleFit(dialogueBox, s).fits;
-
         for (let i = 0; i < chunks.length; i++) {
             const next = cur ? (cur + ' ' + chunks[i]) : chunks[i];
 
-            if (ok(next)) {
+            if (measureFit(next)) {
                 cur = next;
                 continue;
             }
@@ -5366,8 +5402,8 @@ const sceneRenderer = {
             if (cur) pages.push(cur);
             cur = chunks[i];
 
-            if (!ok(cur)) {
-                const forcedPages = this._splitChunkToFitBubble(dialogueBox, cur);
+            if (!measureFit(cur)) {
+                const forcedPages = this._splitChunkToFitByMeasure(dialogueBox, cur, measureFit);
                 if (forcedPages.length > 1) {
                     pages.push(...forcedPages.slice(0, -1));
                     cur = forcedPages[forcedPages.length - 1] || '';
@@ -5376,17 +5412,22 @@ const sceneRenderer = {
 
             if (pages.length >= maxPages - 1) {
                 const rest = [cur].concat(chunks.slice(i + 1)).join(' ').trim();
-                const remainderPages = this._splitChunkToFitBubble(dialogueBox, rest);
+                const remainderPages = this._splitChunkToFitByMeasure(dialogueBox, rest, measureFit);
                 pages.push(...remainderPages);
                 return pages.filter(Boolean);
             }
         }
 
         if (cur) {
-            const tailPages = this._splitChunkToFitBubble(dialogueBox, cur);
+            const tailPages = this._splitChunkToFitByMeasure(dialogueBox, cur, measureFit);
             pages.push(...tailPages);
         }
+
         return pages.filter(Boolean);
+    },
+
+    _splitIntoBubblePages(dialogueBox, fullText, maxPages = 6) {
+        return this._splitIntoDialoguePages(dialogueBox, fullText, maxPages);
     },
 
     repositionActiveDialogue() {
@@ -5476,6 +5517,7 @@ const sceneRenderer = {
         const dialogueBox = document.getElementById('dialogue-box');
         const textEl = document.getElementById('dialogue-text');
         this._cleanupTypewriter(textEl);
+        this._resetDialoguePaging();
         if (!dialogueBox || dialogueBox.classList.contains('hidden')) {
             gameState.dialogueLock = false; // Safety release
             if (typeof nextAction === 'function') nextAction();
