@@ -3233,6 +3233,13 @@ const sceneRenderer = {
     _bubbleFullText: '',
     _bubbleTypingDone: true,
 
+    // Generic dialogue pagination state (covers all layout types)
+    _dialoguePages: null,
+    _dialoguePageIndex: 0,
+    _dialoguePagingActive: false,
+    _dialogueFullText: '',
+    _dialoguePagingMeta: null,
+
     _bindDialogueTapHandlers() {
         const dialogueBox = document.getElementById('dialogue-box');
         if (!dialogueBox || dialogueBox.dataset.tapHandlerBound === 'true') return;
@@ -3251,35 +3258,14 @@ const sceneRenderer = {
                 return;
             }
 
-            // If paging active, tapping should advance pages (or finish typing)
-            if (this._bubblePagingActive && this._isSpeechBubble(dialogueBox)) {
+            // If generic paging is active, tap delegates to the Continue button
+            if (this._dialoguePagingActive) {
                 e.preventDefault();
                 e.stopPropagation();
-
-                if (!this._bubbleTypingDone || this.isTyping) {
-                    this._finishTypewriterInstant();
-                    return;
-                }
-
-                // Next page
-                if (this._bubblePageIndex < this._bubblePages.length - 1) {
-                    this._bubblePageIndex++;
-                    this._updateBubblePageIndicator();
-                    const activeEntry = gameState.currentDialogueEntry || null;
-                    const pos = this.normalizeZoneName((activeEntry?.position) || 'left');
-                    this._showBubblePage(dialogueBox, pos, activeEntry || {});
-                    return;
-                }
-
-                // Last page finished: turn paging off and trigger normal continue behavior
-                this._bubblePagingActive = false;
-                this._setBubblePagingUI(dialogueBox, false);
-
-                // If a continue button exists, click it. Otherwise do your fallback.
-                if (continueBtn && !continueBtn.classList.contains('hidden') && typeof continueBtn.onclick === 'function') {
+                if (continueBtn && !continueBtn.classList.contains('hidden')) {
                     continueBtn.click();
-                } else {
-                    this._closeDialogueThen(() => this.nextDialogue());
+                } else if (this.isTyping) {
+                    this._finishTypewriterInstant();
                 }
                 return;
             }
@@ -4632,6 +4618,7 @@ const sceneRenderer = {
             this._bubbleFullText = '';
             this._bubbleTypingDone = true;
             this._setBubblePagingUI?.(dialogueBox, false);
+            this._resetDialoguePaging();
 
             // Fit text into stable bubble container (speech-bubble mode only, all screen sizes)
             this._fitSpeechBubbleText(dialogueBox, dialogueText);
@@ -4650,22 +4637,29 @@ const sceneRenderer = {
             }
             this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
 
-            const isSpeech = dialogueBox.dataset.layoutPanel === 'speech-bubble';
-            const hasChoices = dialogueEntry.choices && dialogueEntry.choices.length > 0;
-            if (isSpeech && !hasChoices) {
-                const pages = this._splitIntoBubblePages(dialogueBox, dialogueText, 6);
-                if (pages.length > 1) {
-                    this._bubblePages = pages;
-                    this._bubblePageIndex = 0;
-                    this._bubbleFullText = dialogueText;
-                    this._bubblePagingActive = true;
-
-                    this._setBubblePagingUI(dialogueBox, true);
-                    this._updateBubblePageIndicator();
-                    this._showBubblePage(dialogueBox, speechPos, dialogueEntry);
-                    continueBtn.classList.add('hidden');
-                    return;
-                }
+            // Generic pagination: check all layout types for overflow before displaying
+            const pages = this._splitIntoDialoguePages(dialogueBox, dialogueText, 6);
+            if (pages.length > 1) {
+                this._dialoguePages = pages;
+                this._dialoguePageIndex = 0;
+                this._dialogueFullText = dialogueText;
+                this._dialoguePagingActive = true;
+                this._dialoguePagingMeta = {
+                    speaker: dialogueEntry.speaker || '',
+                    position: dialogueEntry.position || '',
+                    entryRef: dialogueEntry
+                };
+                // Ensure bubble tap hint is hidden — Continue button drives pagination
+                this._setBubblePagingUI(dialogueBox, false);
+                this._showDialoguePage(pages[0], dialogueEntry);
+                // Reveal after positioning settles
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        dialogueBox.classList.remove('dialogue-positioning');
+                        this._animateDialogueEntry();
+                    });
+                });
+                return;
             }
 
             this.typeText(text, dialogueText, {
@@ -5387,6 +5381,212 @@ const sceneRenderer = {
             pages.push(...tailPages);
         }
         return pages.filter(Boolean);
+    },
+
+    // ===== GENERIC DIALOGUE PAGINATION HELPERS =====
+
+    _resetDialoguePaging() {
+        this._dialoguePagingActive = false;
+        this._dialoguePages = null;
+        this._dialoguePageIndex = 0;
+        this._dialogueFullText = '';
+        this._dialoguePagingMeta = null;
+    },
+
+    _isDialoguePagingActive() {
+        return this._dialoguePagingActive === true;
+    },
+
+    /** Measure fit for non-bubble layouts using scrollHeight checks. */
+    _measureDialogueContainerFit(dialogueBox, candidateText) {
+        const textEl = document.getElementById('dialogue-text');
+        const contentEl = document.getElementById('dialogue-content');
+        if (!textEl || !contentEl) return { fits: true };
+        const prev = textEl.textContent;
+        textEl.textContent = candidateText || '';
+        const fits = !(textEl.scrollHeight > textEl.clientHeight || contentEl.scrollHeight > contentEl.clientHeight);
+        textEl.textContent = prev;
+        return { fits };
+    },
+
+    /**
+     * Split fullText into pages that each fit inside dialogueBox.
+     * Works for both speech-bubble and non-bubble layouts.
+     */
+    _splitIntoDialoguePages(dialogueBox, fullText, maxPages = 6) {
+        const isBubble = this._isSpeechBubble(dialogueBox);
+        const measureFit = (text) => isBubble
+            ? this._measureSpeechBubbleFit(dialogueBox, text).fits
+            : this._measureDialogueContainerFit(dialogueBox, text).fits;
+
+        const txt = String(fullText || '').replace(/\s+/g, ' ').trim();
+        if (!txt) return [''];
+        if (measureFit(txt)) return [txt];
+
+        // Prefer sentence-boundary splits
+        let chunks = txt.split(/(?<=[.!?])\s+/);
+        if (chunks.length === 1) {
+            const words = txt.split(' ');
+            chunks = [];
+            for (let i = 0; i < words.length; i += 10) {
+                chunks.push(words.slice(i, i + 10).join(' '));
+            }
+        }
+
+        // Force word-by-word split when a chunk doesn't fit by itself
+        const forceWordSplit = (text) => {
+            const words = text.split(' ');
+            const result = [];
+            let buf = '';
+            for (const w of words) {
+                const trial = buf ? buf + ' ' + w : w;
+                if (measureFit(trial)) {
+                    buf = trial;
+                } else {
+                    if (buf) result.push(buf);
+                    buf = w;
+                }
+            }
+            if (buf) result.push(buf);
+            return result.length ? result : [text];
+        };
+
+        const pages = [];
+        let cur = '';
+
+        for (let i = 0; i < chunks.length; i++) {
+            const next = cur ? cur + ' ' + chunks[i] : chunks[i];
+            if (measureFit(next)) {
+                cur = next;
+                continue;
+            }
+            if (cur) pages.push(cur);
+            cur = chunks[i];
+            if (!measureFit(cur)) {
+                const forced = forceWordSplit(cur);
+                pages.push(...forced.slice(0, -1));
+                cur = forced[forced.length - 1] || '';
+            }
+            if (pages.length >= maxPages - 1) {
+                const rest = ([cur]).concat(chunks.slice(i + 1)).join(' ').trim();
+                pages.push(...forceWordSplit(rest));
+                return pages.filter(Boolean);
+            }
+        }
+
+        if (cur) pages.push(...forceWordSplit(cur));
+        return pages.filter(Boolean);
+    },
+
+    /**
+     * Render one page of paginated dialogue via typeText.
+     * Manages the Continue button for skip-typing / advance / finish.
+     */
+    _showDialoguePage(pageText, dialogueEntry) {
+        const textEl = document.getElementById('dialogue-text');
+        const continueBtn = document.getElementById('dialogue-continue');
+        const dialogueBox = document.getElementById('dialogue-box');
+        const choicesDiv = document.getElementById('dialogue-choices');
+        if (!textEl || !continueBtn || !dialogueBox) return;
+
+        // Wipe previous text and cancel any in-progress typewriter
+        this._cleanupTypewriter(textEl);
+        textEl.textContent = '';
+        if (choicesDiv) choicesDiv.innerHTML = '';
+
+        const isLastPage = this._dialoguePageIndex === this._dialoguePages.length - 1;
+
+        // For speech-bubble: re-fit bubble geometry to page text
+        if (this._isSpeechBubble(dialogueBox)) {
+            this._fitSpeechBubbleText(dialogueBox, pageText);
+            const pos = this.normalizeZoneName((dialogueEntry?.position) || 'left');
+            this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
+            this._applyDialogueBubbleTail(dialogueBox, pos);
+            this._clampDialogueToViewport(dialogueBox);
+        }
+
+        // Always hide the bubble tap hint — Continue button is the advance mechanism
+        this._setBubblePagingUI(dialogueBox, false);
+
+        // Show Continue button immediately (click = skip typing or advance page)
+        continueBtn.classList.remove('hidden');
+        continueBtn.textContent = isLastPage ? 'continue' : 'more...';
+        continueBtn.setAttribute('aria-label', isLastPage ? 'Continue dialogue' : 'Show more dialogue');
+
+        continueBtn.onclick = () => {
+            // First click while typing: finish instantly
+            if (this.isTyping) {
+                this.finishTypeText(textEl);
+                return;
+            }
+            if (gameState.actionLock || this.isTransitioning) return;
+            SFXGenerator.playContinueButton();
+
+            if (!isLastPage) {
+                // Advance to next page
+                this._dialoguePageIndex++;
+                this._showDialoguePage(this._dialoguePages[this._dialoguePageIndex], dialogueEntry);
+            }
+            // If last page, onclick is replaced in the typeText onFinish below
+        };
+
+        // Type the page text
+        this.typeText(textEl, pageText, {
+            onFinish: () => {
+                this._updateDialogueOverflowIndicator(textEl);
+                if (!isLastPage) return;
+
+                // Last page finished — disable paging and resume normal entry flow
+                this._dialoguePagingActive = false;
+
+                if (dialogueEntry?.choices?.length) {
+                    // Render choices now that all text has been shown
+                    continueBtn.classList.add('hidden');
+                    continueBtn.onclick = null;
+                    dialogueEntry.choices.forEach(choice => {
+                        const btn = document.createElement('button');
+                        btn.className = 'dialogue-choice';
+                        btn.textContent = choice.text;
+                        let tStart = 0;
+                        let tPos = null;
+                        const handleChoiceClick = () => {
+                            if (gameState.actionLock || this.isTransitioning) return;
+                            gameState.actionLock = true;
+                            gameState.dialogueLock = false;
+                            SFXGenerator.playButtonClick();
+                            if (choice.action) choice.action();
+                            gameState.actionLock = false;
+                        };
+                        const handleInteraction = (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (e.type === 'click' && tStart > Date.now() - 500) return;
+                            if (e.type === 'touchend' && tPos) {
+                                const t = e.changedTouches[0];
+                                if (Math.abs(t.clientX - tPos.x) > 10 || Math.abs(t.clientY - tPos.y) > 10) return;
+                            }
+                            handleChoiceClick();
+                        };
+                        btn.addEventListener('touchstart', (e) => {
+                            tStart = Date.now();
+                            const t = e.touches[0];
+                            tPos = { x: t.clientX, y: t.clientY };
+                        }, { passive: true });
+                        btn.addEventListener('touchend', handleInteraction, { passive: false });
+                        btn.addEventListener('click', handleInteraction);
+                        choicesDiv.appendChild(btn);
+                    });
+                } else if (dialogueEntry?.next) {
+                    this._setupDialogueContinueButton(continueBtn, textEl, dialogueEntry);
+                } else {
+                    continueBtn.classList.add('hidden');
+                    setTimeout(() => {
+                        gameState.dialogueLock = false;
+                        this._closeDialogueThen(() => this.nextDialogue());
+                    }, 3000);
+                }
+            }
+        });
     },
 
     repositionActiveDialogue() {
