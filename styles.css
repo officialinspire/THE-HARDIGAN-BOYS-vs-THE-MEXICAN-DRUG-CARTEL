@@ -1083,7 +1083,7 @@ body.main-menu #scene-title {
     padding: clamp(4px, 0.7vw, 7px) clamp(12px, 2.2vw, 20px);
     background: linear-gradient(180deg, rgba(18, 18, 24, 0.88) 0%, rgba(8, 8, 14, 0.94) 100%);
     border: 1.5px solid rgba(255, 215, 0, 0.42);
-    border-radius: 8px;
+    border-radius: 12px;
     color: #ffd86a;
     font-size: clamp(12px, 1.6vw, 15px);
     font-weight: 700;
@@ -1091,15 +1091,18 @@ body.main-menu #scene-title {
     font-family: 'Bangers', 'Comic Sans MS', 'Trebuchet MS', sans-serif;
     cursor: pointer;
     touch-action: manipulation;
-    align-self: flex-end;
-    display: block;
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     margin-left: auto;
-    margin-right: 0;
+    margin-right: auto;
     letter-spacing: 1px;
     text-transform: uppercase;
     line-height: 1.2;
     text-shadow: 0 0 8px rgba(255, 215, 0, 0.4), 1px 1px 0 rgba(0, 0, 0, 0.75);
     box-shadow: 0 0 12px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 215, 0, 0.12);
+    min-width: clamp(140px, 14vw, 190px);
 }
 
 #dialogue-continue:hover {
@@ -1908,12 +1911,18 @@ body.main-menu #scene-title {
 
 #action-container {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
     align-items: center;
     width: 100%;
     gap: 8px;
     flex-shrink: 0;
     margin-top: auto;
+}
+
+#action-container #dialogue-choices {
+    flex: 0 1 100%;
 }
 
 .dev-layout-target {
@@ -2593,7 +2602,9 @@ body.main-menu #scene-container {
     #action-container {
         width: 100%;
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
         align-items: center;
         gap: 8px;
         flex-shrink: 0;
@@ -2777,9 +2788,9 @@ body.main-menu #scene-container {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    align-self: flex-end;
-    margin: clamp(8px, 1vw, 12px) 4px 0 auto;
-    min-width: clamp(110px, 11vw, 150px);
+    align-self: center;
+    margin: clamp(8px, 1vw, 12px) auto 0;
+    min-width: clamp(140px, 14vw, 190px);
     min-height: clamp(40px, 5vh, 52px);
     width: auto;
     height: auto;
@@ -2787,7 +2798,7 @@ body.main-menu #scene-container {
 
 @media (max-width: 640px) {
     #dialogue-continue {
-        min-width: clamp(120px, 38vw, 170px);
+        min-width: clamp(140px, 38vw, 190px);
         min-height: clamp(42px, 7vh, 56px);
         font-size: clamp(15px, 3.8vw, 20px);
         padding: clamp(10px, 2.1vw, 13px) clamp(18px, 4.2vw, 26px);
