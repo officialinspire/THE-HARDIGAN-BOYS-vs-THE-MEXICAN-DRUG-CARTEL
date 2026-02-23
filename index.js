@@ -5187,37 +5187,29 @@ const sceneRenderer = {
         const isVerySmall = window.matchMedia('(max-width: 480px)').matches;
         const isLandscape = window.matchMedia('(orientation: landscape)').matches;
 
-        let defaultTextSize, defaultSpeakerSize;
+        // Reset inline styles so we read the CSS-computed value as the starting point.
+        // This lets CSS do the sizing work; we only shrink as a last resort if a
+        // single page still overflows after pagination has already been applied.
+        textEl.style.fontSize = '';
+        if (speakerEl) speakerEl.style.fontSize = '';
 
-        if (isVerySmall) {
-            defaultTextSize = textEl.classList.contains('choice-text') ? 8 : 7;
-            defaultSpeakerSize = speakerEl?.classList.contains('choice-speaker') ? 9 : 8;
-        } else if (isSmallPhone) {
-            defaultTextSize = textEl.classList.contains('choice-text') ? 9 : 8;
-            defaultSpeakerSize = speakerEl?.classList.contains('choice-speaker') ? 10 : 9;
-        } else if (isLandscape) {
-            defaultTextSize = textEl.classList.contains('choice-text') ? 9 : 8;
-            defaultSpeakerSize = speakerEl?.classList.contains('choice-speaker') ? 10 : 9;
-        } else {
-            defaultTextSize = textEl.classList.contains('choice-text') ? 10 : 9;
-            defaultSpeakerSize = speakerEl?.classList.contains('choice-speaker') ? 12 : 10;
-        }
+        let textSize = parseFloat(getComputedStyle(textEl).fontSize) || 14;
+        let speakerSize = speakerEl ? (parseFloat(getComputedStyle(speakerEl).fontSize) || 14) : 0;
 
-        const minTextSize = isVerySmall ? 6 : 7;
-        const minSpeakerSize = isVerySmall ? 7 : 8;
-
-        textEl.style.fontSize = `${defaultTextSize}px`;
+        textEl.style.fontSize = `${textSize}px`;
         textEl.style.lineHeight = isSmallPhone ? '1.15' : '1.2';
         if (speakerEl) {
-            speakerEl.style.fontSize = `${defaultSpeakerSize}px`;
+            speakerEl.style.fontSize = `${speakerSize}px`;
             speakerEl.style.lineHeight = '1.1';
         }
 
-        let textSize = defaultTextSize;
-        let speakerSize = defaultSpeakerSize;
+        // Higher floors: prefer readable text over extreme shrinking.
+        const minTextSize = isVerySmall ? 12 : 14;
+        const minSpeakerSize = isVerySmall ? 12 : 14;
+
         let guard = 0;
 
-        while (guard < 12 && (contentEl.scrollHeight > contentEl.clientHeight || textEl.scrollHeight > textEl.clientHeight)) {
+        while (guard < 6 && (contentEl.scrollHeight > contentEl.clientHeight || textEl.scrollHeight > textEl.clientHeight)) {
             guard += 1;
 
             if (textSize > minTextSize) {
@@ -5253,11 +5245,11 @@ const sceneRenderer = {
         textEl.style.fontSize = '';
         if (speakerEl) speakerEl.style.fontSize = '';
 
-        const minText = 10;     // floor: readable on desktop + Android
-        const minSpeaker = 11;
+        const minText = 14;     // floor: readable on desktop + Android
+        const minSpeaker = 15;
 
         let guard = 0;
-        while (guard < 18 && (textEl.scrollHeight > textEl.clientHeight || contentEl.scrollHeight > contentEl.clientHeight)) {
+        while (guard < 8 && (textEl.scrollHeight > textEl.clientHeight || contentEl.scrollHeight > contentEl.clientHeight)) {
             guard++;
             const csT = parseFloat(getComputedStyle(textEl).fontSize) || 16;
             const csS = speakerEl ? (parseFloat(getComputedStyle(speakerEl).fontSize) || 16) : 0;
