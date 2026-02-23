@@ -2960,25 +2960,27 @@ body.main-menu #scene-container {
  */
 #scene-title-fx {
     position: fixed;
-    top: max(30px, calc(env(safe-area-inset-top) + 20px));
+    top: 42vh;
     left: 50%;
     transform: translateX(-50%) translateY(6px) scale(0.98);
 
-    /* Match #scene-title font / colour exactly */
     font-family: 'Courier New', 'Consolas', monospace;
-    font-size: clamp(14px, 3vw, 18px);
+    font-size: clamp(24px, 6vw, 64px);
     font-weight: bold;
     color: #FFD700;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: 4px;
     text-align: center;
     text-shadow:
-        0 0 15px rgba(255, 215, 0, 0.9),
-        2px 2px 6px rgba(0, 0, 0, 0.95),
-        0 2px 10px rgba(0, 0, 0, 0.55);
+        0 0 30px rgba(255, 215, 0, 0.95),
+        0 0 60px rgba(255, 215, 0, 0.5),
+        2px 2px 8px rgba(0, 0, 0, 0.98),
+        0 2px 16px rgba(0, 0, 0, 0.75);
 
-    max-width: 50%;
-    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 6px;
+    max-width: 80%;
+    padding: 16px 32px;
 
     pointer-events: none;
     z-index: 600;

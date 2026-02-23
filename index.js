@@ -5523,18 +5523,8 @@ const sceneRenderer = {
 
     _showSceneTitleFx(titleText) {
         const fx = this.transition.titleFxEl;
-        const hudTitle = document.querySelector('#hud-scene-title') || document.querySelector('.hud-title') || null;
 
         if (!fx) return;
-
-        // copy position from existing HUD title (no layout changes)
-        if (hudTitle) {
-            const r = hudTitle.getBoundingClientRect();
-            fx.style.left = r.left + 'px';
-            fx.style.top = r.top + 'px';
-            fx.style.width = r.width + 'px';
-            fx.style.height = r.height + 'px';
-        }
 
         fx.textContent = titleText || '';
         fx.classList.remove('is-show');
