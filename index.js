@@ -4444,10 +4444,42 @@ const sceneRenderer = {
         }
     },
 
+    _setSpeakingCharacter(speakerName) {
+        const sprites = Array.from(document.querySelectorAll('#character-layer .character-sprite'));
+        if (!sprites.length) return;
+
+        if (!speakerName) {
+            sprites.forEach(sprite => sprite.classList.remove('is-speaking'));
+            return;
+        }
+
+        const normalizedSpeaker = String(speakerName).trim().toUpperCase();
+        if (!normalizedSpeaker || normalizedSpeaker === 'NARRATION' || normalizedSpeaker === 'SYSTEM' || normalizedSpeaker === 'CHOICE' || normalizedSpeaker === 'FINAL CHOICE') {
+            sprites.forEach(sprite => sprite.classList.remove('is-speaking'));
+            return;
+        }
+
+        const matchingSprite = sprites.find(sprite => {
+            const byName = (sprite.dataset.characterName || '').toUpperCase() === normalizedSpeaker;
+            if (byName) return true;
+
+            const characterId = (sprite.dataset.characterId || '').toUpperCase();
+            if (characterId && characterId === normalizedSpeaker) return true;
+
+            const spriteId = (sprite.id || '').replace(/^char-/, '').toUpperCase();
+            return spriteId && spriteId === normalizedSpeaker;
+        });
+
+        sprites.forEach(sprite => {
+            sprite.classList.toggle('is-speaking', sprite === matchingSprite);
+        });
+    },
+
     async showDialogue(dialogueEntry) {
         try {
             this._bindDialogueTapHandlers();
             gameState.currentDialogueEntry = dialogueEntry;
+            this._setSpeakingCharacter(dialogueEntry?.speaker);
 
             // Block dialogue during scene transitions
             if (this.isTransitioning) {
@@ -5480,6 +5512,8 @@ const sceneRenderer = {
         const dialogueBox = document.getElementById('dialogue-box');
         const choicesDiv = document.getElementById('dialogue-choices');
         if (!textEl || !continueBtn || !dialogueBox) return;
+
+        this._setSpeakingCharacter(dialogueEntry?.speaker);
 
         // Wipe previous text and cancel any in-progress typewriter
         this._cleanupTypewriter(textEl);
