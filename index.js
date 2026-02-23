@@ -2686,6 +2686,44 @@ const lightingEffects = {
     }
 };
 
+const ITEM_DISPLAY_NAMES = {
+    house_key: 'HOUSE KEY',
+    conspiracy_notebook: 'CONSPIRACY NOTEBOOK',
+    neighbors_usb: 'NEIGHBORS USB',
+    burner_phone: 'BURNER PHONE',
+    moms_nurse_badge: "MOM'S NURSE BADGE",
+    fake_fbi_badge: 'FAKE FBI BADGE',
+    cartel_usb: 'CARTEL USB',
+    mysterious_passport: 'MYSTERIOUS PASSPORT',
+    tv_remote: 'TV REMOTE'
+};
+
+let statusToastTimerId = null;
+
+function getPrettyItemName(itemId) {
+    const normalizedItemId = itemId.startsWith('item_') ? itemId.slice(5) : itemId;
+    return ITEM_DISPLAY_NAMES[normalizedItemId] || normalizedItemId.replace(/_/g, ' ').toUpperCase();
+}
+
+function showStatusToast(msg, ms = 1400) {
+    const toast = document.getElementById('status-toast');
+    if (!toast) return;
+
+    toast.textContent = msg;
+    toast.classList.remove('is-show');
+    void toast.offsetWidth;
+    toast.classList.add('is-show');
+
+    if (statusToastTimerId) {
+        clearTimeout(statusToastTimerId);
+    }
+
+    statusToastTimerId = setTimeout(() => {
+        toast.classList.remove('is-show');
+        statusToastTimerId = null;
+    }, ms);
+}
+
 // ===== INVENTORY SYSTEM =====
 const inventory = {
     add(itemId) {
@@ -2694,6 +2732,7 @@ const inventory = {
             console.log(`Added to inventory: ${itemId}`);
             SFXGenerator.playMenuOpen();
             saveSystem.save();
+            showStatusToast(`ITEM ACQUIRED: ${getPrettyItemName(itemId)}`);
         }
     },
     
