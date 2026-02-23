@@ -5938,7 +5938,7 @@ const SCENES = {
         music: 'Dark Police Intensity.mp3',
 
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' }
         ],
 
@@ -5949,28 +5949,24 @@ const SCENES = {
                 speaker: 'JONAH',
                 text: "Okay. That's… definitely ICE.",
                 position: 'left-2',
-                bubbleLayout: { left: 1050, top: 394, width: 836, height: 429 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'HANK',
                 text: "No way. They'd never raid a quiet cul-de-sac with a Whole Foods loyalty card.",
                 position: 'left',
-                bubbleLayout: { left: 692, top: 301, width: 836, height: 429 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'JONAH',
                 text: "Bro, that's the Riveras' house.",
                 position: 'left-2',
-                bubbleLayout: { left: 1129, top: 402, width: 836, height: 429 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'HANK',
                 text: "Mom, they're taking Carlos. He literally coached the neighborhood soccer team.",
                 position: 'left',
-                bubbleLayout: { left: 654, top: 282, width: 836, height: 429 },
                 next: 'NEXT_DIALOGUE',
                 onShow: () => {
                     // Keep four visible characters (Hank/Jonah left, ICE/Carlos right)
@@ -5996,7 +5992,6 @@ const SCENES = {
                 speaker: 'MRS. RIVERA',
                 text: "Please! Don't take him — he hasn't done anything wrong!",
                 position: 'right',
-                bubbleLayout: { left: 1050, top: 280, width: 836, height: 429 },
                 bubbleDelay: 800,
                 next: 'NEXT_DIALOGUE',
                 onShow: () => {
@@ -6016,14 +6011,12 @@ const SCENES = {
                 speaker: 'MR. RIVERA',
                 text: "I'm innocent! I swear — I have nothing to do with any of this!",
                 position: 'right-2',
-                bubbleLayout: { left: 1050, top: 280, width: 836, height: 429 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'MOM',
                 text: "Away from the window. NOW! Both of you.",
                 position: 'left',
-                bubbleLayout: { left: 821, top: 221, width: 898, height: 518 },
                 bubbleDelay: 1300,
                 next: 'NEXT_DIALOGUE',
                 onShow: () => {
@@ -6040,7 +6033,6 @@ const SCENES = {
                 speaker: 'MOM',
                 text: "We are not getting involved. Do you hear me?",
                 position: 'left',
-                bubbleLayout: { left: 821, top: 221, width: 898, height: 518 },
                 next: () => {
                     // Mom slides out to the left, then Hank slides in from the left to replace her
                     sceneRenderer.removeCharacter('mom', true);
@@ -6048,7 +6040,7 @@ const SCENES = {
                         sceneRenderer.addCharacter({
                             id: 'hank',
                             name: 'HANK',
-                            sprite: 'char_hank_thinking.png',
+                            sprite: 'char_hank_panicked-left.png',
                             position: 'left'
                         }, 60);
                     }, 180);
