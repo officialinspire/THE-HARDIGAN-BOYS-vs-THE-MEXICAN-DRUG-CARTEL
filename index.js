@@ -6353,6 +6353,12 @@ const SCENES = {
                 next: () => {
                     // Mom slides out to the left, then Hank slides in from the left to replace her
                     sceneRenderer.removeCharacter('mom', true);
+                    // Release the 'left' zone immediately so Hank can claim it.
+                    // Without this, Mom's DOM element lingers for 600ms during her slide-out
+                    // and the zone-collision guard in addCharacter would redirect Hank to
+                    // 'left-2' (where Jonah already is) instead of the far-left position.
+                    const momEl = document.getElementById('char-mom');
+                    if (momEl) momEl.dataset.zone = '';
                     setTimeout(() => {
                         sceneRenderer.addCharacter({
                             id: 'hank',
