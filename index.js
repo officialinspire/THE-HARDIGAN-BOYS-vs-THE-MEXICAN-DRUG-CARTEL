@@ -4173,7 +4173,9 @@ const sceneRenderer = {
                 }, 200); // Start slightly after fade completes
             }
 
-            this._showSceneTitleFx(scene.title || sceneId);
+            if (sceneId !== 'S0_MAIN_MENU') {
+                this._showSceneTitleFx(scene.title || sceneId);
+            }
 
             if (scene.characters) {
                 await this.loadCharacters(scene.characters);
@@ -7819,9 +7821,49 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
         }, 300);
     });
 
-    // Load main menu
-    sceneRenderer.loadScene('S0_MAIN_MENU');
-    setTimeout(() => assetLoader.hideLoadingScreen(), 250);
+    // Hide loading screen then play intro video before main menu
+    setTimeout(() => {
+        assetLoader.hideLoadingScreen();
+
+        const introScreen = document.getElementById('intro-video-screen');
+        const introVideo = document.getElementById('intro-video');
+        const skipBtn = document.getElementById('intro-skip-btn');
+
+        introScreen.classList.remove('hidden');
+
+        // One-shot handler: fade out intro then load main menu
+        const finishIntro = (() => {
+            let done = false;
+            return () => {
+                if (done) return;
+                done = true;
+                introScreen.classList.add('fading-out');
+                setTimeout(() => {
+                    introScreen.classList.add('hidden');
+                    introScreen.classList.remove('fading-out');
+                    try { introVideo.pause(); } catch (_) {}
+                    introVideo.src = '';
+                    sceneRenderer.loadScene('S0_MAIN_MENU');
+                }, 400);
+            };
+        })();
+
+        introVideo.addEventListener('ended', finishIntro, { once: true });
+        skipBtn.addEventListener('click', finishIntro, { once: true });
+
+        // Keyboard skip (any key)
+        document.addEventListener('keydown', finishIntro, { once: true });
+
+        // Try to play with sound; fall back to muted for autoplay policy
+        introVideo.muted = false;
+        introVideo.play().catch(() => {
+            introVideo.muted = true;
+            introVideo.play().catch(() => {
+                // If video cannot play at all, go straight to menu
+                finishIntro();
+            });
+        });
+    }, 250);
 
     console.log('✅ Game initialized successfully!');
 }, 'bootstrap'));
