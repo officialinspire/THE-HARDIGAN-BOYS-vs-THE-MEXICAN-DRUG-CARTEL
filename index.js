@@ -243,7 +243,8 @@ const gameState = {
         DISILLUSIONED: false,
         LOYAL_TO_RIVERAS: false,
         OPPORTUNIST: false,
-        SUSPICIOUS_TO_FEDS: false
+        SUSPICIOUS_TO_FEDS: false,
+        BURNER_USED_AT_FACILITY: false
     },
     settings: {
         musicVolume: 70,
@@ -6608,12 +6609,29 @@ const SCENES = {
                 text: "(muttering) Yeah, or super convenient for a press conference.",
                 position: 'left',
                 next: () => {
-                    sceneRenderer.loadScene('S6_INTEL_ENTANGLEMENT');
+                    sceneRenderer.showDialogue({
+                        speaker: 'CHOICE',
+                        text: 'What do you do next?',
+                        choices: [
+                            {
+                                text: 'Follow the ICE van to the processing facility',
+                                action() {
+                                    sceneRenderer.loadScene('S4C_ICE_PROCESSING_ROOM');
+                                }
+                            },
+                            {
+                                text: 'Head home — this is getting too real',
+                                action() {
+                                    sceneRenderer.loadScene('S6_INTEL_ENTANGLEMENT');
+                                }
+                            }
+                        ]
+                    });
                 }
             }
         ]
     },
-    
+
     // ===== S4B: SCHOOL AFTERSHOCK =====
     S4B_SCHOOL_AFTERSHOCK: {
         id: 'S4B_SCHOOL_AFTERSHOCK',
@@ -6814,6 +6832,86 @@ const SCENES = {
         ]
     },
 
+    // ===== S4C: ICE PROCESSING ROOM =====
+    S4C_ICE_PROCESSING_ROOM: {
+        id: 'S4C_ICE_PROCESSING_ROOM',
+        title: 'The Processing Room',
+        background: './assets/backgrounds/bg_ice_processing_room.png',
+        music: 'Covert Investigation.mp3',
+
+        characters: [
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' },
+            { id: 'agent_smith', name: 'AGENT SMITH', sprite: 'char_ice_smith_stern-right.png', position: 'right-2' },
+            { id: 'specialops', name: 'SPECIAL OPS', sprite: 'char_specialops_masked-right.png', position: 'right' }
+        ],
+
+        hotspots: [],
+
+        itemUses: {
+            burner_phone: {
+                action() {
+                    gameState.flags.BURNER_USED_AT_FACILITY = true;
+                    notebook.add('FACILITY INTEL', 'Used the burner phone to document the processing room layout. Smith doesn\'t know.');
+                    sceneRenderer.showDialogue({
+                        speaker: 'NARRATION',
+                        text: "You discreetly photograph the room with the burner. This could matter later.",
+                        next: 'NEXT_DIALOGUE'
+                    });
+                }
+            }
+        },
+
+        dialogue: [
+            {
+                speaker: 'NARRATION',
+                text: "You tail the ICE van to a nondescript warehouse. Inside: rows of detainees, fluorescent lights, clipboards.",
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'AGENT SMITH',
+                text: "You shouldn't be here, boys. This is a federal processing facility.",
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'JONAH',
+                text: "(quiet) Who's the guy in the mask? That's not ICE gear.",
+                position: 'left-2',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'SPECIAL OPS',
+                text: "...",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "Smith, what is Special Ops doing at an immigration facility?",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'AGENT SMITH',
+                text: "Interagency cooperation. Nothing to see here. I'd suggest you use your phone for something other than cameras, son.",
+                next: () => {
+                    if (!inventory.has('burner_phone')) {
+                        inventory.add('burner_phone');
+                        notebook.add('BURNER PHONE', 'Agent Smith handed it over. "Stay in touch." — feels like a leash, not a gift.');
+                    }
+                    sceneRenderer.showDialogue({
+                        speaker: 'NARRATION',
+                        text: "Smith presses a burner phone into Hank's hand and walks away. The masked operative watches from the far wall.",
+                        next: () => {
+                            notebook.add('SPECIAL OPS SIGHTING', 'Armed operative at ICE processing site. No badge visible. Who does he answer to?');
+                            sceneRenderer.loadScene('S6_INTEL_ENTANGLEMENT');
+                        }
+                    });
+                }
+            }
+        ]
+    },
+
     // ===== S6: INTEL ENTANGLEMENT =====
     S6_INTEL_ENTANGLEMENT: {
         id: 'S6_INTEL_ENTANGLEMENT',
@@ -6936,6 +7034,12 @@ const SCENES = {
                                     gameState.flags.CARTEL_TARGET = true;
                                     sceneRenderer.loadScene('S7B_CARTEL_TARGETING');
                                 }
+                            },
+                            {
+                                text: 'Meet Ortega — "I heard there\'s a third player"',
+                                action() {
+                                    sceneRenderer.loadScene('S7C_VENEZ_BACKROOM_ORTEGA');
+                                }
                             }
                         ]
                     });
@@ -6943,7 +7047,78 @@ const SCENES = {
             }
         ]
     },
-    
+
+    // ===== S7C: VENEZUELAN BACKROOM - ORTEGA =====
+    S7C_VENEZ_BACKROOM_ORTEGA: {
+        id: 'S7C_VENEZ_BACKROOM_ORTEGA',
+        title: 'The Backroom Sermon',
+        background: './assets/backgrounds/bg_venez_backroom.png',
+        music: 'Consulate Backroom.mp3',
+
+        characters: [
+            { id: 'hank_disguise', name: 'HANK', sprite: 'char_hank_in_disguise-right.png', position: 'left' },
+            { id: 'ortega', name: 'ORTEGA', sprite: 'char_ortega_ranting-right.png', position: 'right' }
+        ],
+
+        hotspots: [],
+
+        dialogue: [
+            {
+                speaker: 'NARRATION',
+                text: "Hank slips out the back. A different flag on the wall. A different kind of danger.",
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'ORTEGA',
+                text: "You're not cartel. You're not CIA. Interesting. Sit down.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "I heard you're the reason the Riveras were flagged in the first place.",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'ORTEGA',
+                text: "ICE is a tool. Mendoza is a tool. Everyone's a tool when you hold the real data. That USB? I need it more than either of them.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'ORTEGA',
+                text: "The Riveras were collateral damage. Wrong family, right neighbor. That's all. Help me and I'll make it right.",
+                position: 'right',
+                next: () => {
+                    sceneRenderer.showDialogue({
+                        speaker: 'CHOICE',
+                        text: 'How do you respond to Ortega?',
+                        choices: [
+                            {
+                                text: 'Agree to work with Ortega',
+                                action() {
+                                    gameState.flags.ALLIED_WITH_ORTEGA = true;
+                                    notebook.add('ORTEGA ALLIANCE', 'Ortega claims the Riveras were collateral. He wants the USB — offered to clear them in exchange.');
+                                    notebook.add('CLUE — ORTEGA', 'Ortega has access to ICE targeting lists. He knew which house to flag. Follow the data trail.');
+                                    sceneRenderer.loadScene('S8_PRE_FINAL');
+                                }
+                            },
+                            {
+                                text: 'Walk out — this is above our pay grade',
+                                action() {
+                                    gameState.flags.CARTEL_TARGET = true;
+                                    notebook.add('ORTEGA REFUSED', 'Walked away from Ortega. He knows our faces now.');
+                                    sceneRenderer.loadScene('S7B_CARTEL_TARGETING');
+                                }
+                            }
+                        ]
+                    });
+                }
+            }
+        ]
+    },
+
     // ===== S7B: CARTEL TARGETING =====
     S7B_CARTEL_TARGETING: {
         id: 'S7B_CARTEL_TARGETING',
