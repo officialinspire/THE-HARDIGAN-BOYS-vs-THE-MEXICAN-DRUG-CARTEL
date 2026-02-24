@@ -7133,13 +7133,13 @@ const SCENES = {
         title: 'Snitches with Sneakers',
         background: './assets/backgrounds/bg_street_suburb_hardigan_house.png',
         music: 'Covert Investigation.mp3',
-        
+
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' }
         ],
         hotspots: [],
-        
+
         dialogue: [
             {
                 speaker: 'NARRATION',
@@ -7148,8 +7148,19 @@ const SCENES = {
             },
             {
                 speaker: 'HANK',
-                text: "We might have made a mistake.",
+                text: "We might have made a mistake!",
                 position: 'left',
+                // Wait for the surveillance sprite's slide-in animation before the speech bubble pops in.
+                bubbleDelay: 900,
+                onShow: () => {
+                    // Slide the cartel surveillance operative in from the right for cinematic tension.
+                    sceneRenderer.addCharacter({
+                        id: 'cartel_surveillance',
+                        name: 'CARTEL SURVEILLANCE',
+                        sprite: 'char_cartel-surveillance.png',
+                        position: 'right'
+                    }, 100);
+                },
                 next: () => {
                     sceneRenderer.loadScene('S8_PRE_FINAL');
                 }
