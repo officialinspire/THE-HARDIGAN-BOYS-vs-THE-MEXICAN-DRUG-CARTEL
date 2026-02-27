@@ -677,8 +677,8 @@ body.main-menu #scene-title {
     max-width: calc(100% - 24px);
 }
 #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container {
-    height: clamp(150px, 20vh, 260px);
-    min-height: clamp(150px, 20vh, 260px);
+    height: clamp(160px, 24vh, 320px);
+    min-height: clamp(160px, 24vh, 320px);
 }
 #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-content {
     height: 100%;
@@ -688,7 +688,11 @@ body.main-menu #scene-title {
 }
 #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-text {
     flex: 1;
-    overflow: hidden;      /* never scroll inside bubble */
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,0,0,0.3) transparent;
 }
 
 /* Mobile portrait: keep dialogue positioned above characters */
@@ -972,6 +976,9 @@ body.main-menu #scene-title {
     width: 100%;
     text-align: center;
     text-wrap: pretty;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
     position: relative;
 }
 
@@ -1432,21 +1439,48 @@ body.main-menu #scene-title {
 }
 
 .notebook-entry {
-    padding: 12px 0;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+    padding: 14px 0 14px 0;
+    border-bottom: 2px dashed rgba(0, 0, 0, 0.18);
+    position: relative;
+}
+
+.notebook-entry::before {
+    content: '';
+    display: block;
+    width: 4px;
+    height: 100%;
+    background: rgba(139, 0, 0, 0.6);
+    position: absolute;
+    left: -14px;
+    top: 0;
+    border-radius: 2px;
 }
 
 .notebook-entry-title {
-    font-weight: bold;
-    font-size: 17px;
-    margin-bottom: 10px;
+    font-weight: 900;
+    font-size: 15px;
+    margin-bottom: 8px;
     text-transform: uppercase;
-    color: #000;
+    color: #1a1a1a;
+    letter-spacing: 1.5px;
+    font-family: 'Courier New', monospace;
+    border-bottom: 1px solid rgba(0,0,0,0.12);
+    padding-bottom: 4px;
+}
+
+.notebook-entry-title::before {
+    content: '▸ ';
+    color: rgba(139, 0, 0, 0.7);
 }
 
 .notebook-entry div {
-    color: #333;
-    line-height: 1.8;
+    color: #222;
+    line-height: 1.9;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    white-space: pre-wrap;
+    font-size: 13px;
 }
 
 .notebook-close-btn {
@@ -2745,7 +2779,12 @@ body.main-menu #scene-container {
     }
 
     .notebook-entry-title {
-        font-size: 12px;
+        font-size: 11px;
+        letter-spacing: 1px;
+    }
+
+    .notebook-entry div {
+        font-size: 11px;
     }
 }
 

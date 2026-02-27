@@ -2931,11 +2931,12 @@ const notebook = {
         if (gameState.notebook.length === 0) {
             entriesDiv.innerHTML = '<p style="color: #666; font-style: italic; text-align: center; margin-top: 20px;">No entries yet...</p>';
         } else {
-            gameState.notebook.forEach(entry => {
+            gameState.notebook.forEach((entry, index) => {
                 const entryDiv = document.createElement('div');
                 entryDiv.className = 'notebook-entry';
+                const entryNumber = String(index + 1).padStart(2, '0');
                 entryDiv.innerHTML = `
-                    <div class="notebook-entry-title">${entry.title}</div>
+                    <div class="notebook-entry-title">[${entryNumber}] ${entry.title}</div>
                     <div>${entry.content}</div>
                 `;
                 entriesDiv.appendChild(entryDiv);
@@ -5366,11 +5367,11 @@ const sceneRenderer = {
         textEl.style.fontSize = '';
         if (speakerEl) speakerEl.style.fontSize = '';
 
-        const minText = 14;     // floor: readable on desktop + Android
-        const minSpeaker = 15;
+        const minText = 13;     // floor: readable on desktop + Android
+        const minSpeaker = 14;
 
         let guard = 0;
-        while (guard < 8 && (textEl.scrollHeight > textEl.clientHeight || contentEl.scrollHeight > contentEl.clientHeight)) {
+        while (guard < 20 && (textEl.scrollHeight > textEl.clientHeight || contentEl.scrollHeight > contentEl.clientHeight)) {
             guard++;
             const csT = parseFloat(getComputedStyle(textEl).fontSize) || 16;
             const csS = speakerEl ? (parseFloat(getComputedStyle(speakerEl).fontSize) || 16) : 0;
@@ -6337,6 +6338,17 @@ const SCENES = {
                 bubbleDelay: 1300,
                 next: 'NEXT_DIALOGUE',
                 onShow: () => {
+                    // Swap ICE agent back in to replace Mrs. Rivera (char_luisa-pleading)
+                    sceneRenderer.removeCharacter('mrs_rivera', false);
+                    setTimeout(() => {
+                        sceneRenderer.addCharacter({
+                            id: 'ice_agent',
+                            name: 'ICE AGENT',
+                            sprite: 'char_ice_generic_1-right.png',
+                            position: 'right'
+                        }, 100);
+                    }, 200);
+                    // Replace Hank with Mom on the left
                     sceneRenderer.removeCharacter('hank', false);
                     sceneRenderer.addCharacter({
                         id: 'mom',
@@ -6535,16 +6547,17 @@ const SCENES = {
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
-            { id: 'agent_smith', name: 'AGENT SMITH', sprite: 'char_ice_smith_smirk.png', position: 'right' },
-            { id: 'ice_generic_1', name: 'ICE AGENT', sprite: 'char_ice_generic_1-right.png', position: 'right-2' }
+            { id: 'ice_generic_1', name: 'ICE AGENT', sprite: 'char_ice_generic_1-right.png', position: 'right' },
+            { id: 'agent_smith', name: 'AGENT SMITH', sprite: 'char_ice_smith_smirk.png', position: 'right-2' }
         ],
-        
+
         hotspots: [],
-        
+
         dialogue: [
             {
                 speaker: 'AGENT SMITH',
                 text: "Morning. Just following up on your very patriotic phone call.",
+                position: 'right-2',
                 next: 'NEXT_DIALOGUE'
             },
             {
@@ -6566,8 +6579,6 @@ const SCENES = {
                                 text: 'Cooperate fully with ICE',
                                 action() {
                                     gameState.flags.WORKING_WITH_CIA = true;
-                                    inventory.add('burner_phone');
-                                    notebook.add('BURNER PHONE', 'Given by Agent Smith. They want us to report any "unusual activity."');
                                     sceneRenderer.loadScene('S4A2_GUILT_AND_GOSSIP');
                                 }
                             },
@@ -6845,7 +6856,7 @@ const SCENES = {
         id: 'S4C_ICE_PROCESSING_ROOM',
         title: 'The Processing Room',
         background: './assets/backgrounds/bg_ice_processing_room.png',
-        music: 'Covert Investigation.mp3',
+        music: 'Bureaucratic Cold.mp3',
 
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
