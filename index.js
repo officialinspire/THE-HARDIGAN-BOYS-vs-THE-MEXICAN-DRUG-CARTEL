@@ -7022,9 +7022,56 @@ const SCENES = {
                 next: 'NEXT_DIALOGUE'
             },
             {
+                speaker: 'LUPITA',
+                text: "[whispering] Don't show fear. He can smell it.",
+                position: 'right-2',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
                 speaker: 'JONAH',
                 text: "Fun fact: this is not what we meant by 'side hustle.'",
                 position: 'left-2',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "What exactly do you want from us? Spell it out.",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                text: "One shipment. Domestic delivery address that won't raise flags. In return, the Rivera family is untouched. Permanently.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'LUPITA',
+                text: "And this—",
+                position: 'right-2',
+                next: 'NEXT_DIALOGUE',
+                onShow: () => {
+                    // Lupita slides the passport across — player receives it regardless of choice
+                    inventory.add('mysterious_passport');
+                    notebook.add('MYSTERIOUS PASSPORT', 'A passport with Hank\'s photo but a different name. Lupita said it was "in case things get complicated." That\'s not comforting.');
+                }
+            },
+            {
+                speaker: 'LUPITA',
+                text: "—is your exit plan. Passport, clean alias. Use it if you need to disappear after this is over.",
+                position: 'right-2',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'JONAH',
+                text: "Is that a passport with MY face on it? How did you even—you know what, never mind.",
+                position: 'left-2',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "...",
+                position: 'left',
                 next: () => {
                     sceneRenderer.showDialogue({
                         speaker: 'CHOICE',
@@ -7151,6 +7198,29 @@ const SCENES = {
         ],
         hotspots: [],
 
+        onEnter() {
+            // Surveillance operative slides in from right as soon as scene loads
+            sceneRenderer.addCharacter({
+                id: 'cartel_surveillance',
+                name: 'CARTEL SURVEILLANCE',
+                sprite: 'char_cartel-surveillance.png',
+                position: 'right'
+            }, 400).then(() => {
+                // Make the surveillance character slightly larger than the default cap
+                const el = document.getElementById('char-cartel_surveillance');
+                if (el) {
+                    const rect = positioningSystem.getBackgroundRect();
+                    if (rect) {
+                        el.style.maxWidth  = (rect.renderedW * 0.44) + 'px';
+                        el.style.maxHeight = (rect.renderedH * 0.68) + 'px';
+                    } else {
+                        el.style.maxWidth  = '44%';
+                        el.style.maxHeight = '68%';
+                    }
+                }
+            });
+        },
+
         dialogue: [
             {
                 speaker: 'NARRATION',
@@ -7158,68 +7228,255 @@ const SCENES = {
                 next: 'NEXT_DIALOGUE'
             },
             {
+                speaker: 'JONAH',
+                text: "Hank. Don't look now. The car across the street... it's been there for an hour.",
+                position: 'left-2',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
                 speaker: 'HANK',
-                text: "We might have made a mistake!",
+                text: "Yeah. I see it. We may have made a very, very significant mistake.",
                 position: 'left',
-                // Wait for the surveillance sprite's slide-in animation before the speech bubble pops in.
-                bubbleDelay: 900,
-                onShow: () => {
-                    // Slide the cartel surveillance operative in from the right for cinematic tension.
-                    sceneRenderer.addCharacter({
-                        id: 'cartel_surveillance',
-                        name: 'CARTEL SURVEILLANCE',
-                        sprite: 'char_cartel-surveillance.png',
-                        position: 'right'
-                    }, 100);
-                },
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'JONAH',
+                text: "My hobbies used to be gaming and snacks. How did we end up here?",
+                position: 'left-2',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "We need to move. Now. Before that car decides to move first.",
+                position: 'left',
                 next: () => {
-                    sceneRenderer.loadScene('S8_PRE_FINAL');
+                    sceneRenderer.loadScene('S7D_AFTERMATH_PANIC');
                 }
             }
         ]
     },
     
+    // ===== S7D: AFTERMATH — PANIC IN THE KITCHEN =====
+    S7D_AFTERMATH_PANIC: {
+        id: 'S7D_AFTERMATH_PANIC',
+        title: 'No Good Options',
+        background: './assets/backgrounds/bg_hardigan_livingroom_night_02.png',
+        music: 'Hardigan Noir Tension.mp3',
+
+        characters: [
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking-right.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'right' }
+        ],
+        hotspots: [],
+
+        dialogue: [
+            {
+                speaker: 'NARRATION',
+                text: "They lock the door. Pull the blinds. The kind of quiet that means something bad is coming.",
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'JONAH',
+                text: "Okay. Options. Go to the cops. Go to the CIA lady. Or... run.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "The cops are in someone's pocket. Ms. Gray wants the USB for herself. And we have nowhere to run TO.",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'JONAH',
+                text: "So... show up to the meeting? At the airport? Like they want?",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "On our terms. With a plan. Not theirs.",
+                position: 'left',
+                next: () => {
+                    sceneRenderer.showDialogue({
+                        speaker: 'CHOICE',
+                        text: 'How do you want to play this?',
+                        choices: [
+                            {
+                                text: 'Call Ms. Gray — work a deal before the meeting',
+                                action() {
+                                    gameState.flags.WORKING_WITH_CIA = true;
+                                    notebook.add('CIA CONTACT', 'Called Ms. Gray before the airport meeting. She has a plan. So do we.');
+                                    sceneRenderer.loadScene('S8_PRE_FINAL');
+                                }
+                            },
+                            {
+                                text: 'Go straight to the airport — improvise',
+                                action() {
+                                    notebook.add('GOING IN BLIND', 'Showed up to the cartel meeting without backup. Classic Hardigan move.');
+                                    sceneRenderer.loadScene('S8_PRE_FINAL');
+                                }
+                            }
+                        ]
+                    });
+                }
+            }
+        ]
+    },
+
     // ===== S8: PRE-FINAL =====
     S8_PRE_FINAL: {
         id: 'S8_PRE_FINAL',
         title: 'Everyone Wants a Piece',
         background: './assets/backgrounds/bg_airport_cartel_landing_strip.png',
-        music: 'Covert Investigation.mp3',
-        
+        music: 'Safehouse Ambience.mp3',
+
         characters: [
             { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk.png', position: 'right' },
             { id: 'elgato', name: 'EL GATO', sprite: 'char_elgato_neutral-right.png', position: 'right-2' }
         ],
-        
+
         hotspots: [],
-        
+
         dialogue: [
             {
                 speaker: 'NARRATION',
-                text: "Meetings at airports. Deals at docks. Venezuelan conspiracies. Everything's converging.",
+                text: "Meetings at airports. Deals at docks. Venezuelan conspiracies. Everything converging at once.",
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'EL GATO',
+                text: "You made it. I wasn't sure you would.",
+                position: 'right-2',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'LUPITA',
+                text: "The CIA wants it. The cartel wants it. The Venezuelans want it. And somehow you two are in the middle.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'EL GATO',
+                text: "Whoever controls that USB controls the outcome. That's why everyone's smiling at you right now.",
+                position: 'right-2',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'LUPITA',
+                text: "Don't let it go to your head. Tonight decides everything. The warehouse. All parties present.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'EL GATO',
+                text: "One piece of advice? Walk in like you already know how it ends.",
+                position: 'right-2',
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'LUPITA',
                 text: "Time to see if you boys are serious. The warehouse. Tonight.",
+                position: 'right',
                 next: () => {
-                    sceneRenderer.loadScene('S9_FINAL_WAREHOUSE_SHOWDOWN');
+                    sceneRenderer.loadScene('S8B_HANK_DISGUISE_BRIEFING');
                 }
             }
         ]
     },
     
+    // ===== S8B: HANK IN DISGUISE — CIA BRIEFING =====
+    S8B_HANK_DISGUISE_BRIEFING: {
+        id: 'S8B_HANK_DISGUISE_BRIEFING',
+        title: 'The Undercover Idiot',
+        background: './assets/backgrounds/bg_cia_office.png',
+        music: 'Classified Silence.mp3',
+
+        characters: [
+            { id: 'hank_disguise', name: 'HANK', sprite: 'char_hank_in_disguise-right.png', position: 'left' },
+            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_amused-right.png', position: 'right' }
+        ],
+
+        hotspots: [],
+
+        dialogue: [
+            {
+                speaker: 'NARRATION',
+                text: "One hour before the warehouse. Ms. Gray has a plan. Hank is already regretting agreeing to it.",
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'MS. GRAY',
+                text: "You walk in as 'Marco Delgado' — independent courier. Here's the alias, the cover story, and the emergency extraction number.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "Marco Delgado. Right. And if they recognize me?",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'MS. GRAY',
+                text: "Improvise. You've been doing it since Tuesday.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "That is... not reassuring.",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'MS. GRAY',
+                text: "Your job is simple: get inside, confirm the principals are there, and stall until my team positions. Don't be a hero.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "What about Jonah?",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'MS. GRAY',
+                text: "Jonah stays outside. He's backup. Or a distraction. Honestly, same thing.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "He's going to be so offended by that.",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'MS. GRAY',
+                text: "Go. And Hank — don't lose the USB. Whatever happens in there, that drives the ending.",
+                position: 'right',
+                next: () => {
+                    gameState.flags.WORKING_WITH_CIA = true;
+                    notebook.add('UNDERCOVER OPERATION', 'Hank going in as "Marco Delgado". Ms. Gray\'s team is outside. This plan has about a 40% chance of working, which is better than our usual average.');
+                    sceneRenderer.loadScene('S9_FINAL_WAREHOUSE_SHOWDOWN');
+                }
+            }
+        ]
+    },
+
     // ===== S9: FINAL WAREHOUSE SHOWDOWN =====
     S9_FINAL_WAREHOUSE_SHOWDOWN: {
         id: 'S9_FINAL_WAREHOUSE_SHOWDOWN',
         title: 'Diplomacy, but Make It Stupid',
         background: './assets/backgrounds/bg_warehouse_night.png',
         music: 'Warehouse Night Suspense.mp3',
-        
+
         characters: [
-            { id: 'cartel_boss', name: 'ANDREAS "THE BUTCHER" MENDOZA', sprite: 'char_cartel_boss_menacing.png', position: 'left' },
-            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_threatening-right.png', position: 'right' },
-            { id: 'elgato', name: 'EL GATO', sprite: 'char_elgato_intense-right.png', position: 'right-2' }
+            { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_threatening.png', position: 'left' },
+            { id: 'elgato', name: 'EL GATO', sprite: 'char_elgato_intense-right.png', position: 'right' },
+            { id: 'cartel_boss', name: 'ANDREAS "THE BUTCHER" MENDOZA', sprite: 'char_cartel_boss_menacing-right.png', position: 'right-2' }
         ],
 
         hotspots: [],
@@ -7227,19 +7484,42 @@ const SCENES = {
         dialogue: [
             {
                 speaker: 'NARRATION',
-                text: "Everyone's here. Cartel. CIA. Maybe even the Riveras. All eyes on you.",
+                text: "The warehouse. Everyone showed up. Of course they did.",
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'NARRATION',
+                text: "Cartel on the right. CIA on the left. Two suburban teenagers in the middle holding a USB drive that apparently runs the world.",
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
-                text: "So who gets the USB, boys?",
-                position: 'left',
+                text: "I admire the audacity. Walking in here like you have leverage.",
+                position: 'right-2',
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'MS. GRAY',
-                text: "Choose wisely. Or don't. Either way makes for good paperwork.",
+                text: "They do have leverage. That's the problem.",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'EL GATO',
+                text: "Everyone wants something different. CIA wants it buried. Cartel wants it weaponized. Venezuela wants it disappeared.",
                 position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                text: "So who gets the USB, boys? Choose before someone chooses for you.",
+                position: 'right-2',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'MS. GRAY',
+                text: "Choose wisely. Or don't. Either way makes for excellent paperwork.",
+                position: 'left',
                 next: () => {
                     sceneRenderer.showDialogue({
                         speaker: 'FINAL CHOICE',
@@ -7366,37 +7646,122 @@ const SCENES = {
         title: 'Multilateral Dumbassery',
         background: './assets/backgrounds/bg_river_dock_night.png',
         music: 'Dark Police Intensity.mp3',
-        
+
         characters: [
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left' },
             { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk.png', position: 'right' }
         ],
         hotspots: [],
-        
+
         dialogue: [
             {
                 speaker: 'NARRATION',
-                text: "Chaos at the warehouse. Explosions. Leaks. International incident. And somehow... you're on a boat.",
+                text: "Chaos at the warehouse. Explosions. A diplomatic incident with three countries. Someone set a forklift on fire.",
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'NARRATION',
+                text: "And somehow... you're on a boat. At 2am. With Lupita.",
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'LUPITA',
                 text: "Welcome to the game, boys. You played it... interestingly.",
-                next: 'NEXT_DIALOGUE'
-            },
-            {
-                speaker: 'JONAH',
-                text: "Are we fugitives now? Or entrepreneurs? I genuinely can't tell.",
                 position: 'right',
                 next: 'NEXT_DIALOGUE'
             },
             {
-                speaker: 'NARRATION',
-                text: "ENDING: THE CHAOTIC ENDING (Everybody's Mad, Nobody Wins)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
+                speaker: 'JONAH',
+                text: "Are we fugitives now? Or entrepreneurs? I genuinely cannot tell.",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'LUPITA',
+                text: "Both. Neither. It depends who's asking and how much they're offering.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'JONAH',
+                text: "Hank. What did we do.",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'LUPITA',
+                text: "The CIA is furious. The cartel is reorganizing. Ortega is already spinning it as a Venezuelan intelligence success.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'JONAH',
+                text: "And the Riveras?",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'LUPITA',
+                text: "Safe. For now. Nobody's touching them — too much heat. You accidentally created a standoff.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'JONAH',
+                text: "So we won? By losing completely?",
+                position: 'left',
                 next: () => {
-                    setTimeout(() => {
-                        sceneRenderer.loadScene('S0_MAIN_MENU');
-                    }, 5000);
+                    sceneRenderer.showDialogue({
+                        speaker: 'CHOICE',
+                        text: 'How do you feel about this outcome?',
+                        choices: [
+                            {
+                                text: '"Honestly? I\'ll take it."',
+                                action() {
+                                    sceneRenderer.showDialogue({
+                                        speaker: 'JONAH',
+                                        text: "Honestly? I'll take it.",
+                                        position: 'left',
+                                        next: 'NEXT_DIALOGUE'
+                                    });
+                                    // Continue to ending narration after a beat
+                                    setTimeout(() => {
+                                        sceneRenderer.showDialogue({
+                                            speaker: 'NARRATION',
+                                            text: "ENDING: MULTILATERAL DUMBASSERY\n(Everybody's Mad, Nobody Wins — But The Riveras Are Okay)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
+                                            next: () => {
+                                                setTimeout(() => {
+                                                    sceneRenderer.loadScene('S0_MAIN_MENU');
+                                                }, 5000);
+                                            }
+                                        });
+                                    }, 2500);
+                                }
+                            },
+                            {
+                                text: '"This is not what I planned."',
+                                action() {
+                                    sceneRenderer.showDialogue({
+                                        speaker: 'LUPITA',
+                                        text: "Nobody plans for this. That's what makes it interesting.",
+                                        position: 'right',
+                                        next: 'NEXT_DIALOGUE'
+                                    });
+                                    setTimeout(() => {
+                                        sceneRenderer.showDialogue({
+                                            speaker: 'NARRATION',
+                                            text: "ENDING: MULTILATERAL DUMBASSERY\n(Everybody's Mad, Nobody Wins — But The Riveras Are Okay)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
+                                            next: () => {
+                                                setTimeout(() => {
+                                                    sceneRenderer.loadScene('S0_MAIN_MENU');
+                                                }, 5000);
+                                            }
+                                        });
+                                    }, 2500);
+                                }
+                            }
+                        ]
+                    });
                 }
             }
         ]

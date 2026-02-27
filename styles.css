@@ -673,12 +673,13 @@ body.main-menu #scene-title {
 
 /* --- SPEECH BUBBLE: stable comic size (matches example images) --- */
 #dialogue-box[data-layout-panel="speech-bubble"] {
-    width: clamp(320px, 36vw, 560px);
+    width: clamp(320px, 40vw, 600px);
     max-width: calc(100% - 24px);
 }
 #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container {
-    height: clamp(160px, 24vh, 320px);
-    min-height: clamp(160px, 24vh, 320px);
+    height: auto;
+    min-height: clamp(160px, 22vh, 300px);
+    max-height: clamp(200px, 32vh, 380px);
 }
 #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-content {
     height: 100%;
@@ -693,6 +694,10 @@ body.main-menu #scene-title {
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
     scrollbar-color: rgba(0,0,0,0.3) transparent;
+    hyphens: auto;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
 }
 
 /* Mobile portrait: keep dialogue positioned above characters */
@@ -979,6 +984,8 @@ body.main-menu #scene-title {
     word-wrap: break-word;
     overflow-wrap: break-word;
     word-break: break-word;
+    hyphens: auto;
+    white-space: normal;
     position: relative;
 }
 
