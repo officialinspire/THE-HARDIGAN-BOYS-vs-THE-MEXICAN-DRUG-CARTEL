@@ -1285,6 +1285,86 @@ body.main-menu #scene-title {
     box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
 }
 
+/* ===== MODAL OVERLAY ===== */
+.modal-content {
+    width: min(92vw, 560px);
+    max-width: 560px;
+    max-height: min(80vh, 640px);
+    padding: 36px 32px 28px;
+    display: flex;
+    flex-direction: column;
+}
+
+#modal-title {
+    font-size: clamp(18px, 3.5vw, 22px);
+    letter-spacing: 2px;
+    margin-bottom: 16px;
+}
+
+#modal-body {
+    font-size: clamp(14px, 2.2vw, 16px);
+    line-height: 1.65;
+    color: #d0d0d0;
+    overflow-y: auto;
+    max-height: 50vh;
+    flex: 1 1 auto;
+    padding-right: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: #555 transparent;
+}
+
+#modal-body::-webkit-scrollbar {
+    width: 5px;
+}
+
+#modal-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#modal-body::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 4px;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 24px;
+    flex-shrink: 0;
+}
+
+.modal-actions .menu-btn {
+    width: auto;
+    min-width: 120px;
+    max-width: 200px;
+    margin: 0;
+    padding: 12px 28px;
+    font-size: clamp(14px, 2.5vw, 17px);
+    opacity: 1;
+    transform: none;
+}
+
+@media (max-width: 600px) {
+    .modal-content {
+        max-height: min(88vh, 560px);
+        padding: 24px 18px 20px;
+    }
+
+    #modal-body {
+        max-height: 48vh;
+    }
+
+    .modal-actions {
+        margin-top: 16px;
+    }
+
+    .modal-actions .menu-btn {
+        min-width: 100px;
+        padding: 10px 20px;
+    }
+}
+
 /* ===== INVENTORY - RESPONSIVE GRID ===== */
 #inventory-grid {
     display: grid;
