@@ -5271,8 +5271,8 @@ const sceneRenderer = {
         }
 
         // Higher floors: prefer readable text over extreme shrinking.
-        const minTextSize = isVerySmall ? 12 : 14;
-        const minSpeakerSize = isVerySmall ? 12 : 14;
+        const minTextSize = isVerySmall ? 13 : 15;
+        const minSpeakerSize = isVerySmall ? 14 : 16;
 
         let guard = 0;
 
@@ -5312,8 +5312,8 @@ const sceneRenderer = {
         textEl.style.fontSize = '';
         if (speakerEl) speakerEl.style.fontSize = '';
 
-        const minText = 13;     // floor: readable on desktop + Android
-        const minSpeaker = 14;
+        const minText = 14;     // floor: readable on desktop + Android
+        const minSpeaker = 15;
 
         let guard = 0;
         while (guard < 20 && (textEl.scrollHeight > textEl.clientHeight || contentEl.scrollHeight > contentEl.clientHeight)) {
@@ -5478,7 +5478,7 @@ const sceneRenderer = {
      * Split fullText into pages that each fit inside dialogueBox.
      * Works for both speech-bubble and non-bubble layouts.
      */
-    _splitIntoDialoguePages(dialogueBox, fullText, maxPages = 6) {
+    _splitIntoDialoguePages(dialogueBox, fullText, maxPages = 10) {
         const isBubble = this._isSpeechBubble(dialogueBox);
         const measureFit = (text) => isBubble
             ? this._measureSpeechBubbleFit(dialogueBox, text).fits
@@ -5486,10 +5486,14 @@ const sceneRenderer = {
 
         const txt = String(fullText || '').replace(/\s+/g, ' ').trim();
         if (!txt) return [''];
-        if (measureFit(txt)) return [txt];
+
+        const sentenceChunksRaw = txt.split(/(?<=[.!?])\s+/).filter(Boolean);
+        const shouldForceSentencePaging = sentenceChunksRaw.length > 2 && txt.length > 170;
+
+        if (measureFit(txt) && !shouldForceSentencePaging) return [txt];
 
         // Prefer sentence-boundary splits
-        let chunks = txt.split(/(?<=[.!?])\s+/);
+        let chunks = sentenceChunksRaw;
         if (chunks.length === 1) {
             const words = txt.split(' ');
             chunks = [];
@@ -5518,19 +5522,27 @@ const sceneRenderer = {
 
         const pages = [];
         let cur = '';
+        let curSentenceCount = 0;
 
         for (let i = 0; i < chunks.length; i++) {
             const next = cur ? cur + ' ' + chunks[i] : chunks[i];
-            if (measureFit(next)) {
+            const currentChunkIsSentence = /[.!?]["')\]]*$/.test(chunks[i]);
+            const nextSentenceCount = curSentenceCount + (currentChunkIsSentence ? 1 : 0);
+            const exceedsSentenceLimit = shouldForceSentencePaging && cur && nextSentenceCount > 2;
+
+            if (!exceedsSentenceLimit && measureFit(next)) {
                 cur = next;
+                curSentenceCount = nextSentenceCount;
                 continue;
             }
             if (cur) pages.push(cur);
             cur = chunks[i];
+            curSentenceCount = currentChunkIsSentence ? 1 : 0;
             if (!measureFit(cur)) {
                 const forced = forceWordSplit(cur);
                 pages.push(...forced.slice(0, -1));
                 cur = forced[forced.length - 1] || '';
+                curSentenceCount = /[.!?]["')\]]*$/.test(cur) ? 1 : 0;
             }
             if (pages.length >= maxPages - 1) {
                 const rest = ([cur]).concat(chunks.slice(i + 1)).join(' ').trim();
