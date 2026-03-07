@@ -307,6 +307,13 @@ body.main-menu #scene-container::after {
     display: none;
 }
 
+/* Mobile backgrounds were reading too dark; remove the vignette overlay on touch layouts. */
+@media (max-width: 1024px) {
+    #scene-container::after {
+        display: none;
+    }
+}
+
 #scene-background {
     position: absolute;
     top: 0;
