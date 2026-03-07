@@ -2019,16 +2019,14 @@ const spriteTransparencyProcessor = {
             const width = imageEl.naturalWidth || imageEl.width;
             const height = imageEl.naturalHeight || imageEl.height;
             if (!width || !height) return false;
-
-            const sampleSize = 12;
             const canvas = document.createElement('canvas');
-            canvas.width = sampleSize;
-            canvas.height = sampleSize;
+            canvas.width = width;
+            canvas.height = height;
             const ctx = canvas.getContext('2d', { willReadFrequently: true });
             if (!ctx) return false;
 
-            ctx.drawImage(imageEl, 0, 0, sampleSize, sampleSize);
-            const pixels = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
+            ctx.drawImage(imageEl, 0, 0, width, height);
+            const pixels = ctx.getImageData(0, 0, width, height).data;
 
             for (let i = 3; i < pixels.length; i += 4) {
                 if (pixels[i] < 255) return true;
@@ -2117,59 +2115,6 @@ const spriteTransparencyProcessor = {
                 push(x - 1, y);
                 push(x, y + 1);
                 push(x, y - 1);
-            }
-
-            const internalVisited = new Uint8Array(width * height);
-            const isTransparent = (x, y) => {
-                const i = indexOf(x, y);
-                return pixels[i + 3] === 0;
-            };
-
-            const minIslandSize = 26;
-            for (let y = 1; y < height - 1; y += 1) {
-                for (let x = 1; x < width - 1; x += 1) {
-                    const idx = y * width + x;
-                    if (internalVisited[idx] || !isNearWhite(x, y)) continue;
-
-                    const component = [];
-                    const stack = [[x, y]];
-                    let touchesEdge = false;
-
-                    while (stack.length > 0) {
-                        const [cx, cy] = stack.pop();
-                        const cIdx = cy * width + cx;
-                        if (internalVisited[cIdx]) continue;
-                        internalVisited[cIdx] = 1;
-                        if (!isNearWhite(cx, cy)) continue;
-
-                        component.push([cx, cy]);
-                        if (cx === 0 || cy === 0 || cx === width - 1 || cy === height - 1) {
-                            touchesEdge = true;
-                        }
-
-                        stack.push([cx + 1, cy]);
-                        stack.push([cx - 1, cy]);
-                        stack.push([cx, cy + 1]);
-                        stack.push([cx, cy - 1]);
-                    }
-
-                    if (touchesEdge || component.length < minIslandSize) continue;
-
-                    let transparentNeighbors = 0;
-                    component.forEach(([cx, cy]) => {
-                        if (isTransparent(cx + 1, cy) || isTransparent(cx - 1, cy) || isTransparent(cx, cy + 1) || isTransparent(cx, cy - 1)) {
-                            transparentNeighbors += 1;
-                        }
-                    });
-
-                    if (transparentNeighbors / component.length > 0.45) {
-                        component.forEach(([cx, cy]) => {
-                            const i = indexOf(cx, cy);
-                            pixels[i + 3] = 0;
-                            changed += 1;
-                        });
-                    }
-                }
             }
 
             if (changed > 0) {
