@@ -3639,17 +3639,17 @@ const sceneRenderer = {
         const hasDirectionalSuffix = /(?:-|_)(left|right)\.png$/i.test(spriteName);
         const baseName = spriteName.replace(/(?:-|_)(left|right)\.png$/i, '.png');
 
-        add(spriteName);
-
-        if (spriteName.endsWith('.png')) {
-            add(`${spriteName}.png`);
-        }
-
         if (side && !hasDirectionalSuffix) {
             add(baseName.replace(/\.png$/i, `${sideSuffix}.png`));
             add(baseName.replace(/\.png$/i, `${sideUnderscore}.png`));
             add(baseName.replace(/\.png$/i, `${sideSuffix}.png.png`));
             add(baseName.replace(/\.png$/i, `${sideUnderscore}.png.png`));
+        }
+
+        add(spriteName);
+
+        if (spriteName.endsWith('.png')) {
+            add(`${spriteName}.png`);
         }
 
         if (hasDirectionalSuffix) {
