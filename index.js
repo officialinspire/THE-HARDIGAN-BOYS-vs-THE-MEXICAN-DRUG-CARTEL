@@ -2658,14 +2658,14 @@ const ITEM_DISPLAY_NAMES = {
 };
 
 const ITEM_JOURNAL_HINTS = {
-    neighbors_usb: 'This USB probably matters at the school computers or when talking to Ortega.',
-    burner_phone: 'Keep this close. CIA contacts may expect updates or proof before making their next move.',
-    house_key: 'The house key may unlock side paths when the family needs to move quickly or secretly.',
-    moms_nurse_badge: 'A real hospital badge could open staff-only areas and build trust with medical contacts.',
-    fake_fbi_badge: 'Use the fake badge sparingly—best for intimidation when no real agents are around.',
-    cartel_usb: 'This drive could expose cartel operations. Try pairing it with allies who can decrypt data safely.',
-    mysterious_passport: 'This passport hints at an escape route or a false identity option in high-risk moments.',
-    tv_remote: 'The remote might reveal news clues or hidden broadcasts tied to the investigation.'
+    neighbors_usb: 'NEIGHBORS USB — This drive is the key to everything. When Sofia asks if you still have it at school, open INVENTORY and USE it to show her. Later at the CIA office, Ms. Gray will ask about it too — USE it again to trigger the choice that shapes your alliance.',
+    burner_phone: 'BURNER PHONE — Smith gave you this as a leash, but it can be your tool. At the ICE processing facility, open INVENTORY and USE the burner phone to secretly document the room. If the cartel puts you under surveillance, USE it again to call for backup.',
+    house_key: 'HOUSE KEY — Got you out the back door during the raid. May open side paths if the family needs to move quickly or secretly in later scenes.',
+    moms_nurse_badge: "MOM'S NURSE BADGE — A real hospital ID. Could grant access to restricted areas or establish trust in official-looking situations. Hold onto it.",
+    fake_fbi_badge: 'FAKE FBI BADGE — Use sparingly. When facing Ortega in the Venezuelan backroom, open INVENTORY and USE this badge to establish credibility and negotiate a better deal. Could also work on cartel contacts who respect federal authority.',
+    cartel_usb: 'CARTEL USB — Serious leverage. The cartel\'s own data turned against them. Secure it until the warehouse showdown, where it can tip the final confrontation.',
+    mysterious_passport: 'MYSTERIOUS PASSPORT — A clean alias. Before heading to the warehouse as "Marco Delgado," open INVENTORY and USE this passport to confirm your cover identity with Ms. Gray. Do not skip this step.',
+    tv_remote: 'TV REMOTE — The channel that started it all. Hank and Jonah\'s night changed when the news broke. Might reveal hidden broadcast clues if used in the right scene.'
 };
 
 let statusToastTimerId = null;
@@ -2801,7 +2801,7 @@ function renderInventory() {
 
 // ===== UI MODAL HELPER =====
 const uiModal = {
-    show({ title, bodyHtml, bodyText }) {
+    show({ title, bodyHtml, bodyText, actionBtn }) {
         const overlay = document.getElementById('modal-overlay');
         const titleEl = document.getElementById('modal-title');
         const bodyEl = document.getElementById('modal-body');
@@ -2819,10 +2819,23 @@ const uiModal = {
 
         const okBtn = document.getElementById('modal-ok');
         const closeBtn = document.getElementById('modal-close');
+        const useBtn = document.getElementById('modal-use-btn');
 
         okBtn.onclick = hide;
         closeBtn.onclick = hide;
         overlay.onclick = (e) => { if (e.target === overlay) hide(); };
+
+        if (actionBtn && useBtn) {
+            useBtn.textContent = actionBtn.label || 'USE ITEM';
+            useBtn.classList.remove('hidden');
+            useBtn.onclick = () => {
+                this.hide();
+                actionBtn.onClick();
+            };
+        } else if (useBtn) {
+            useBtn.classList.add('hidden');
+            useBtn.onclick = null;
+        }
     },
 
     hide() {
@@ -2839,7 +2852,32 @@ function showItemInfo(itemId) {
     }
     const itemName = itemId.replace(/_/g, ' ').toUpperCase();
     const infoText = getItemDescription(itemId);
-    uiModal.show({ title: itemName, bodyText: infoText });
+    uiModal.show({
+        title: itemName,
+        bodyText: infoText,
+        actionBtn: {
+            label: 'USE ITEM',
+            onClick: () => {
+                document.getElementById('inventory-overlay').classList.add('hidden');
+                handleItemUse(itemId);
+            }
+        }
+    });
+}
+
+function handleItemUse(itemId) {
+    const currentScene = SCENES[gameState.currentSceneId];
+    if (!currentScene) {
+        showStatusToast("Can't use that right now.");
+        return;
+    }
+    const useHandler = currentScene.itemUses && currentScene.itemUses[itemId];
+    if (useHandler && typeof useHandler.action === 'function') {
+        SFXGenerator.playButtonClick();
+        useHandler.action();
+    } else {
+        showStatusToast(`Can't use that here right now.`, 2200);
+    }
 }
 
 function getItemDescription(itemId) {
@@ -6141,6 +6179,9 @@ const SCENES = {
         ],
 
         onEnter() {
+            // Journal: Act I status
+            addJournalOnce('status_s1', 'ACT I — A Normal Night', 'Northern Virginia. Hank and Jonah are home. Something feels off outside. Explore the room before looking out the window — click the TV, lamp, notebook, and remote first. The window is the last stop.');
+
             // Initialize lighting - start with both off for dramatic effect
             gameState.lighting.lampOn = false;
             gameState.lighting.tvOn = false;
@@ -6218,6 +6259,11 @@ const SCENES = {
         ],
 
         hotspots: [],
+
+        onEnter() {
+            addJournalOnce('status_s2', 'THE RAID — ICE Takes the Riveras', 'ICE agents are raiding the Riveras\' house. Carlos Rivera is being detained. Mom says stay inside — but this is a major choice point. Staying means the cooperation path. Sneaking out means getting involved.');
+            addJournalOnce('clue_s2_choice', 'CHOICE AHEAD — Two Paths', 'If you sneak out to help the Riveras, you\'ll pick up the HOUSE KEY and head into the backyard. That path leads to Sofia and the USB drive that drives the whole story. If you stay, you\'ll deal with ICE agents at your door the next morning.');
+        },
 
         dialogue: [
             {
@@ -6381,9 +6427,14 @@ const SCENES = {
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused-left.png', position: 'left-2' },
             { id: 'mom', name: 'MOM', sprite: 'char_mom_worried.png', position: 'right' }
         ],
-        
+
         hotspots: [],
-        
+
+        onEnter() {
+            addJournalOnce('status_s3a', 'PATH A — You Stayed Inside', 'You chose not to get involved. The Riveras are being taken while you watch from behind the window. The TV news is already spinning the story. Mom is relieved — but Hank is unsettled.');
+            addJournalOnce('clue_s3a_next', 'NEXT STEP — Cooperate or Resist?', 'You can call the ICE tip line and cooperate fully with authorities, or refuse and just go silent. Cooperating opens the federal path with Agent Smith. Refusing leads to guilt and gossip at school next day.');
+        },
+
         dialogue: [
             {
                 speaker: 'NARRATION',
@@ -6433,9 +6484,14 @@ const SCENES = {
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' },
             { id: 'sofia', name: 'SOFIA', sprite: 'char_sofia_upset.png', position: 'right' }
         ],
-        
+
         hotspots: [],
-        
+
+        onEnter() {
+            addJournalOnce('status_s3b', 'PATH B — Into the Backyard', 'You snuck out to help. The HOUSE KEY got you here. Sofia Rivera is in the backyard — scared, alone, and about to hand you something that will change everything. Listen carefully to what she says.');
+            addJournalOnce('clue_s3b_usb', 'INCOMING ITEM — The USB Drive', 'Sofia is going to give you a USB drive with sensitive data. This is the most important item in the game. You\'ll need to USE it at school when she asks if you still have it, and again at the CIA office when Ms. Gray asks about it.');
+        },
+
         dialogue: [
             {
                 speaker: 'SOFIA',
@@ -6500,7 +6556,7 @@ const SCENES = {
         title: 'Friendly Federal Harassment',
         background: './assets/backgrounds/bg_hardigan_livingroom_day.png',
         music: 'Empty Hallways (Ambient Mix).mp3',
-        
+
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
@@ -6509,6 +6565,11 @@ const SCENES = {
         ],
 
         hotspots: [],
+
+        onEnter() {
+            addJournalOnce('status_s4a1', 'STATUS — Federal Follow-Up', 'You called the tip line. Agent Smith showed up. He\'s at your door with a generic ICE agent. This is the official cooperation path. Whatever you tell them here determines how suspicious you look to the feds.');
+            addJournalOnce('clue_s4a1_badge', 'CLUE — The FAKE FBI BADGE', 'If you find a fake FBI badge later, it could be useful when dealing with officials who don\'t know you. Cooperating fully with Smith now puts you deeper in the federal pocket.');
+        },
 
         dialogue: [
             {
@@ -6559,7 +6620,7 @@ const SCENES = {
         title: 'We Just Watched',
         background: './assets/backgrounds/bg_school_hallway_day.png',
         music: 'Empty Hallways (Ambient Mix).mp3',
-        
+
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused-left.png', position: 'left-2' },
@@ -6567,6 +6628,11 @@ const SCENES = {
             { id: 'student_2', name: 'ANOTHER STUDENT', sprite: 'char_random-student-02-right.png', position: 'right-2' }
         ],
         hotspots: [],
+
+        onEnter() {
+            addJournalOnce('status_s4a2', 'STATUS — Guilt and Gossip', 'School hallway. The rumor mill is already spinning wild stories about the Riveras. Hank knows the truth is messier. You can follow the ICE van to the processing facility or head home. Following the van leads to the ICE Processing Room scene.');
+            addJournalOnce('clue_s4a2_facility', 'CLUE — The Processing Facility', 'If you follow the ICE van, you\'ll end up inside a federal processing room. If you already have — or get — a BURNER PHONE there, USE it in inventory to document what you see. That intel could matter later.');
+        },
 
         dialogue: [
             {
@@ -6624,6 +6690,32 @@ const SCENES = {
 
         hotspots: [],
 
+        onEnter() {
+            addJournalOnce('status_s4b', 'STATUS — School Aftershock', 'School the next day. The gossip is already mutating the truth. Sofia Rivera pulls you aside — she wants to confirm you still have the drive her dad gave you.');
+            addJournalOnce('clue_s4b_usb_gate', 'ACTION REQUIRED — Show Sofia the USB', 'When Sofia asks "You still have the drive?" — she needs proof. Open your INVENTORY and USE the NEIGHBORS USB to show it to her. This unlocks the next part of the conversation and sets up the meeting at her place tonight.');
+        },
+
+        itemUses: {
+            neighbors_usb: {
+                action() {
+                    addJournalOnce('used_usb_s4b', 'CONFIRMED — USB Shown to Sofia', 'You showed Sofia the drive at school. She confirmed other people want it too. Meeting at her place tonight — she\'s cracked the encryption and has something big to share.');
+                    sceneRenderer.showDialogue({
+                        speaker: 'HANK',
+                        text: "(pulls out the USB) Right here. Feels like holding a grenade filled with subpoenas.",
+                        position: 'left',
+                        next: () => {
+                            sceneRenderer.showDialogue({
+                                speaker: 'SOFIA',
+                                text: "Good. Because you're not the only ones who want it.",
+                                position: 'right',
+                                next: 'NEXT_DIALOGUE'
+                            });
+                        }
+                    });
+                }
+            }
+        },
+
         dialogue: [
             {
                 speaker: 'RANDOM STUDENT',
@@ -6648,7 +6740,12 @@ const SCENES = {
                 text: "You still have the drive?",
                 position: 'right',
                 bubbleDelay: 600,
-                next: 'NEXT_DIALOGUE',
+                next: () => {
+                    // Gate: player must USE neighbors_usb from inventory to continue
+                    gameState.dialogueLock = false;
+                    document.getElementById('dialogue-box').classList.add('hidden');
+                    showStatusToast('💡 Open INVENTORY — USE the NEIGHBORS USB to show Sofia!', 4000);
+                },
                 onShow: () => {
                     sceneRenderer.removeCharacter('student_1', true);
                     sceneRenderer.removeCharacter('student_2', true);
@@ -6663,18 +6760,7 @@ const SCENES = {
                 }
             },
             {
-                speaker: 'HANK',
-                text: "Yeah. Feels like holding a grenade filled with subpoenas.",
-                position: 'left',
-                next: 'NEXT_DIALOGUE'
-            },
-            {
-                speaker: 'SOFIA',
-                text: "Good. Because you're not the only ones who want it.",
-                position: 'right',
-                next: 'NEXT_DIALOGUE'
-            },
-            {
+                // Reached via NEXT_DIALOGUE from the itemUses "Good" response (index 3 → 4)
                 speaker: 'SOFIA',
                 text: "Come to my place tonight — both of you. Around eight.",
                 position: 'right',
@@ -6717,6 +6803,11 @@ const SCENES = {
         ],
 
         hotspots: [],
+
+        onEnter() {
+            addJournalOnce('status_s5', 'STATUS — Sofia\'s Intel Reveal', 'Sofia cracked the USB drive. What\'s on it is bigger than expected: a DEA informant list and a cartel payment ledger with names of U.S. officials. Someone used ICE to recover this drive from the Riveras — not immigration enforcement.');
+            addJournalOnce('clue_s5_gray', 'KEY CONTACT — CIA Analyst Gray', 'CIA analyst "Ms. Gray" has been building an independent case against the Mendoza operation for two years. She\'s the only one who can authenticate this data safely. Sofia wants you to take it to her. Next stop: the CIA research annex.');
+        },
 
         dialogue: [
             {
@@ -6824,14 +6915,19 @@ const SCENES = {
 
         hotspots: [],
 
+        onEnter() {
+            addJournalOnce('status_s4c', 'STATUS — Inside the ICE Facility', 'You followed the van to a federal processing room. Rows of detainees. Fluorescent lights. A masked operative who doesn\'t belong here. Agent Smith gives you a burner phone — use it wisely.');
+            addJournalOnce('clue_s4c_burner', 'ACTION AVAILABLE — Document the Room', 'Smith gives you a BURNER PHONE. While you\'re inside this facility, open your INVENTORY and USE the burner phone to secretly photograph the layout. That intel could expose what\'s really happening here. The masked Special Ops figure is not ICE — note it in your journal.');
+        },
+
         itemUses: {
             burner_phone: {
                 action() {
                     gameState.flags.BURNER_USED_AT_FACILITY = true;
-                    notebook.add('FACILITY INTEL', 'Used the burner phone to document the processing room layout. Smith doesn\'t know.');
+                    addJournalOnce('used_burner_s4c', 'INTEL GATHERED — Facility Documented', 'Used the burner phone to photograph the processing room layout while Smith wasn\'t watching. The masked operative, the layout, and the number of detainees are all on record now. Smith doesn\'t know.');
                     sceneRenderer.showDialogue({
                         speaker: 'NARRATION',
-                        text: "You discreetly photograph the room with the burner. This could matter later.",
+                        text: "You angle the burner phone and quietly capture the room — the rows, the masked figure, the unmarked equipment. Smith doesn't notice. This evidence could matter later.",
                         next: 'NEXT_DIALOGUE'
                     });
                 }
@@ -6900,9 +6996,47 @@ const SCENES = {
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
             { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_amused.png', position: 'right' }
         ],
-        
+
         hotspots: [],
-        
+
+        onEnter() {
+            addJournalOnce('status_s6', 'STATUS — CIA Contact: Ms. Gray', 'You\'re at the federal research annex. CIA analyst Ms. Gray has been waiting for someone with that USB. This is the biggest decision point so far: hand it over or stay independent.');
+            if (inventory.has('neighbors_usb')) {
+                addJournalOnce('clue_s6_usb_gate', 'ACTION REQUIRED — Hand Over or Keep the USB', 'Ms. Gray is going to ask about the USB drive. When she does, open your INVENTORY and USE the NEIGHBORS USB to put it on the table. That triggers the choice: give it to the CIA or keep it and go to the cartel.');
+            }
+        },
+
+        itemUses: {
+            neighbors_usb: {
+                action() {
+                    addJournalOnce('used_usb_s6', 'DECISION POINT — The USB is on the Table', 'You placed the USB in front of Ms. Gray. Now she wants it. You have to decide: let the CIA take it, or keep it and find another play.');
+                    sceneRenderer.showDialogue({
+                        speaker: 'CHOICE',
+                        text: 'What do you do with the USB?',
+                        choices: [
+                            {
+                                text: 'Hand over the USB to Ms. Gray',
+                                action() {
+                                    gameState.flags.WORKING_WITH_CIA = true;
+                                    inventory.remove('neighbors_usb');
+                                    notebook.add('DECISION', 'Gave the USB to the CIA. They said they\'d "handle it." Whether that\'s good or bad depends on who Gray really answers to.');
+                                    sceneRenderer.loadScene('S7B_CARTEL_TARGETING');
+                                }
+                            },
+                            {
+                                text: 'Keep the USB — stay independent',
+                                action() {
+                                    gameState.flags.INDEPENDENT_OPERATORS = true;
+                                    notebook.add('DECISION', 'Kept the USB. Gray wasn\'t happy. Now we need another angle — the cartel might be the only other option.');
+                                    sceneRenderer.loadScene('S7A_CARTEL_CONTACT');
+                                }
+                            }
+                        ]
+                    });
+                }
+            }
+        },
+
         dialogue: [
             {
                 speaker: 'MS. GRAY',
@@ -6925,28 +7059,10 @@ const SCENES = {
                 text: "That USB you have? It's... complicated. Could clear the Riveras. Could also make things much worse.",
                 next: () => {
                     if (inventory.has('neighbors_usb')) {
-                        sceneRenderer.showDialogue({
-                            speaker: 'CHOICE',
-                            text: 'What do you do with the USB?',
-                            choices: [
-                                {
-                                    text: 'Hand over the USB to Ms. Gray',
-                                    action() {
-                                        gameState.flags.WORKING_WITH_CIA = true;
-                                        inventory.remove('neighbors_usb');
-                                        notebook.add('DECISION', 'Gave the USB to the CIA. They said they\'d "handle it."');
-                                        sceneRenderer.loadScene('S7B_CARTEL_TARGETING');
-                                    }
-                                },
-                                {
-                                    text: 'Keep the USB - stay independent',
-                                    action() {
-                                        gameState.flags.INDEPENDENT_OPERATORS = true;
-                                        sceneRenderer.loadScene('S7A_CARTEL_CONTACT');
-                                    }
-                                }
-                            ]
-                        });
+                        // Gate: player must USE neighbors_usb from inventory to trigger the choice
+                        gameState.dialogueLock = false;
+                        document.getElementById('dialogue-box').classList.add('hidden');
+                        showStatusToast('💡 Open INVENTORY — USE the NEIGHBORS USB to show Ms. Gray!', 4000);
                     } else {
                         sceneRenderer.loadScene('S7B_CARTEL_TARGETING');
                     }
@@ -6961,7 +7077,7 @@ const SCENES = {
         title: 'Business Opportunity',
         background: './assets/backgrounds/bg_cartel_safehouse_night.png',
         music: 'Safehouse Ambience.mp3',
-        
+
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' },
@@ -6970,6 +7086,48 @@ const SCENES = {
         ],
 
         hotspots: [],
+
+        onEnter() {
+            addJournalOnce('status_s7a', 'STATUS — Cartel Safehouse', 'You kept the USB and now you\'re sitting across from Andreas "The Butcher" Mendoza. Lupita brokered this. The cartel wants a delivery route. In exchange: the Riveras stay safe, and you get a fake passport.');
+            addJournalOnce('clue_s7a_badge', 'OPTIONAL ACTION — Try the Fake FBI Badge', 'If you have the FAKE FBI BADGE in your inventory, this is a moment to USE it. Flashing federal credentials at the cartel is a bluff — but Mendoza respects authority. It might shift his offer or reveal how much he really knows about your situation.');
+        },
+
+        itemUses: {
+            fake_fbi_badge: {
+                action() {
+                    addJournalOnce('used_badge_s7a', 'BLUFF ATTEMPTED — FBI Badge at Cartel Meeting', 'You flashed the fake FBI badge at Mendoza. He stared at it for a long moment. Then he laughed — but it was the kind of laugh that means he\'s recalculating.');
+                    sceneRenderer.showDialogue({
+                        speaker: 'HANK',
+                        text: "(holds up the badge) Federal Bureau of Investigation. We're not here to negotiate — we're here to audit.",
+                        position: 'left',
+                        next: () => {
+                            sceneRenderer.showDialogue({
+                                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                                text: "(long pause, then laughs) FBI. In my safehouse. Handing me a badge. Either you're very brave or completely insane.",
+                                position: 'right',
+                                next: () => {
+                                    sceneRenderer.showDialogue({
+                                        speaker: 'LUPITA',
+                                        text: "(whispering) What are you doing?! Put that away!",
+                                        position: 'right-2',
+                                        next: () => {
+                                            addJournalOnce('badge_bluff_result', 'BLUFF RESULT — Mendoza Is Watching', 'The badge bluff didn\'t scare him, but it changed the dynamic. Mendoza is now treating you as more of a wildcard than a pawn. This might affect his final offer.');
+                                            gameState.flags.DOUBLE_CROSSED_SOMEONE = true;
+                                            sceneRenderer.showDialogue({
+                                                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                                                text: "Sit down. Let's talk like people who might both survive tonight.",
+                                                position: 'right',
+                                                next: 'NEXT_DIALOGUE'
+                                            });
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            }
+        },
 
         dialogue: [
             {
@@ -7085,6 +7243,48 @@ const SCENES = {
 
         hotspots: [],
 
+        onEnter() {
+            addJournalOnce('status_s7c', 'STATUS — Ortega\'s Backroom', 'You slipped away to meet Ortega — a Venezuelan operative who has access to ICE targeting lists. He\'s the one who flagged the Rivera house. He claims it was a mistake and wants the USB to protect his own operation.');
+            addJournalOnce('clue_s7c_badge', 'ACTION AVAILABLE — Use the Fake FBI Badge', 'Ortega respects authority. If you have the FAKE FBI BADGE in your inventory, USE it now to establish credibility before he pitches his deal. A federal identity gives you leverage in this negotiation — he\'ll offer better terms if he thinks you have institutional backing.');
+        },
+
+        itemUses: {
+            fake_fbi_badge: {
+                action() {
+                    addJournalOnce('used_badge_s7c', 'CREDIBILITY ESTABLISHED — Badge Used with Ortega', 'You showed Ortega the FBI badge before he could set the terms. He paused, reassessed, and shifted his pitch. The badge bought you a better opening position in this negotiation.');
+                    gameState.flags.ALLIED_WITH_ORTEGA = true;
+                    sceneRenderer.showDialogue({
+                        speaker: 'HANK',
+                        text: "(slides the badge across the table) Before you start — you should know who you're dealing with.",
+                        position: 'left',
+                        next: () => {
+                            sceneRenderer.showDialogue({
+                                speaker: 'ORTEGA',
+                                text: "(examines the badge carefully) FBI. Interesting. Then you already know more about the Rivera situation than you've let on.",
+                                position: 'right',
+                                next: () => {
+                                    sceneRenderer.showDialogue({
+                                        speaker: 'ORTEGA',
+                                        text: "All right. Different terms then. I'll clear the Riveras completely — no conditions — if you hand me the USB quietly and we both pretend this conversation never happened.",
+                                        position: 'right',
+                                        next: () => {
+                                            addJournalOnce('ortega_badge_deal', 'IMPROVED OFFER — Ortega\'s Terms (Badge Bonus)', 'Badge use paid off. Ortega offered a clean deal: Riveras cleared with no strings, in exchange for the USB and silence. This is a better deal than the no-badge version. Check the NOTEBOOK for how to respond.');
+                                            sceneRenderer.showDialogue({
+                                                speaker: 'HANK',
+                                                text: "(thinks for a beat) That's... actually a cleaner offer than I expected.",
+                                                position: 'left',
+                                                next: 'NEXT_DIALOGUE'
+                                            });
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            }
+        },
+
         dialogue: [
             {
                 speaker: 'NARRATION',
@@ -7155,7 +7355,39 @@ const SCENES = {
         ],
         hotspots: [],
 
+        itemUses: {
+            burner_phone: {
+                action() {
+                    addJournalOnce('used_burner_s7b', 'BACKUP CALLED — Burner Used Under Surveillance', 'Called Ms. Gray on the burner while the cartel was watching. She\'s aware of the surveillance and says her team is already moving. This buys a little time before the airport meeting.');
+                    gameState.flags.WORKING_WITH_CIA = true;
+                    sceneRenderer.showDialogue({
+                        speaker: 'HANK',
+                        text: "(dials quickly, head down) Gray. They're outside. Black car, engine running. Yes — right now.",
+                        position: 'left',
+                        next: () => {
+                            sceneRenderer.showDialogue({
+                                speaker: 'NARRATION',
+                                text: "A brief crackle of static. Then: \"I see them. Don't go outside. My team is three minutes away.\" Hank exhales for the first time all day.",
+                                next: () => {
+                                    addJournalOnce('cia_aware_surveillance', 'CIA INFORMED — Gray Knows About the Cartel Car', 'Ms. Gray has eyes on the cartel surveillance vehicle. Her team is nearby. This changes the dynamic at the upcoming airport meeting — she\'ll have coverage in place.');
+                                    sceneRenderer.showDialogue({
+                                        speaker: 'JONAH',
+                                        text: "Did she say three minutes? What happens at three minutes?",
+                                        position: 'right',
+                                        next: 'NEXT_DIALOGUE'
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            }
+        },
+
         onEnter() {
+            addJournalOnce('status_s7b', 'STATUS — Under Surveillance', 'The cartel knows. There\'s an unmarked car outside that\'s been there for an hour. You\'re being watched. If you have the BURNER PHONE, this is the time to USE it — call Ms. Gray for backup before things escalate.');
+            addJournalOnce('clue_s7b_burner', 'ACTION AVAILABLE — Call for Backup', 'Open your INVENTORY and USE the BURNER PHONE to contact Ms. Gray while the surveillance car is still watching. Letting her know about the cartel\'s presence gives the CIA a heads-up before the airport meeting and may give you better support later.');
+
             // Surveillance operative slides in from right as soon as scene loads
             sceneRenderer.addCharacter({
                 id: 'cartel_surveillance',
@@ -7226,6 +7458,11 @@ const SCENES = {
         ],
         hotspots: [],
 
+        onEnter() {
+            addJournalOnce('status_s7d', 'STATUS — No Good Options', 'Blinds pulled. Door locked. The cartel knows where you live. Jonah\'s listing options: cops (compromised), CIA (wants the USB for herself), or run (no destination). Hank is already making a plan for the airport meeting — but it has to be on their terms.');
+            addJournalOnce('clue_s7d_airport', 'NEXT MOVE — The Airport Meeting', 'You can call Ms. Gray now to coordinate before the airport, or show up and improvise. Calling Gray sets up CIA backup. Going in blind is riskier but keeps your options open. Either way — the warehouse showdown is after this.');
+        },
+
         dialogue: [
             {
                 speaker: 'NARRATION',
@@ -7295,6 +7532,11 @@ const SCENES = {
 
         hotspots: [],
 
+        onEnter() {
+            addJournalOnce('status_s8', 'STATUS — Everyone Wants a Piece', 'The airport landing strip. Lupita and El Gato are here. All factions are converging. CIA wants the USB buried, cartel wants it weaponized, Venezuela wants it gone. The warehouse showdown is tonight.');
+            addJournalOnce('clue_s8_passport', 'UPCOMING — Confirm Your Cover', 'Before the warehouse, you\'ll brief with Ms. Gray. She\'ll set up your cover identity as "Marco Delgado." When she does — have your MYSTERIOUS PASSPORT ready in INVENTORY. You\'ll need to USE it to lock in the alias before going in.');
+        },
+
         dialogue: [
             {
                 speaker: 'NARRATION',
@@ -7356,6 +7598,45 @@ const SCENES = {
 
         hotspots: [],
 
+        onEnter() {
+            addJournalOnce('status_s8b', 'STATUS — The Undercover Briefing', 'One hour before the warehouse. Ms. Gray is sending Hank in as "Marco Delgado" — independent courier. Jonah stays outside. The USB is the key card to the ending. Don\'t lose it.');
+            if (inventory.has('mysterious_passport')) {
+                addJournalOnce('clue_s8b_passport_gate', 'ACTION REQUIRED — Confirm Your Cover Identity', 'Ms. Gray needs you to confirm your alias before you go in. When she finishes the briefing, open your INVENTORY and USE the MYSTERIOUS PASSPORT to lock in the "Marco Delgado" cover. This step is required before heading to the warehouse.');
+            }
+        },
+
+        itemUses: {
+            mysterious_passport: {
+                action() {
+                    addJournalOnce('used_passport_s8b', 'COVER CONFIRMED — Marco Delgado is Ready', 'You showed the passport to Ms. Gray. She verified the alias, memorized the cover story, and confirmed the extraction signal. The "Marco Delgado" identity is locked in. You\'re ready for the warehouse.');
+                    sceneRenderer.showDialogue({
+                        speaker: 'HANK',
+                        text: "(holds up the passport) Marco Delgado. Independent courier. Allergic to being shot.",
+                        position: 'left',
+                        next: () => {
+                            sceneRenderer.showDialogue({
+                                speaker: 'MS. GRAY',
+                                text: "(takes the passport, scans it, hands it back) Good. The alias is clean. When you're inside, you don't know me. You don't know Jonah. You're just a delivery guy who got in over his head.",
+                                position: 'right',
+                                next: () => {
+                                    sceneRenderer.showDialogue({
+                                        speaker: 'HANK',
+                                        text: "That's... uncomfortably accurate.",
+                                        position: 'left',
+                                        next: () => {
+                                            gameState.flags.WORKING_WITH_CIA = true;
+                                            addJournalOnce('undercover_ready', 'READY — Heading to the Warehouse', 'Cover confirmed. Ms. Gray\'s team is positioned outside. Jonah is backup. Hank goes in as Marco Delgado. The USB decides the ending. Whatever you do with it in that warehouse — it\'s permanent.');
+                                            sceneRenderer.loadScene('S9_FINAL_WAREHOUSE_SHOWDOWN');
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            }
+        },
+
         dialogue: [
             {
                 speaker: 'NARRATION',
@@ -7415,9 +7696,16 @@ const SCENES = {
                 text: "Go. And Hank — don't lose the USB. Whatever happens in there, that drives the ending.",
                 position: 'right',
                 next: () => {
-                    gameState.flags.WORKING_WITH_CIA = true;
-                    notebook.add('UNDERCOVER OPERATION', 'Hank going in as "Marco Delgado". Ms. Gray\'s team is outside. This plan has about a 40% chance of working, which is better than our usual average.');
-                    sceneRenderer.loadScene('S9_FINAL_WAREHOUSE_SHOWDOWN');
+                    if (inventory.has('mysterious_passport')) {
+                        // Gate: player must USE passport to confirm their cover before going in
+                        gameState.dialogueLock = false;
+                        document.getElementById('dialogue-box').classList.add('hidden');
+                        showStatusToast('💡 Open INVENTORY — USE the MYSTERIOUS PASSPORT to confirm your cover identity!', 4500);
+                    } else {
+                        gameState.flags.WORKING_WITH_CIA = true;
+                        notebook.add('UNDERCOVER OPERATION', 'Hank going in as "Marco Delgado". Ms. Gray\'s team is outside. This plan has about a 40% chance of working, which is better than our usual average.');
+                        sceneRenderer.loadScene('S9_FINAL_WAREHOUSE_SHOWDOWN');
+                    }
                 }
             }
         ]
@@ -7437,6 +7725,109 @@ const SCENES = {
         ],
 
         hotspots: [],
+
+        onEnter() {
+            addJournalOnce('status_s9', 'FINAL SCENE — The Warehouse Showdown', 'Everyone showed up. CIA on the left. Cartel on the right. El Gato in the middle. And two suburban teenagers holding the USB that apparently runs the world. This is it.');
+            addJournalOnce('clue_s9_usb_final', 'ACTION REQUIRED — Use the USB to Force the Confrontation', 'When Mendoza asks who gets the USB, don\'t just answer — open INVENTORY and USE the NEIGHBORS USB (or CARTEL USB) to physically produce it. That\'s the moment that triggers the final choice. The whole room is waiting for you to make a move.');
+        },
+
+        itemUses: {
+            neighbors_usb: {
+                action() {
+                    addJournalOnce('used_usb_final', 'MOMENT OF TRUTH — USB Produced at the Showdown', 'You held up the USB in front of all three factions. The room went quiet. Now every eye in that warehouse is on it — and on you. Time to decide who gets it.');
+                    sceneRenderer.showDialogue({
+                        speaker: 'HANK',
+                        text: "(holds up the USB drive) Right here. The thing everyone came for. And I'm the one holding it.",
+                        position: 'left',
+                        next: () => {
+                            sceneRenderer.showDialogue({
+                                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                                text: "Smart boy. Now — choose.",
+                                position: 'right-2',
+                                next: () => {
+                                    sceneRenderer.showDialogue({
+                                        speaker: 'FINAL CHOICE',
+                                        text: 'What do you do with the USB?',
+                                        choices: [
+                                            {
+                                                text: 'Destroy the USB publicly',
+                                                action() {
+                                                    if (gameState.flags.HELPED_NEIGHBORS) {
+                                                        gameState.flags.SAVED_NEIGHBORS = true;
+                                                        sceneRenderer.loadScene('E_HAPPY');
+                                                    } else {
+                                                        sceneRenderer.loadScene('E_SAD');
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                text: 'Upload everything to the internet',
+                                                action() {
+                                                    sceneRenderer.loadScene('E_IRONIC_MEDIA');
+                                                }
+                                            },
+                                            {
+                                                text: 'Fake-destroy it but keep a copy',
+                                                action() {
+                                                    gameState.flags.DOUBLE_CROSSED_SOMEONE = true;
+                                                    sceneRenderer.loadScene('E_CHAOTIC');
+                                                }
+                                            },
+                                            {
+                                                text: 'Give it to the cartel',
+                                                action() {
+                                                    gameState.flags.TOOK_CARTEL_DEAL = true;
+                                                    sceneRenderer.loadScene('E_CHAOTIC');
+                                                }
+                                            }
+                                        ]
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            },
+            cartel_usb: {
+                action() {
+                    addJournalOnce('used_cartel_usb_final', 'WILDCARD — Cartel USB Produced at the Showdown', 'You pulled out the cartel\'s own USB drive instead. Mendoza\'s expression changed instantly. This wasn\'t the data he expected. The room is suddenly much more dangerous — but you have more leverage than before.');
+                    gameState.flags.DOUBLE_CROSSED_SOMEONE = true;
+                    sceneRenderer.showDialogue({
+                        speaker: 'HANK',
+                        text: "(produces a different USB) Actually — the one everyone THINKS they want? That's not what I have. THIS is what Mendoza doesn't want anyone else to see.",
+                        position: 'left',
+                        next: () => {
+                            sceneRenderer.showDialogue({
+                                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                                text: "(very quietly) Where did you get that.",
+                                position: 'right-2',
+                                next: () => {
+                                    sceneRenderer.showDialogue({
+                                        speaker: 'FINAL CHOICE',
+                                        text: 'What do you do with the cartel\'s USB?',
+                                        choices: [
+                                            {
+                                                text: 'Upload the cartel data live — burn it all down',
+                                                action() {
+                                                    sceneRenderer.loadScene('E_IRONIC_MEDIA');
+                                                }
+                                            },
+                                            {
+                                                text: 'Use it as leverage — demand the Riveras go free',
+                                                action() {
+                                                    gameState.flags.SAVED_NEIGHBORS = true;
+                                                    sceneRenderer.loadScene('E_CHAOTIC');
+                                                }
+                                            }
+                                        ]
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            }
+        },
 
         dialogue: [
             {
@@ -7478,43 +7869,36 @@ const SCENES = {
                 text: "Choose wisely. Or don't. Either way makes for excellent paperwork.",
                 position: 'left',
                 next: () => {
-                    sceneRenderer.showDialogue({
-                        speaker: 'FINAL CHOICE',
-                        text: 'What do you do with the USB?',
-                        choices: [
-                            {
-                                text: 'Destroy the USB publicly',
-                                action() {
-                                    if (gameState.flags.HELPED_NEIGHBORS) {
-                                        gameState.flags.SAVED_NEIGHBORS = true;
-                                        sceneRenderer.loadScene('E_HAPPY');
-                                    } else {
+                    const hasUsb = inventory.has('neighbors_usb') || inventory.has('cartel_usb');
+                    if (hasUsb) {
+                        // Gate: player must USE a USB from inventory to force the confrontation
+                        gameState.dialogueLock = false;
+                        document.getElementById('dialogue-box').classList.add('hidden');
+                        const usbName = inventory.has('neighbors_usb') ? 'NEIGHBORS USB' : 'CARTEL USB';
+                        showStatusToast(`💡 Open INVENTORY — USE the ${usbName} to make your move!`, 4500);
+                    } else {
+                        // No USB in inventory — player already gave it away, skip to ending
+                        addJournalOnce('no_usb_final', 'NOTE — No USB in Hand', 'The USB was already handed over earlier. The decision was made before this moment. The ending reflects that choice.');
+                        sceneRenderer.showDialogue({
+                            speaker: 'FINAL CHOICE',
+                            text: 'What do you do?',
+                            choices: [
+                                {
+                                    text: 'Stand with the CIA — let Gray control the outcome',
+                                    action() {
+                                        gameState.flags.WORKING_WITH_CIA = true;
                                         sceneRenderer.loadScene('E_SAD');
                                     }
+                                },
+                                {
+                                    text: 'Walk away — this isn\'t your fight anymore',
+                                    action() {
+                                        sceneRenderer.loadScene('E_CHAOTIC');
+                                    }
                                 }
-                            },
-                            {
-                                text: 'Upload everything to the internet',
-                                action() {
-                                    sceneRenderer.loadScene('E_IRONIC_MEDIA');
-                                }
-                            },
-                            {
-                                text: 'Fake-destroy it but keep a copy',
-                                action() {
-                                    gameState.flags.DOUBLE_CROSSED_SOMEONE = true;
-                                    sceneRenderer.loadScene('E_CHAOTIC');
-                                }
-                            },
-                            {
-                                text: 'Give it to the cartel',
-                                action() {
-                                    gameState.flags.TOOK_CARTEL_DEAL = true;
-                                    sceneRenderer.loadScene('E_CHAOTIC');
-                                }
-                            }
-                        ]
-                    });
+                            ]
+                        });
+                    }
                 }
             }
         ]
