@@ -2908,24 +2908,81 @@ const notebook = {
         SFXGenerator.playMenuOpen();
         const overlay = document.getElementById('notebook-overlay');
         const entriesDiv = document.getElementById('notebook-entries');
-        
+
         entriesDiv.innerHTML = '';
-        
+
         if (gameState.notebook.length === 0) {
             entriesDiv.innerHTML = '<p style="color: #666; font-style: italic; text-align: center; margin-top: 20px;">No entries yet...</p>';
         } else {
+            // Category prefix → CSS tag class mapping
+            const TAG_CLASSES = {
+                'STATUS':                  'journal-tag-status',
+                'FINAL SCENE':             'journal-tag-status',
+                'ACTION REQUIRED':         'journal-tag-action',
+                'ACTION AVAILABLE':        'journal-tag-action',
+                'OPTIONAL ACTION':         'journal-tag-action',
+                'CLUE':                    'journal-tag-clue',
+                'KEY CONTACT':             'journal-tag-clue',
+                'NEXT STEP':               'journal-tag-clue',
+                'CHOICE AHEAD':            'journal-tag-clue',
+                'UPCOMING':                'journal-tag-clue',
+                'INCOMING ITEM':           'journal-tag-clue',
+                'INTEL GATHERED':          'journal-tag-result',
+                'CONFIRMED':               'journal-tag-result',
+                'CREDIBILITY ESTABLISHED': 'journal-tag-result',
+                'COVER CONFIRMED':         'journal-tag-result',
+                'UNDERCOVER READY':        'journal-tag-result',
+                'READY':                   'journal-tag-result',
+                'IMPROVED OFFER':          'journal-tag-result',
+                'CIA INFORMED':            'journal-tag-result',
+                'BACKUP CALLED':           'journal-tag-result',
+                'WILDCARD':                'journal-tag-story',
+                'MOMENT OF TRUTH':         'journal-tag-story',
+                'DECISION POINT':          'journal-tag-story',
+                'BLUFF ATTEMPTED':         'journal-tag-story',
+                'BLUFF RESULT':            'journal-tag-story',
+            };
+
             gameState.notebook.forEach((entry, index) => {
                 const entryDiv = document.createElement('div');
                 entryDiv.className = 'notebook-entry';
                 const entryNumber = String(index + 1).padStart(2, '0');
+
+                // Parse "CATEGORY — Subject" from title
+                const dashIdx = entry.title.indexOf(' \u2014 ');
+                let category = null;
+                let subject = entry.title;
+                if (dashIdx !== -1) {
+                    const prefix = entry.title.slice(0, dashIdx);
+                    if (TAG_CLASSES[prefix] !== undefined || prefix === 'NOTE') {
+                        category = prefix;
+                        subject = entry.title.slice(dashIdx + 3);
+                    }
+                }
+
+                const tagClass = category ? (TAG_CLASSES[category] || 'journal-tag-note') : '';
+                const tagHTML = category
+                    ? `<span class="journal-tag ${tagClass}">${category}</span>`
+                    : '';
+
+                // Format timestamp as readable date + time
+                const date = new Date(entry.timestamp);
+                const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
                 entryDiv.innerHTML = `
-                    <div class="notebook-entry-title">[${entryNumber}] ${entry.title}</div>
-                    <div>${entry.content}</div>
+                    <div class="journal-entry-header">
+                        ${tagHTML}
+                        <span class="journal-entry-num">#${entryNumber}</span>
+                        <span class="journal-entry-date">${dateStr} \u00b7 ${timeStr}</span>
+                    </div>
+                    <div class="notebook-entry-title">${subject}</div>
+                    <div class="notebook-entry-body">${entry.content}</div>
                 `;
                 entriesDiv.appendChild(entryDiv);
             });
         }
-        
+
         overlay.classList.remove('hidden');
     }
 };

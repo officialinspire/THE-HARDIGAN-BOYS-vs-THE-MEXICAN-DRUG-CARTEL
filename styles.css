@@ -1477,6 +1477,10 @@ body.main-menu #scene-title {
     font-family: 'Courier New', monospace;
     border-bottom: 1px solid rgba(0,0,0,0.12);
     padding-bottom: 4px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    white-space: normal;
 }
 
 .notebook-entry-title::before {
@@ -1484,14 +1488,91 @@ body.main-menu #scene-title {
     color: rgba(139, 0, 0, 0.7);
 }
 
-.notebook-entry div {
+.notebook-entry-body {
     color: #222;
     line-height: 1.9;
     word-wrap: break-word;
     overflow-wrap: break-word;
     word-break: break-word;
-    white-space: pre-wrap;
+    white-space: normal;
     font-size: 13px;
+}
+
+/* ===== JOURNAL ENTRY MODE ===== */
+
+.journal-entry-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.journal-entry-num {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #888;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.journal-entry-date {
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    color: #999;
+    font-style: italic;
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+/* Category tags */
+.journal-tag {
+    display: inline-block;
+    font-family: 'Courier New', monospace;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.journal-tag-status {
+    background: rgba(30, 90, 160, 0.15);
+    color: #1e5aa0;
+    border: 1px solid rgba(30, 90, 160, 0.35);
+}
+
+.journal-tag-action {
+    background: rgba(180, 30, 30, 0.15);
+    color: #b41e1e;
+    border: 1px solid rgba(180, 30, 30, 0.35);
+}
+
+.journal-tag-clue {
+    background: rgba(160, 100, 0, 0.15);
+    color: #8a5c00;
+    border: 1px solid rgba(160, 100, 0, 0.35);
+}
+
+.journal-tag-result {
+    background: rgba(20, 120, 60, 0.15);
+    color: #14783c;
+    border: 1px solid rgba(20, 120, 60, 0.35);
+}
+
+.journal-tag-story {
+    background: rgba(100, 40, 160, 0.15);
+    color: #6428a0;
+    border: 1px solid rgba(100, 40, 160, 0.35);
+}
+
+.journal-tag-note {
+    background: rgba(80, 80, 80, 0.12);
+    color: #555;
+    border: 1px solid rgba(80, 80, 80, 0.25);
 }
 
 .notebook-close-btn {
@@ -2794,8 +2875,17 @@ body.main-menu #scene-container {
         letter-spacing: 1px;
     }
 
-    .notebook-entry div {
+    .notebook-entry-body {
         font-size: 11px;
+    }
+
+    .journal-entry-date {
+        font-size: 9px;
+    }
+
+    .journal-tag {
+        font-size: 8px;
+        padding: 1px 5px;
     }
 }
 
