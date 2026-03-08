@@ -3014,6 +3014,49 @@ body.main-menu #scene-container {
     #dialogue-text.choice-text {
         font-size: clamp(15px, 3.8vw, 20px);
     }
+
+    /* Keep narration/speech dialogue compact enough for the More button */
+    #dialogue-box,
+    #dialogue-box[data-layout-panel="speech-bubble"],
+    #dialogue-box.dialogue-center {
+        width: min(94vw, 420px);
+        min-width: min(220px, 94vw);
+        max-width: 94vw;
+    }
+
+    #dialogue-container,
+    #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container {
+        min-height: clamp(78px, 18vh, 130px);
+        max-height: min(46vh, 260px);
+    }
+
+    #dialogue-content {
+        padding: clamp(7px, 1.9vw, 10px) clamp(9px, 2.2vw, 12px);
+        min-height: 0;
+    }
+
+    #dialogue-speaker {
+        font-size: clamp(14px, 4.1vw, 19px);
+        margin-bottom: 3px;
+    }
+
+    #dialogue-text,
+    #dialogue-container.narrative-mode #dialogue-text,
+    #dialogue-text.choice-text {
+        font-size: clamp(12px, 3.6vw, 16px);
+        line-height: 1.28;
+        margin-bottom: 2px;
+        padding: 0;
+    }
+
+    #dialogue-continue {
+        margin: 6px auto 0;
+        min-width: 112px;
+        min-height: 36px;
+        max-width: calc(100% - 12px);
+        font-size: clamp(12px, 3.4vw, 15px);
+        padding: 8px 14px;
+    }
 }
 
 /* --- Landscape (short viewport) --- */
