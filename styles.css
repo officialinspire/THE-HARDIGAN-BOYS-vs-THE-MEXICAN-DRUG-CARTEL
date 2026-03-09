@@ -709,8 +709,37 @@ body.main-menu #scene-title {
     #dialogue-box {
         bottom: auto;
     }
+
+    #dialogue-box[data-mode="narration"] {
+        width: min(92vw, 520px);
+        max-width: min(92vw, 520px);
+    }
+
     #dialogue-box[data-layout-panel="speech-bubble"] {
         width: clamp(280px, 92vw, 520px);
+    }
+
+    #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container {
+        min-height: clamp(120px, 18vh, 220px);
+        max-height: min(42vh, 300px);
+    }
+
+    #dialogue-container.narrative-mode {
+        max-height: min(52vh, 340px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #dialogue-content {
+        padding: clamp(8px, 2vw, 14px) clamp(10px, 2.5vw, 18px) clamp(10px, 2.5vw, 16px);
+        justify-content: flex-start;
+    }
+
+    #dialogue-continue {
+        margin-top: 6px;
+        min-width: 120px;
+        font-size: 13px;
+        padding: 8px 14px;
     }
 }
 
