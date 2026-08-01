@@ -1657,6 +1657,8 @@ const Dev = {
         const exitBtn = document.getElementById('btn-exit-dev-mode');
         const floatingButton = document.getElementById('dev-floating-btn');
         const runValidateBtn = document.getElementById('dev-run-validate-now');
+        const validateAllBtn = document.getElementById('dev-validate-all-scenes');
+        const downloadValidationJsonBtn = document.getElementById('dev-download-validation-json');
         const jumpInput = document.getElementById('dev-scene-jump-input');
         const jumpBtn = document.getElementById('dev-scene-jump-btn');
 
@@ -1722,6 +1724,26 @@ const Dev = {
                 runValidateBtn.addEventListener('click', () => {
                     SFXGenerator.playButtonClick();
                     this.runValidationNow();
+                });
+            }
+
+            if (validateAllBtn) {
+                validateAllBtn.addEventListener('click', () => {
+                    SFXGenerator.playButtonClick();
+                    this.runDemoValidationAll();
+                });
+            }
+
+            if (downloadValidationJsonBtn) {
+                downloadValidationJsonBtn.addEventListener('click', () => {
+                    SFXGenerator.playButtonClick();
+                    if (!demoValidator.lastReport) {
+                        const output = document.getElementById('dev-validation-output');
+                        if (output) output.textContent = 'Run "Validate All Scenes" first — no report to download yet.';
+                        return;
+                    }
+                    const text = JSON.stringify(demoValidator.lastReport, null, 2);
+                    this.hotspots.downloadText('demo-validation-report.json', text, 'application/json');
                 });
             }
 
@@ -1951,6 +1973,23 @@ const Dev = {
             'nextSteps:',
             ...actions.map(action => `- ${action}`)
         ].join('\n');
+    },
+
+    /**
+     * Runs the full demo-readiness validator (demoValidator.validateAll())
+     * across every SCENES entry — structure, characters, dialogue, and live
+     * asset probes — without entering any scene. Read-only: never mutates
+     * SCENES, save data, or the currently-loaded scene/game state.
+     */
+    async runDemoValidationAll() {
+        const output = document.getElementById('dev-validation-output');
+        if (output) {
+            output.textContent = 'Running full demo validation across all scenes... this probes every referenced asset and may take a few seconds.';
+        }
+        const report = await demoValidator.validateAll();
+        if (output) output.textContent = report.markdown;
+        this.updateStatus();
+        return report;
     },
 
     validateScenes() {
@@ -8449,6 +8488,774 @@ const sceneIntegrity = {
     }
 };
 
+// ===== DEMO READINESS VALIDATOR =====
+// Read-only static analysis of SCENES plus best-effort live asset probing.
+// Never mutates SCENES, save data, or live game/scene state: every check
+// either reads existing data directly, or (for character layout) goes
+// through sceneRenderer.resolveCharacterLayout(), which is itself a pure
+// function returning a new object rather than mutating its input. Duplicate
+// slot detection here is computed independently of
+// sceneRenderer._lastCharacterLayoutWarnings so this validator never
+// clobbers that shared field for whatever scene is actually loaded.
+//
+// Two entry points call demoValidator.validateAll():
+//   - Dev Hub "Validate All Scenes" button (see Dev.runDemoValidationAll)
+//   - window.__HB_DEBUG__.validateAllScenes() for automated tests
+//
+// Both resolve to:
+//   { ok, generatedAt, durationMs, sceneCount, totals: {error,warning,info}, findings[], markdown }
+// where every finding is { sceneId, category, severity, message, fix }.
+const demoValidator = {
+    SEVERITY: { ERROR: 'error', WARNING: 'warning', INFO: 'info' },
+    ASSET_TIMEOUT_MS: 6000,
+    ASSET_CONCURRENCY: 8,
+    SYSTEM_SPEAKERS: new Set(['NARRATION', 'SYSTEM', 'CHOICE', 'FINAL CHOICE']),
+    GLOBAL_SCENE_LABEL: '(global)',
+
+    _imageProbeCache: new Map(),
+    _audioProbeCache: new Map(),
+    lastReport: null,
+
+    // ===== asset probing (pure network reads, memoized per session) =====
+    probeImage(src) {
+        if (!src) return Promise.resolve(false);
+        if (this._imageProbeCache.has(src)) return this._imageProbeCache.get(src);
+        const p = new Promise(resolve => {
+            const img = new Image();
+            let settled = false;
+            const finish = (ok) => { if (settled) return; settled = true; resolve(ok); };
+            img.onload = () => finish(true);
+            img.onerror = () => finish(false);
+            img.src = src;
+            setTimeout(() => finish(false), this.ASSET_TIMEOUT_MS);
+        });
+        this._imageProbeCache.set(src, p);
+        return p;
+    },
+
+    probeAudio(src) {
+        if (!src) return Promise.resolve(false);
+        if (this._audioProbeCache.has(src)) return this._audioProbeCache.get(src);
+        const p = new Promise(resolve => {
+            const audio = new Audio();
+            let settled = false;
+            const finish = (ok) => { if (settled) return; settled = true; resolve(ok); };
+            audio.addEventListener('loadedmetadata', () => finish(true), { once: true });
+            audio.addEventListener('error', () => finish(false), { once: true });
+            audio.preload = 'metadata';
+            audio.src = src;
+            setTimeout(() => finish(false), this.ASSET_TIMEOUT_MS);
+        });
+        this._audioProbeCache.set(src, p);
+        return p;
+    },
+
+    async probeMany(paths, prober) {
+        const unique = [...new Set((paths || []).filter(Boolean))];
+        const results = new Map();
+        for (let i = 0; i < unique.length; i += this.ASSET_CONCURRENCY) {
+            const chunk = unique.slice(i, i + this.ASSET_CONCURRENCY);
+            await Promise.all(chunk.map(async src => {
+                results.set(src, await prober.call(this, src));
+            }));
+        }
+        return results;
+    },
+
+    // ===== read-only source-text introspection =====
+    // Function#toString() returns a function's original source text without
+    // executing it — used for best-effort discovery of characters spawned,
+    // flags set, and inventory ids touched inside onClick/onEnter/next/action
+    // callbacks, which the validator otherwise can't see without actually
+    // playing the scene (out of scope — see acceptance criterion 1).
+    _collectSceneFunctionSources(scene) {
+        const sources = [];
+        const addFn = (fn) => {
+            if (typeof fn === 'function') {
+                try { sources.push(fn.toString()); } catch (_) { /* ignore */ }
+            }
+        };
+
+        addFn(scene.onEnter);
+        addFn(scene.checkProgression);
+        (scene.hotspots || []).forEach(h => addFn(h?.onClick));
+        (scene.items || []).forEach(it => addFn(it?.onClick));
+        Object.values(scene.itemUses || {}).forEach(use => addFn(use?.action));
+        (scene.dialogue || []).forEach(entry => {
+            if (!entry) return;
+            addFn(entry.next);
+            addFn(entry.onShow);
+            (entry.choices || []).forEach(choice => {
+                addFn(choice?.action);
+                addFn(choice?.next);
+            });
+        });
+        return sources.join('\n');
+    },
+
+    _harvestDynamicCharacterIds(sceneSource) {
+        const ids = new Set();
+        const re = /addCharacter\(\s*\{[^}]*?\bid\s*:\s*['"]([\w.-]+)['"]/g;
+        let m;
+        while ((m = re.exec(sceneSource))) ids.add(m[1]);
+        return ids;
+    },
+
+    _harvestFlagsAndItems(sceneSource) {
+        const flagsRead = new Set();
+        const flagsWritten = new Set();
+        const itemsGranted = new Set();
+        const itemsChecked = new Set();
+        let m;
+
+        const flagWriteRe = /gameState\.flags\.(\w+)\s*=(?!=)/g;
+        while ((m = flagWriteRe.exec(sceneSource))) flagsWritten.add(m[1]);
+        const flagReadRe = /gameState\.flags\.(\w+)/g;
+        while ((m = flagReadRe.exec(sceneSource))) flagsRead.add(m[1]);
+
+        const grantRe = /inventory\.add\(\s*['"]([\w.-]+)['"]/g;
+        while ((m = grantRe.exec(sceneSource))) itemsGranted.add(m[1]);
+        const checkRe = /inventory\.(?:has|remove)\(\s*['"]([\w.-]+)['"]/g;
+        while ((m = checkRe.exec(sceneSource))) itemsChecked.add(m[1]);
+
+        return { flagsRead, flagsWritten, itemsGranted, itemsChecked };
+    },
+
+    // ===== per-scene checks =====
+    checkSceneStructure(findings, key, scene, ctx) {
+        const sceneId = scene.id || key;
+
+        // scene key matches scene.id
+        if (scene.id !== key) {
+            findings.push({
+                sceneId, category: 'structure', severity: this.SEVERITY.ERROR,
+                message: `SCENES key "${key}" does not match scene.id "${scene.id}".`,
+                fix: `Set scene.id to "${key}" (or rename the SCENES key to "${scene.id}").`,
+            });
+        }
+
+        // unique scene IDs
+        const idValue = scene.id || key;
+        const keysWithSameId = ctx.idToKeys.get(idValue) || [];
+        if (keysWithSameId.length > 1) {
+            findings.push({
+                sceneId, category: 'structure', severity: this.SEVERITY.ERROR,
+                message: `scene.id "${idValue}" is shared by SCENES keys: ${keysWithSameId.join(', ')}.`,
+                fix: 'Give each scene a unique id — duplicate ids make loadScene()/next references ambiguous.',
+            });
+        }
+
+        // background path
+        if (!scene.background) {
+            findings.push({
+                sceneId, category: 'structure', severity: this.SEVERITY.ERROR,
+                message: 'Scene has no background image path.',
+                fix: 'Add a background path — the scene cannot render without one.',
+            });
+        } else {
+            ctx.backgroundChecks.push({ sceneId, path: scene.background });
+        }
+
+        // music path (optional)
+        if (scene.music) {
+            ctx.musicChecks.push({ sceneId, path: `./audio/${scene.music}` });
+        }
+
+        // next/target references
+        const checkNext = (value, where) => {
+            if (typeof value !== 'string' || value === 'NEXT_DIALOGUE') return;
+            if (!ctx.sceneKeysSet.has(value)) {
+                findings.push({
+                    sceneId, category: 'flow', severity: this.SEVERITY.ERROR,
+                    message: `${where} references unknown scene "${value}".`,
+                    fix: `Point to an existing SCENES key or add the "${value}" scene.`,
+                });
+            }
+        };
+        (scene.dialogue || []).forEach((entry, idx) => {
+            if (!entry) return;
+            checkNext(entry.next, `dialogue[${idx}].next`);
+            (entry.choices || []).forEach((choice, ci) => {
+                checkNext(choice?.next, `dialogue[${idx}].choices[${ci}].next`);
+            });
+        });
+        (scene.hotspots || []).forEach((h, idx) => {
+            if (h?.target) checkNext(h.target, `hotspots[${idx}] (${h.id || idx}).target`);
+        });
+
+        // unique hotspot ids
+        const hotspotIds = new Map();
+        (scene.hotspots || []).forEach((h, idx) => {
+            const id = h?.id || `(hotspot ${idx})`;
+            if (!hotspotIds.has(id)) hotspotIds.set(id, []);
+            hotspotIds.get(id).push(idx);
+        });
+        hotspotIds.forEach((idxs, id) => {
+            if (idxs.length > 1) {
+                findings.push({
+                    sceneId, category: 'structure', severity: this.SEVERITY.ERROR,
+                    message: `Duplicate hotspot id "${id}" (${idxs.length} occurrences).`,
+                    fix: 'Give each hotspot a unique id — duplicates break click-trace/debug tooling and undo.',
+                });
+            }
+        });
+
+        // unique item ids
+        const itemIds = new Map();
+        (scene.items || []).forEach((it, idx) => {
+            const id = it?.id || `(item ${idx})`;
+            if (!itemIds.has(id)) itemIds.set(id, []);
+            itemIds.get(id).push(idx);
+        });
+        itemIds.forEach((idxs, id) => {
+            if (idxs.length > 1) {
+                findings.push({
+                    sceneId, category: 'structure', severity: this.SEVERITY.ERROR,
+                    message: `Duplicate item id "${id}" (${idxs.length} occurrences).`,
+                    fix: 'Give each item a unique id — duplicates confuse inventory.has()/collection state.',
+                });
+            }
+        });
+
+        // hotspot bounds and positive dimensions
+        (scene.hotspots || []).forEach((h, idx) => {
+            if (!h) return;
+            const label = h.id || `hotspots[${idx}]`;
+            const x = Number(h.x), y = Number(h.y), w = Number(h.width), ht = Number(h.height);
+            const allFinite = [x, y, w, ht].every(n => Number.isFinite(n));
+            if (!allFinite) {
+                findings.push({
+                    sceneId, category: 'structure', severity: this.SEVERITY.ERROR,
+                    message: `Hotspot "${label}" has non-finite x/y/width/height.`,
+                    fix: 'Ensure x, y, width, and height are all numbers.',
+                });
+                return;
+            }
+            if (!(w > 0) || !(ht > 0)) {
+                findings.push({
+                    sceneId, category: 'structure', severity: this.SEVERITY.ERROR,
+                    message: `Hotspot "${label}" has non-positive dimensions (width=${h.width}, height=${h.height}).`,
+                    fix: 'Set width/height to positive numbers so the hotspot is clickable.',
+                });
+            }
+            const isNative = h.coordSystem === 'native';
+            const maxX = isNative ? positioningSystem.REF_WIDTH : 100;
+            const maxY = isNative ? positioningSystem.REF_HEIGHT : 100;
+            if (x < 0 || y < 0 || x + w > maxX || y + ht > maxY) {
+                findings.push({
+                    sceneId, category: 'structure', severity: this.SEVERITY.WARNING,
+                    message: `Hotspot "${label}" bounds extend outside the ${isNative ? '1920×1080 native' : '0-100%'} reference space.`,
+                    fix: 'Adjust x/y/width/height to stay inside the reference frame.',
+                });
+            }
+        });
+    },
+
+    checkSceneCharacters(findings, key, scene, ctx) {
+        const sceneId = scene.id || key;
+        const characters = scene.characters || [];
+
+        // unique character ids
+        const idMap = new Map();
+        characters.forEach((c, idx) => {
+            const id = c?.id || `(character ${idx})`;
+            if (!idMap.has(id)) idMap.set(id, []);
+            idMap.get(id).push(idx);
+        });
+        idMap.forEach((idxs, id) => {
+            if (idxs.length > 1) {
+                findings.push({
+                    sceneId, category: 'characters', severity: this.SEVERITY.ERROR,
+                    message: `Duplicate character id "${id}" (${idxs.length} occurrences).`,
+                    fix: 'Give each character a unique id — duplicates break speaker/highlight resolution.',
+                });
+            }
+        });
+
+        // resolveCharacterLayout is pure — returns a new object, never
+        // mutates the scene's characters array.
+        const resolved = characters.map(c => sceneRenderer.resolveCharacterLayout(c || {}));
+
+        // duplicate-slot detection, computed independently of
+        // sceneRenderer._lastCharacterLayoutWarnings (see file header note).
+        const bySlot = new Map();
+        resolved.forEach(c => {
+            if (!bySlot.has(c.slot)) bySlot.set(c.slot, []);
+            bySlot.get(c.slot).push(c.id || c.name || '(unnamed)');
+        });
+        bySlot.forEach((names, slot) => {
+            if (names.length > 1) {
+                findings.push({
+                    sceneId, category: 'characters', severity: this.SEVERITY.WARNING,
+                    message: `Duplicate slot "${slot}" claimed by: ${names.join(', ')}.`,
+                    fix: 'Assign distinct slot/position values — characters sharing a slot render on top of each other.',
+                });
+            }
+        });
+
+        characters.forEach((raw, idx) => {
+            const c = resolved[idx];
+            const label = raw?.id || raw?.name || `characters[${idx}]`;
+
+            const rawSlot = raw?.slot || raw?.position;
+            if (rawSlot && !sceneRenderer.validZones.has(rawSlot)) {
+                findings.push({
+                    sceneId, category: 'characters', severity: this.SEVERITY.WARNING,
+                    message: `Character "${label}" has invalid slot/position "${rawSlot}" — falls back to "center".`,
+                    fix: `Use one of: ${[...sceneRenderer.validZones].join(', ')}.`,
+                });
+            }
+
+            if (raw?.scale !== undefined && (typeof raw.scale !== 'number' || !isFinite(raw.scale) || raw.scale <= 0)) {
+                findings.push({
+                    sceneId, category: 'characters', severity: this.SEVERITY.WARNING,
+                    message: `Character "${label}" has invalid scale "${raw.scale}" — falls back to 1.`,
+                    fix: 'scale must be a positive finite number.',
+                });
+            }
+
+            ['offsetX', 'offsetY'].forEach(field => {
+                const v = raw?.[field];
+                if (v === undefined) return;
+                if (typeof v !== 'number' || !isFinite(v)) {
+                    findings.push({
+                        sceneId, category: 'characters', severity: this.SEVERITY.WARNING,
+                        message: `Character "${label}" has invalid ${field} "${v}" — falls back to 0.`,
+                        fix: `${field} must be a finite number (pixels).`,
+                    });
+                } else if (Math.abs(v) > 800) {
+                    findings.push({
+                        sceneId, category: 'characters', severity: this.SEVERITY.WARNING,
+                        message: `Character "${label}" has a large ${field} (${v}px) — may push the sprite off-screen.`,
+                        fix: 'Verify this offset visually; consider reducing its magnitude.',
+                    });
+                }
+            });
+
+            ['headAnchorX', 'headAnchorY'].forEach(field => {
+                const v = raw?.[field];
+                if (v === undefined) return;
+                if (typeof v !== 'number' || !isFinite(v) || v < 0 || v > 1) {
+                    findings.push({
+                        sceneId, category: 'characters', severity: this.SEVERITY.WARNING,
+                        message: `Character "${label}" has invalid ${field} "${v}" — must be 0-1, metadata ignored.`,
+                        fix: `${field} should be a fraction between 0 and 1.`,
+                    });
+                }
+            });
+
+            if (raw?.zIndex !== undefined && (typeof raw.zIndex !== 'number' || !isFinite(raw.zIndex))) {
+                findings.push({
+                    sceneId, category: 'characters', severity: this.SEVERITY.WARNING,
+                    message: `Character "${label}" has invalid zIndex "${raw.zIndex}" — falls back to the slot default.`,
+                    fix: 'zIndex must be a finite number.',
+                });
+            }
+
+            if (raw?.sprite) {
+                ctx.spriteChecks.push({ sceneId, label, sprite: raw.sprite, zone: c.slot });
+            } else {
+                findings.push({
+                    sceneId, category: 'characters', severity: this.SEVERITY.ERROR,
+                    message: `Character "${label}" has no sprite specified.`,
+                    fix: 'Add a sprite filename.',
+                });
+            }
+        });
+    },
+
+    checkSceneDialogue(findings, key, scene, ctx) {
+        const sceneId = scene.id || key;
+        const dialogue = scene.dialogue || [];
+        const characters = scene.characters || [];
+
+        const charById = new Map(characters.filter(c => c?.id).map(c => [String(c.id).toLowerCase(), c]));
+        const normalizeToken = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+        const charNameTokens = characters.filter(c => c?.name).map(c => normalizeToken(c.name));
+
+        const sceneSource = this._collectSceneFunctionSources(scene);
+        const dynamicIds = this._harvestDynamicCharacterIds(sceneSource);
+        const dynamicTokens = [...dynamicIds].map(id => normalizeToken(id));
+
+        const resolvesToCharacter = (speaker, characterId) => {
+            if (characterId) {
+                return charById.has(String(characterId).toLowerCase()) || dynamicIds.has(characterId);
+            }
+            if (!speaker) return true;
+            const token = normalizeToken(speaker);
+            const byId = charById.has(String(speaker).toLowerCase());
+            const byName = charNameTokens.some(ct => ct === token || ct.includes(token) || token.includes(ct));
+            const byDynamic = dynamicTokens.some(dt => dt === token);
+            return byId || byName || byDynamic;
+        };
+
+        dialogue.forEach((entry, idx) => {
+            if (!entry || typeof entry !== 'object') {
+                findings.push({
+                    sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                    message: `dialogue[${idx}] is not a valid object.`,
+                    fix: 'Remove or fix this entry.',
+                });
+                return;
+            }
+            const prefix = `dialogue[${idx}]`;
+            const speaker = entry.speaker;
+            const isSystemSpeaker = this.SYSTEM_SPEAKERS.has(speaker) || !speaker;
+            const isChoiceEntry = speaker === 'CHOICE' || speaker === 'FINAL CHOICE';
+
+            if (!isSystemSpeaker && !resolvesToCharacter(speaker, entry.characterId)) {
+                findings.push({
+                    sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                    message: `${prefix}: speaker "${speaker}" does not resolve to a character in scene.characters, an explicit addCharacter() spawn, or an allowed system speaker.`,
+                    fix: 'Add this character to scene.characters, spawn it via addCharacter() before this line, or fix the speaker name/characterId.',
+                });
+            }
+
+            if (entry.characterId) {
+                const idLower = String(entry.characterId).toLowerCase();
+                if (!charById.has(idLower) && !dynamicIds.has(entry.characterId)) {
+                    findings.push({
+                        sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                        message: `${prefix}: characterId "${entry.characterId}" not found in scene.characters or any addCharacter() spawn in this scene.`,
+                        fix: 'Correct the characterId or add/spawn that character.',
+                    });
+                }
+            }
+
+            if (!isSystemSpeaker && (!entry.position || !sceneRenderer.validZones.has(entry.position))) {
+                findings.push({
+                    sceneId, category: 'dialogue', severity: this.SEVERITY.WARNING,
+                    message: `${prefix} (${speaker}): missing or invalid position ("${entry.position}").`,
+                    fix: `Set position to one of: ${[...sceneRenderer.validZones].join(', ')}.`,
+                });
+            }
+
+            if (entry.bubbleLayout) {
+                const bl = entry.bubbleLayout;
+                const nums = ['left', 'top', 'width', 'height'].map(k => Number(bl[k]));
+                const allFinite = nums.every(n => Number.isFinite(n));
+                const [left, top, width, height] = nums;
+                if (!allFinite || !(width > 0) || !(height > 0)) {
+                    findings.push({
+                        sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                        message: `${prefix}: bubbleLayout has non-finite or non-positive values (${JSON.stringify(bl)}).`,
+                        fix: 'left/top/width/height must all be finite numbers, width and height > 0.',
+                    });
+                } else if (left < 0 || top < 0 || left + width > 1920 || top + height > 1080) {
+                    findings.push({
+                        sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                        message: `${prefix}: bubbleLayout rect extends outside the 1920×1080 reference space (${JSON.stringify(bl)}).`,
+                        fix: 'Adjust left/top/width/height so the rect stays fully inside 0-1920 x 0-1080.',
+                    });
+                }
+            }
+
+            if (isChoiceEntry) {
+                if (!Array.isArray(entry.choices) || entry.choices.length === 0) {
+                    findings.push({
+                        sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                        message: `${prefix} (${speaker}): no choices array or it is empty.`,
+                        fix: 'Add at least one choice with text and an action/next.',
+                    });
+                } else {
+                    entry.choices.forEach((choice, ci) => {
+                        const cprefix = `${prefix}.choices[${ci}]`;
+                        if (!choice || !choice.text) {
+                            findings.push({
+                                sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                                message: `${cprefix}: missing or empty text.`,
+                                fix: 'Add player-facing choice text.',
+                            });
+                        }
+                        if (choice && choice.action !== undefined && typeof choice.action !== 'function') {
+                            findings.push({
+                                sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                                message: `${cprefix}: action is present but not callable (${typeof choice.action}).`,
+                                fix: 'action must be a function.',
+                            });
+                        }
+                        if (choice && !choice.action && !choice.next) {
+                            findings.push({
+                                sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                                message: `${cprefix}: has neither action nor next — selecting it does nothing.`,
+                                fix: 'Add an action function or a next scene id.',
+                            });
+                        }
+                    });
+                }
+            }
+
+            if (!entry.text && entry.text !== 0) {
+                findings.push({
+                    sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                    message: `${prefix}: missing or empty text.`,
+                    fix: 'Add dialogue text.',
+                });
+            }
+
+            const isLast = idx === dialogue.length - 1;
+            const hasChoices = Array.isArray(entry.choices) && entry.choices.length > 0;
+            if (!isLast && !hasChoices && !entry.next) {
+                findings.push({
+                    sceneId, category: 'flow', severity: this.SEVERITY.ERROR,
+                    message: `${prefix}: no next/choices, but ${dialogue.length - idx - 1} more entries follow — they are unreachable.`,
+                    fix: `Add next: 'NEXT_DIALOGUE' (or a target) so dialogue[${idx + 1}] onward remains reachable.`,
+                });
+            } else if (isLast && !hasChoices && !entry.next) {
+                findings.push({
+                    sceneId, category: 'flow', severity: this.SEVERITY.INFO,
+                    message: `${prefix}: last dialogue entry has no next — assumed intentional (scene waits for hotspot/item interaction).`,
+                    fix: 'No action needed if this is intentional.',
+                });
+            }
+        });
+
+        const { flagsRead, itemsChecked } = this._harvestFlagsAndItems(sceneSource);
+        flagsRead.forEach(flag => {
+            if (!ctx.globalFlagsWritten.has(flag)) {
+                findings.push({
+                    sceneId, category: 'dialogue', severity: this.SEVERITY.INFO,
+                    message: `Flag "gameState.flags.${flag}" is referenced here but never appears to be assigned anywhere in SCENES.`,
+                    fix: 'Verify this is intentional (defaults to falsy) or check for a typo elsewhere.',
+                });
+            }
+        });
+        itemsChecked.forEach(itemId => {
+            if (!ctx.knownItemIds.has(itemId)) {
+                findings.push({
+                    sceneId, category: 'dialogue', severity: this.SEVERITY.INFO,
+                    message: `Item id "${itemId}" is checked/removed here but never appears as a scene item or inventory.add() target anywhere.`,
+                    fix: 'Verify the item id is spelled correctly and is actually granted somewhere.',
+                });
+            }
+        });
+    },
+
+    buildMarkdownReport(report) {
+        const lines = [];
+        lines.push('# Demo Validation Report');
+        lines.push('');
+        lines.push(`Generated: ${report.generatedAt}`);
+        lines.push(`Scenes scanned: ${report.sceneCount}`);
+        lines.push(`Duration: ${report.durationMs}ms`);
+        lines.push('');
+        lines.push('## Totals');
+        lines.push('');
+        lines.push('| Severity | Count |');
+        lines.push('|---|---|');
+        lines.push(`| Error | ${report.totals.error} |`);
+        lines.push(`| Warning | ${report.totals.warning} |`);
+        lines.push(`| Info | ${report.totals.info} |`);
+        lines.push('');
+        lines.push(report.ok
+            ? '**Result: PASS — zero errors.**'
+            : `**Result: FAIL — ${report.totals.error} error(s) must be fixed before demo.**`);
+        lines.push('');
+
+        const bySceneId = new Map();
+        report.findings.forEach(f => {
+            if (!bySceneId.has(f.sceneId)) bySceneId.set(f.sceneId, []);
+            bySceneId.get(f.sceneId).push(f);
+        });
+
+        const severityOrder = { error: 0, warning: 1, info: 2 };
+        const sortedSceneIds = [...bySceneId.keys()].sort((a, b) => {
+            if (a === this.GLOBAL_SCENE_LABEL) return -1;
+            if (b === this.GLOBAL_SCENE_LABEL) return 1;
+            return a.localeCompare(b);
+        });
+
+        lines.push('## Findings by scene');
+        lines.push('');
+        if (sortedSceneIds.length === 0) {
+            lines.push('No findings.');
+        }
+        sortedSceneIds.forEach(sceneId => {
+            const items = bySceneId.get(sceneId).slice().sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+            const counts = { error: 0, warning: 0, info: 0 };
+            items.forEach(f => counts[f.severity]++);
+            lines.push(`### ${sceneId} — ${counts.error} error, ${counts.warning} warning, ${counts.info} info`);
+            lines.push('');
+            items.forEach(f => {
+                const badge = f.severity === 'error' ? '[ERROR]' : f.severity === 'warning' ? '[WARNING]' : '[INFO]';
+                lines.push(`- ${badge} \`${f.category}\` ${f.message}`);
+                lines.push(`  - Fix: ${f.fix}`);
+            });
+            lines.push('');
+        });
+
+        lines.push('## Methodology / known limitations');
+        lines.push('');
+        lines.push('- Dialogue shown dynamically from inside onClick/onEnter/next/action callbacks (not the top-level `scene.dialogue` array) is validated only insofar as `addCharacter()` calls, `gameState.flags.*`, and `inventory.*` references can be discovered via read-only `Function#toString()` source inspection. This is best-effort, not exhaustive — see acceptance criterion 1 (the validator does not enter scenes or execute callbacks).');
+        lines.push('- Flag/item reference findings are info-level because the detection is heuristic (regex over function source) and can both under- and over-report.');
+        lines.push('- Asset checks are live network probes (Image/Audio) against the paths scene data references; a slow or offline asset host will show assets as missing.');
+        lines.push('- Missing directional sprite-fallback candidates are not counted as errors when the primary sprite resolves; they are only surfaced (as a warning) when the primary sprite is itself missing and a fallback candidate is what actually renders.');
+        lines.push('- This validator never mutates SCENES, save data, or live game state.');
+        lines.push('');
+
+        return lines.join('\n');
+    },
+
+    // ===== orchestrator =====
+    async validateAll() {
+        const startedAt = Date.now();
+        const findings = [];
+        const sceneEntries = Object.entries(SCENES).filter(([, scene]) => scene && typeof scene === 'object');
+        const sceneKeysSet = new Set(sceneEntries.map(([key]) => key));
+
+        const idToKeys = new Map();
+        sceneEntries.forEach(([key, scene]) => {
+            const idValue = scene.id || key;
+            if (!idToKeys.has(idValue)) idToKeys.set(idValue, []);
+            idToKeys.get(idValue).push(key);
+        });
+
+        // Global pass: known item ids + flags actually assigned anywhere,
+        // used by the per-scene flag/item sanity checks below.
+        const globalFlagsWritten = new Set();
+        const knownItemIds = new Set();
+        sceneEntries.forEach(([, scene]) => {
+            (scene.items || []).forEach(it => { if (it?.id) knownItemIds.add(it.id); });
+            const src = this._collectSceneFunctionSources(scene);
+            const { flagsWritten, itemsGranted } = this._harvestFlagsAndItems(src);
+            flagsWritten.forEach(f => globalFlagsWritten.add(f));
+            itemsGranted.forEach(i => knownItemIds.add(i));
+        });
+
+        const ctx = {
+            sceneKeysSet, idToKeys, globalFlagsWritten, knownItemIds,
+            backgroundChecks: [], musicChecks: [], spriteChecks: [],
+        };
+
+        sceneEntries.forEach(([key, scene]) => {
+            this.checkSceneStructure(findings, key, scene, ctx);
+            this.checkSceneCharacters(findings, key, scene, ctx);
+            this.checkSceneDialogue(findings, key, scene, ctx);
+        });
+
+        // ---- background assets ----
+        const bgResults = await this.probeMany(ctx.backgroundChecks.map(c => c.path), this.probeImage);
+        ctx.backgroundChecks.forEach(({ sceneId, path }) => {
+            if (!bgResults.get(path)) {
+                findings.push({
+                    sceneId, category: 'assets/background', severity: this.SEVERITY.ERROR,
+                    message: `Background asset not found or failed to load: ${path}`,
+                    fix: 'Add the missing background file or correct scene.background.',
+                });
+            }
+        });
+
+        // ---- music assets ----
+        const musicResults = await this.probeMany(ctx.musicChecks.map(c => c.path), this.probeAudio);
+        ctx.musicChecks.forEach(({ sceneId, path }) => {
+            if (!musicResults.get(path)) {
+                findings.push({
+                    sceneId, category: 'assets/music', severity: this.SEVERITY.WARNING,
+                    message: `Music asset not found or failed to load: ${path}`,
+                    fix: 'Add the missing audio file or correct scene.music (the scene still runs muted, but demo quality suffers).',
+                });
+            }
+        });
+
+        // ---- character sprites: primary first, fallback chain only if primary is missing ----
+        const primaryPaths = ctx.spriteChecks.map(c => `./assets/characters/${c.sprite}`);
+        const primaryResults = await this.probeMany(primaryPaths, this.probeImage);
+        const needsFallbackProbe = ctx.spriteChecks.filter(c => !primaryResults.get(`./assets/characters/${c.sprite}`));
+        const candidateListBySprite = new Map();
+        const fallbackCandidatePaths = [];
+        needsFallbackProbe.forEach(c => {
+            const candidates = sceneRenderer.buildSpriteCandidates(c.sprite, c.zone);
+            candidateListBySprite.set(c, candidates);
+            candidates.forEach(name => fallbackCandidatePaths.push(`./assets/characters/${name}`));
+        });
+        const fallbackResults = await this.probeMany(fallbackCandidatePaths, this.probeImage);
+        needsFallbackProbe.forEach(c => {
+            const candidates = candidateListBySprite.get(c) || [];
+            const workingCandidate = candidates.find(name => fallbackResults.get(`./assets/characters/${name}`));
+            if (workingCandidate) {
+                findings.push({
+                    sceneId: c.sceneId, category: 'assets/sprite', severity: this.SEVERITY.WARNING,
+                    message: `Character "${c.label}": primary sprite "${c.sprite}" not found; renders via fallback candidate "${workingCandidate}".`,
+                    fix: `Add a file named "${c.sprite}", or update scene data to reference "${workingCandidate}" directly and document the fallback.`,
+                });
+            } else {
+                findings.push({
+                    sceneId: c.sceneId, category: 'assets/sprite', severity: this.SEVERITY.ERROR,
+                    message: `Character "${c.label}": no valid sprite found (tried "${c.sprite}" and ${candidates.length} fallback candidate(s)).`,
+                    fix: 'Add a matching sprite file under assets/characters/.',
+                });
+            }
+        });
+
+        // ---- item icons ----
+        const itemIconChecks = [];
+        sceneEntries.forEach(([key, scene]) => {
+            (scene.items || []).forEach(it => {
+                if (it?.id) itemIconChecks.push({ sceneId: scene.id || key, id: it.id, path: `./assets/items/item_${it.id}.png` });
+            });
+        });
+        const itemIconResults = await this.probeMany(itemIconChecks.map(c => c.path), this.probeImage);
+        itemIconChecks.forEach(({ sceneId, id, path }) => {
+            if (!itemIconResults.get(path)) {
+                findings.push({
+                    sceneId, category: 'assets/item', severity: this.SEVERITY.ERROR,
+                    message: `Item "${id}" icon not found: ${path}`,
+                    fix: `Add assets/items/item_${id}.png.`,
+                });
+            }
+        });
+
+        // ---- global (non-scene-specific) assets ----
+        const bubbleAssets = [
+            './assets/menu_dialogue/dialogue-bubble-large-left.png',
+            './assets/menu_dialogue/dialogue-bubble-large-right.png',
+        ];
+        const bubbleResults = await this.probeMany(bubbleAssets, this.probeImage);
+        bubbleAssets.forEach(path => {
+            if (!bubbleResults.get(path)) {
+                findings.push({
+                    sceneId: this.GLOBAL_SCENE_LABEL, category: 'assets/bubble', severity: this.SEVERITY.ERROR,
+                    message: `Dialogue bubble asset not found: ${path}`,
+                    fix: 'Character-relative speech bubbles cannot render without this file.',
+                });
+            }
+        });
+
+        const uiAssets = assetLoader.getCriticalAssets().filter(a => a.startsWith('./assets/ui/'));
+        const uiResults = await this.probeMany(uiAssets, this.probeImage);
+        uiAssets.forEach(path => {
+            if (!uiResults.get(path)) {
+                findings.push({
+                    sceneId: this.GLOBAL_SCENE_LABEL, category: 'assets/ui', severity: this.SEVERITY.ERROR,
+                    message: `UI asset not found: ${path}`,
+                    fix: 'Add the missing UI asset.',
+                });
+            }
+        });
+
+        findings.push({
+            sceneId: this.GLOBAL_SCENE_LABEL, category: 'assets/sfx', severity: this.SEVERITY.INFO,
+            message: 'SFX are synthesized in-browser via SFXGenerator (Web Audio API) — there are no SFX file assets to validate.',
+            fix: 'No action needed.',
+        });
+
+        const totals = { error: 0, warning: 0, info: 0 };
+        findings.forEach(f => { totals[f.severity] = (totals[f.severity] || 0) + 1; });
+
+        const report = {
+            ok: totals.error === 0,
+            generatedAt: new Date().toISOString(),
+            durationMs: Date.now() - startedAt,
+            sceneCount: sceneEntries.length,
+            totals,
+            findings,
+        };
+        report.markdown = this.buildMarkdownReport(report);
+        this.lastReport = report;
+        return report;
+    },
+};
+
 // ===== SETTINGS PERSISTENCE =====
 function loadSettingsFromStorage() {
     try {
@@ -9118,6 +9925,18 @@ const HBDebugAPI = {
             title: SCENES[id]?.title || null,
             background: SCENES[id]?.background || null
         }));
+    },
+
+    /**
+     * Runs the full demo-readiness validator across every SCENES entry —
+     * structure, characters, dialogue, and live asset probes — without
+     * entering any scene or mutating SCENES/save data/game state. Intended
+     * for automated tests: check `result.ok` (true iff zero error-severity
+     * findings) and `result.totals`/`result.findings` for details.
+     */
+    async validateAllScenes() {
+        const report = await demoValidator.validateAll();
+        return hbToJSONSafe(report);
     },
 
     jumpToScene(sceneId) {

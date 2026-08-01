@@ -101,6 +101,35 @@ const report = window.__HB_DEBUG__.validateCurrentLayout();
 console.log(report.ok, report.violations);
 ```
 
+## Demo validation report
+
+`window.__HB_DEBUG__.validateAllScenes()` (async) runs a full demo-readiness
+check across every `SCENES` entry — scene structure, characters, dialogue,
+and live asset probes — without loading or entering any scene, and without
+mutating `SCENES`, save data, or game state. It's the programmatic entry
+point to the same check the Developer Hub's **Validate All Scenes** button
+runs (next to the existing per-scene **Run Validate Now** hotspot check,
+which it does not replace).
+
+```js
+const report = await window.__HB_DEBUG__.validateAllScenes();
+console.log(report.ok, report.totals, report.findings.length);
+```
+
+Returns `{ ok, generatedAt, durationMs, sceneCount, totals: {error, warning,
+info}, findings, markdown }`. `ok` is `true` iff there are zero error-severity
+findings — suitable for an automated test assertion. Every finding is
+`{ sceneId, category, severity, message, fix }`.
+
+In the Dev Hub, running it writes the same Markdown report into the existing
+`#dev-validation-output` panel, and **Download JSON Report** saves the full
+structured result (`demoValidator.lastReport`) as `demo-validation-report.json`.
+See `DEMO_VALIDATION_REPORT.md` in the repo root for the initial run's output,
+and that file's own "Methodology / known limitations" section for what the
+validator can and can't see (e.g. dialogue shown from inside `onClick`/
+`onEnter`/`next`/`onShow` callbacks is only covered via best-effort source
+inspection, not execution).
+
 ## Character layout schema
 
 Scene `characters` entries support an explicit layout schema, resolved by
