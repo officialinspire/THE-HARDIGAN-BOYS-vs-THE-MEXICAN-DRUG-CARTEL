@@ -101,6 +101,93 @@ const report = window.__HB_DEBUG__.validateCurrentLayout();
 console.log(report.ok, report.violations);
 ```
 
+## Character layout schema
+
+Scene `characters` entries support an explicit layout schema, resolved by
+`sceneRenderer.resolveCharacterLayout(char)` — the single place scene-authored
+character data becomes a placed sprite. It is a pure function (no DOM access)
+called by both `normalizeCharacterZones()` (the scene's initial `characters`
+array) and `addCharacter()` itself, so a character added later via a
+dialogue/`onEnter` callback goes through the exact same resolution as one
+declared in the scene up front.
+
+| Field | Type | Default | Meaning |
+|---|---|---|---|
+| `slot` | string | — | Canonical placement zone: `left`, `left-2`, `center`, `right-2`, `right`. Takes priority over `position` if both are set. |
+| `position` | string | `'center'` | Legacy alias for `slot`, still fully supported — existing scene data needs no changes. |
+| `scale` | number | `1` | Uniform scale multiplier, composed into the slide-in/visible CSS transform via a `--char-scale` custom property (never overwrites the animation's `translateX`). |
+| `offsetX` | number | `0` | Pixel nudge from the slot's anchor point, positive = right. Baked directly into the computed `left`/`right`, not a transform, so it never conflicts with the slide animation. |
+| `offsetY` | number | `0` | Pixel nudge from the slot's anchor point, positive = down. Baked into `bottom`. |
+| `zIndex` | number | Per-slot default (`DEFAULT_CHARACTER_Z_INDEX`: center 4, left/right 3, left-2/right-2 2) | Explicit stacking order, independent of DOM insertion order. |
+| `headAnchorX` | number (0-1) | none (falls back to the existing zone-based heuristic) | Fraction of the sprite's own rendered width where the visible head center is — used only by character-relative bubble placement (`layoutMode: 'character'`). |
+| `headAnchorY` | number (0-1) | none (falls back to assuming the image's top edge is the head) | Fraction of the sprite's own rendered height where the visible head top is. Most sprite PNGs have transparent padding above the head, so without this the bubble anchors above empty space. |
+
+**No remapping, ever.** `slot`/`position` is authoritative. If two characters
+in the same scene claim the same slot, neither is silently moved — a warning
+is recorded (`sceneRenderer._lastCharacterLayoutWarnings`) and surfaced by
+`window.__HB_DEBUG__.validateCurrentLayout()` as a `duplicate-slot` violation.
+There is exactly one remapper (`normalizeCharacterZones` /
+`resolveCharacterLayout`); `addCharacter()` no longer runs a second,
+DOM-state-dependent remap on top of it.
+
+**Speaker resolution priority** (dialogue entries, `dialogueEntry.characterId`
+optional): explicit `characterId` first (exact `data-character-id` match),
+then exact character id/name match, then (for character-relative bubble
+placement only) zone fallback last. Used by `_resolveDialogueCharacter()`
+(bubble anchor target), `_setSpeakingCharacter()` (`.is-speaking` highlight),
+and `_ensureSpeakerPresent()` (auto-adds a scene character that hasn't
+rendered yet).
+
+**Sequencing**: `addCharacter()` loads the sprite asset first, then applies
+the resolved position/scale/offset/zIndex/head-anchor metadata, then starts
+the slide-in animation — composition never depends on how far a fetch
+happened to get.
+
+**DOM metadata kept on every sprite** (`data-*`, stable across resize):
+`data-character-id`, `data-character-name`, `data-zone` / `data-slot` (same
+value), `data-offset-x`, `data-offset-y`, `data-head-anchor-x` /
+`data-head-anchor-y` (when authored). `recalculateAll()` (the resize/orientation
+handler) reads `data-offset-x`/`data-offset-y` back on every call so a
+character's slot and offsets survive repeated resize events instead of
+drifting back to zero.
+
+None of this required editing existing scene data — every field is optional
+and defaults preserve prior behavior exactly.
+
+### Validator additions
+
+`window.__HB_DEBUG__.validateCurrentLayout()` now also reports:
+- `duplicate-slot` — two characters resolved to the same slot in the current scene.
+- `missing-speaker-sprite` — unchanged check, now prefers `characterId` over display name when the active dialogue entry has one.
+
+`getLayoutSnapshot()`'s `characters[]` entries also include `slot` and a
+`layout` object (`scale`, `offsetX`, `offsetY`, `zIndex`, `headAnchorX`,
+`headAnchorY`) for inspection.
+
+### Scenes that may need later data corrections
+
+Manually verified via Playwright: S1, S2 (ICE raid), S5 (Sofia's Intel), S7B
+(surveillance), S8 / S8B, S9 (final showdown), and the E_CHAOTIC ending — all
+resolve to their originally-authored slots with no `duplicate-slot` or
+`missing-speaker-sprite` violations, and slots/offsets are stable across
+resize. No scene currently sets `slot`, `scale`, `offsetX`, `offsetY`,
+`zIndex`, `headAnchorX`, or `headAnchorY` — they're all running on
+compatibility defaults via the legacy `position` field, as intended (this
+change did not bulk-edit scene data).
+
+Pre-existing, unrelated to this change (surfaced as sprite-fallback warnings
+during verification, not failures — `buildSpriteCandidates` already recovers
+a working image): `char_sofia_hacker-right.png` (S5), `char_jonah_scared-left.png`
+and `char_cartel-surveillance-right.png` (S7B), `char_msgray_threatening-left.png`
+(S9) don't exist under their expected directional filename and fall through
+several fallback candidates before resolving. Worth a filename cleanup pass
+separately from this layout work.
+
+No scene currently needs `headAnchorX`/`headAnchorY` tuning to pass
+validation, but any speech-bubble character art with significant transparent
+padding above the head is a good candidate for it — `_positionDialogueNearCharacter()`
+otherwise anchors to the sprite's raw top edge.
+
 ## Known pre-existing issues (not introduced by this change)
 
 - Some character sprites ship as RGB without alpha (cream backgrounds),

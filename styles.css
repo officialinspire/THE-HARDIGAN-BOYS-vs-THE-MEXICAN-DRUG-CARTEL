@@ -385,6 +385,10 @@ body.main-menu #scene-container::after {
     transition: filter 180ms ease, transform 180ms ease, opacity 0.6s ease;
     filter: drop-shadow(2px 4px 6px rgba(0, 0, 0, 0.8))
             drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+    /* Per-character scale (addCharacter() sets this inline). Composed into
+       every transform below via calc/var so a scaled character never
+       fights the slide-in/visible animation's translateX. */
+    --char-scale: 1;
 }
 
 .character-sprite.is-speaking {
@@ -394,24 +398,24 @@ body.main-menu #scene-container::after {
 
 /* Slide-in animations */
 .character-sprite.slide-in-left {
-    transform: translateX(-100%);
+    transform: translateX(-100%) scale(var(--char-scale));
     opacity: 0;
 }
 
 .character-sprite.slide-in-right {
-    transform: translateX(100%);
+    transform: translateX(100%) scale(var(--char-scale));
     opacity: 0;
 }
 
 /* Visible state after slide-in completes */
 .character-sprite.visible {
-    transform: translateX(0);
+    transform: translateX(0) scale(var(--char-scale));
     opacity: 1;
 }
 
 /* Center-zone characters need translateX(-50%) even when visible */
 .character-sprite.char-center.visible {
-    transform: translateX(-50%);
+    transform: translateX(-50%) scale(var(--char-scale));
 }
 
 /* Fallback position classes (overridden by inline pixel styles from positioningSystem) */

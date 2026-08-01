@@ -3195,10 +3195,22 @@ const positioningSystem = {
     /**
      * Calculate pixel position for a character in a named zone.
      * Returns an object with CSS properties to apply via style.
+     *
+     * `layout.offsetX`/`layout.offsetY` are the character's own authored
+     * nudge (px, in reference-image space is NOT assumed — they're applied
+     * directly in rendered pixels so they scale visually the same way the
+     * zone anchor itself does at any viewport size). Positive X moves the
+     * character right, positive Y moves it down. Baked directly into
+     * left/right/bottom (not a transform) so they never conflict with the
+     * slide-in/visible animation's translateX, and recalculateAll() must
+     * pass the same offsets back in on every resize/orientation change so a
+     * character's final position never drifts from what was authored.
      */
-    calculateCharacterPosition(zoneName) {
+    calculateCharacterPosition(zoneName, layout = {}) {
         const zone = this.zones[zoneName] || this.zones['center'];
         const rect = this.getBackgroundRect();
+        const charOffsetX = Number.isFinite(layout.offsetX) ? layout.offsetX : 0;
+        const charOffsetY = Number.isFinite(layout.offsetY) ? layout.offsetY : 0;
 
         if (!rect) {
             // Fallback: return percentage-based positioning
@@ -3215,22 +3227,25 @@ const positioningSystem = {
         const bottomFromContainer = Math.max(0, containerH - (offsetY + renderedH));
 
         const result = {
-            bottom: bottomFromContainer + 'px',
+            bottom: (bottomFromContainer - charOffsetY) + 'px',
         };
 
         if (zone.centered) {
-            // Center zone: position at 50% of container, translate to center
-            result.left = (offsetX + renderedW * zone.anchor) + 'px';
-            result.transform = 'translateX(-50%)';
+            // Center zone: position at 50% of container, translate to center.
+            // Composes --char-scale so this inline transform (which always
+            // wins over the CSS class rule of the same name) doesn't strip
+            // per-character scale from centered characters.
+            result.left = (offsetX + renderedW * zone.anchor + charOffsetX) + 'px';
+            result.transform = 'translateX(-50%) scale(var(--char-scale, 1))';
             result.right = 'auto';
         } else if (zone.side === 'right') {
             // Right-side zones: position from right edge of rendered area
             const rightFromContainer = containerW - (offsetX + renderedW) + (renderedW * zone.anchor);
-            result.right = rightFromContainer + 'px';
+            result.right = (rightFromContainer - charOffsetX) + 'px';
             result.left = 'auto';
         } else {
             // Left-side zones: position from left edge of rendered area
-            result.left = (offsetX + renderedW * zone.anchor) + 'px';
+            result.left = (offsetX + renderedW * zone.anchor + charOffsetX) + 'px';
             result.right = 'auto';
         }
 
@@ -3337,7 +3352,12 @@ const positioningSystem = {
         characters.forEach(charEl => {
             const zoneName = charEl.dataset.zone;
             if (zoneName) {
-                const pos = this.calculateCharacterPosition(zoneName);
+                // Read back the character's own authored nudge so repeated
+                // resize/orientation events keep reproducing the exact same
+                // slot + offsets rather than losing them on recalculation.
+                const offsetX = parseFloat(charEl.dataset.offsetX) || 0;
+                const offsetY = parseFloat(charEl.dataset.offsetY) || 0;
+                const pos = this.calculateCharacterPosition(zoneName, { offsetX, offsetY });
                 // Preserve existing transforms for animations
                 const isVisible = charEl.classList.contains('visible');
                 const isSlideLeft = charEl.classList.contains('slide-in-left');
@@ -3350,7 +3370,7 @@ const positioningSystem = {
                 if (pos.transform && zoneName !== 'center') {
                     // Non-center zones don't need transform
                 } else if (zoneName === 'center' && isVisible) {
-                    charEl.style.transform = 'translateX(-50%)';
+                    charEl.style.transform = 'translateX(-50%) scale(var(--char-scale, 1))';
                 }
             }
         });
@@ -3970,7 +3990,45 @@ const sceneRenderer = {
         'right':   { left: 1080, top: 120, width: 720, height: 420 },
         'right-2': { left: 1040, top: 270, width: 720, height: 420 },
     },
+    // Deterministic stacking order by slot — independent of DOM insertion
+    // order, so composition never depends on which character loaded first.
+    // An explicit char.zIndex always overrides this default.
+    DEFAULT_CHARACTER_Z_INDEX: { left: 3, 'left-2': 2, center: 4, 'right-2': 2, right: 3 },
+    // Populated by normalizeCharacterZones() each scene load; read by the
+    // debug validator (hbValidateLayout) to surface duplicate-slot warnings.
+    _lastCharacterLayoutWarnings: [],
     isTyping: false,
+
+    /**
+     * THE single place scene-authored character data becomes a resolved
+     * layout. Treats `slot` (new canonical field) / `position` (legacy
+     * field, still fully supported) as authoritative — neither this nor any
+     * caller may remap a slot to avoid a collision; see
+     * normalizeCharacterZones() for how collisions are surfaced instead.
+     * Pure function: no DOM access, safe to call before a background/layer
+     * exists.
+     */
+    resolveCharacterLayout(char) {
+        const rawSlot = char.slot || char.position || 'center';
+        const slot = this.normalizeZoneName(rawSlot);
+        return {
+            ...char,
+            slot,
+            // Keep `.position` in sync so every existing call site that
+            // still reads `.position` (addCharacter, dialogue anchoring,
+            // sprite dataset) continues to work unchanged.
+            position: slot,
+            scale: (typeof char.scale === 'number' && isFinite(char.scale) && char.scale > 0) ? char.scale : 1,
+            offsetX: (typeof char.offsetX === 'number' && isFinite(char.offsetX)) ? char.offsetX : 0,
+            offsetY: (typeof char.offsetY === 'number' && isFinite(char.offsetY)) ? char.offsetY : 0,
+            zIndex: (typeof char.zIndex === 'number' && isFinite(char.zIndex)) ? char.zIndex : (this.DEFAULT_CHARACTER_Z_INDEX[slot] ?? 3),
+            // Fractions (0-1) of the sprite's own rendered box where the
+            // visible head actually is — null means "unknown", callers fall
+            // back to the old top-of-rect assumption for compatibility.
+            headAnchorX: (typeof char.headAnchorX === 'number' && isFinite(char.headAnchorX)) ? char.headAnchorX : null,
+            headAnchorY: (typeof char.headAnchorY === 'number' && isFinite(char.headAnchorY)) ? char.headAnchorY : null,
+        };
+    },
 
     _bindDialogueTapHandlers() {
         const dialogueBox = document.getElementById('dialogue-box');
@@ -4430,28 +4488,59 @@ const sceneRenderer = {
         return this.validZones.has(zoneName) ? zoneName : 'center';
     },
 
+    /**
+     * Resolves each scene character's authored slot/position through
+     * resolveCharacterLayout() — authoritative, never remapped. If two
+     * characters claim the same slot this does NOT silently move either one
+     * (that was the old behavior); it records a warning (surfaced by the
+     * debug validator as a `duplicate-slot` violation) and leaves both
+     * characters exactly where the scene author put them. addCharacter()
+     * must not run a second, independent remap on top of this one.
+     */
     normalizeCharacterZones(characters) {
-        const sideCounts = { left: 0, right: 0 };
+        this._lastCharacterLayoutWarnings = [];
 
-        return (characters || []).map(char => {
-            const normalized = { ...char };
+        const resolved = (characters || []).map(char => this.resolveCharacterLayout(char));
 
-            normalized.position = this.normalizeZoneName(normalized.position || 'center');
-
-            if (normalized.position === 'left') {
-                sideCounts.left += 1;
-                if (sideCounts.left > 1) normalized.position = 'left-2';
-            } else if (normalized.position === 'right') {
-                sideCounts.right += 1;
-                if (sideCounts.right > 1) normalized.position = 'right-2';
-            }
-
-            return normalized;
+        const bySlot = new Map();
+        resolved.forEach(char => {
+            if (!bySlot.has(char.slot)) bySlot.set(char.slot, []);
+            bySlot.get(char.slot).push(char);
         });
+        bySlot.forEach((group, slot) => {
+            if (group.length <= 1) return;
+            const ids = group.map(c => c.id || c.name || '(unnamed)');
+            const warning = {
+                type: 'duplicate-slot',
+                sceneId: this.currentScene?.id || null,
+                slot,
+                characters: ids,
+            };
+            this._lastCharacterLayoutWarnings.push(warning);
+            console.warn(`[sceneRenderer] Duplicate character slot "${slot}" claimed by: ${ids.join(', ')} — both will render in the same spot (scene "${warning.sceneId}"). Assign distinct slot/position values.`);
+        });
+
+        return resolved;
     },
 
+    /**
+     * Adds one character sprite to the scene. Always resolves the character
+     * through resolveCharacterLayout() itself — the SAME schema resolution
+     * normalizeCharacterZones() uses — so a character added later via a
+     * dialogue onClick/onEnter callback (not part of the scene's initial
+     * `characters` array) gets identical slot/scale/offset/zIndex/head-anchor
+     * handling. There is no second remap here: whatever slot the caller
+     * resolved (or the raw scene data specifies) is authoritative.
+     *
+     * Sequenced in three explicit phases: load the sprite asset, THEN apply
+     * the deterministic position/layout metadata, THEN start the entry
+     * (slide-in) animation — so composition never depends on how far
+     * along the asset fetch happened to be.
+     */
     async addCharacter(char, slideDelay = 100) {
+        const resolvedChar = this.resolveCharacterLayout(char);
         const charLayer = document.getElementById('character-layer');
+        const zoneName = resolvedChar.slot;
 
         const bg = document.getElementById('scene-background');
         if (bg && !bg.complete) {
@@ -4462,38 +4551,12 @@ const sceneRenderer = {
             });
         }
 
-        const existingZones = new Set(
-            Array.from(charLayer.querySelectorAll('.character-sprite')).map(el => el.dataset.zone)
-        );
-        let resolvedZone = char.position || 'center';
-        if (resolvedZone === 'left' && existingZones.has('left')) resolvedZone = 'left-2';
-        if (resolvedZone === 'right' && existingZones.has('right')) resolvedZone = 'right-2';
-
+        // ===== 1. Load sprite asset first (detached — no DOM/positioning
+        // dependency; images load regardless of DOM attachment) =====
         const img = document.createElement('img');
-        const zoneName = this.normalizeZoneName(resolvedZone);
-        img.className = `character-sprite char-${zoneName}`;
-        img.dataset.zone = zoneName;
-        img.dataset.characterId = char.id || '';
-        img.dataset.characterName = (char.name || '').toUpperCase();
-        if (char.id) img.id = `char-${char.id}`;
-        img.style.zIndex = charLayer.querySelectorAll('.character-sprite').length + 1;
-        img.alt = char.name;
+        img.alt = resolvedChar.name || '';
+        const spriteCandidates = this.buildSpriteCandidates(resolvedChar.sprite, zoneName);
 
-        // Position before adding to DOM
-        const pos = positioningSystem.calculateCharacterPosition(zoneName);
-        positioningSystem.applyPosition(img, pos);
-
-        // Add slide direction class (starts offscreen + transparent via CSS)
-        const side = this.getZoneSide(zoneName);
-        if (side === 'left') img.classList.add('slide-in-left');
-        else if (side === 'right') img.classList.add('slide-in-right');
-
-        charLayer.appendChild(img);
-
-        // Start loading sprite via fallback chain
-        const spriteCandidates = this.buildSpriteCandidates(char.sprite, zoneName);
-
-        // Wait for sprite to load + transparency to process
         await new Promise(resolve => {
             let resolved = false;
             const finish = () => {
@@ -4519,7 +4582,37 @@ const sceneRenderer = {
             }, 2500);
         });
 
-        // NOW trigger slide-in — sprite is fully loaded and processed
+        // ===== 2. Apply deterministic position + layout metadata =====
+        img.className = `character-sprite char-${zoneName}`;
+        img.dataset.zone = zoneName;
+        img.dataset.slot = zoneName;
+        img.dataset.characterId = resolvedChar.id || '';
+        img.dataset.characterName = (resolvedChar.name || '').toUpperCase();
+        if (resolvedChar.id) img.id = `char-${resolvedChar.id}`;
+        img.dataset.offsetX = String(resolvedChar.offsetX);
+        img.dataset.offsetY = String(resolvedChar.offsetY);
+        if (resolvedChar.headAnchorX !== null) img.dataset.headAnchorX = String(resolvedChar.headAnchorX);
+        if (resolvedChar.headAnchorY !== null) img.dataset.headAnchorY = String(resolvedChar.headAnchorY);
+        img.style.zIndex = resolvedChar.zIndex;
+        // Scale composes with the slide-in/visible transform via a CSS
+        // custom property (see styles.css) instead of JS setting `transform`
+        // directly, so it never fights the slide animation.
+        img.style.setProperty('--char-scale', String(resolvedChar.scale));
+
+        const pos = positioningSystem.calculateCharacterPosition(zoneName, {
+            offsetX: resolvedChar.offsetX,
+            offsetY: resolvedChar.offsetY,
+        });
+        positioningSystem.applyPosition(img, pos);
+
+        // Add slide direction class (starts offscreen + transparent via CSS)
+        const side = this.getZoneSide(zoneName);
+        if (side === 'left') img.classList.add('slide-in-left');
+        else if (side === 'right') img.classList.add('slide-in-right');
+
+        charLayer.appendChild(img);
+
+        // ===== 3. Start entry animation =====
         setTimeout(() => {
             img.classList.add('visible');
         }, slideDelay);
@@ -5150,56 +5243,78 @@ const sceneRenderer = {
     
     async _ensureSpeakerPresent(dialogueEntry) {
         const speaker = dialogueEntry.speaker;
-        if (!speaker || speaker === 'NARRATION' || speaker === 'SYSTEM' || speaker === 'CHOICE' || speaker === 'FINAL CHOICE') {
+        const characterId = dialogueEntry.characterId;
+        const isSpecialSpeaker = speaker === 'NARRATION' || speaker === 'SYSTEM' || speaker === 'CHOICE' || speaker === 'FINAL CHOICE';
+        if (isSpecialSpeaker || (!speaker && !characterId)) {
             return;
         }
-        const speakerUpper = speaker.toUpperCase();
+        const speakerUpper = (speaker || '').toUpperCase();
+        const characterIdLower = (characterId || '').toLowerCase();
+
+        // characterId first, exact speaker name second — matches the same
+        // priority _resolveDialogueCharacter()/_setSpeakingCharacter() use.
         const existing = Array.from(document.querySelectorAll('#character-layer .character-sprite'))
-            .find(el => (el.dataset.characterName || '').toUpperCase() === speakerUpper);
+            .find(el =>
+                (characterId && (el.dataset.characterId || '').toLowerCase() === characterIdLower) ||
+                (speakerUpper && (el.dataset.characterName || '').toUpperCase() === speakerUpper)
+            );
         if (existing) return;
 
         const chars = this.currentScene?.characters || [];
         const found = chars.find(c =>
-            (c.name || '').toUpperCase() === speakerUpper ||
-            (c.id || '').toLowerCase() === speaker.toLowerCase()
+            (characterId && (c.id || '').toLowerCase() === characterIdLower) ||
+            (speakerUpper && (c.name || '').toUpperCase() === speakerUpper) ||
+            (speakerUpper && (c.id || '').toLowerCase() === speakerUpper.toLowerCase())
         );
         if (found) {
             await this.addCharacter(found, 0);
         } else {
             if (!this._ensureSpeakerWarned) this._ensureSpeakerWarned = new Set();
-            const warnKey = `${this.currentScene?.id}:${speaker}`;
+            const warnKey = `${this.currentScene?.id}:${characterId || speaker}`;
             if (!this._ensureSpeakerWarned.has(warnKey)) {
                 this._ensureSpeakerWarned.add(warnKey);
-                console.warn(`[sceneRenderer] Speaker "${speaker}" not found in scene "${this.currentScene?.id}"`);
+                console.warn(`[sceneRenderer] Speaker "${characterId || speaker}" not found in scene "${this.currentScene?.id}"`);
             }
         }
     },
 
-    _setSpeakingCharacter(speakerName) {
+    /**
+     * Highlights the sprite belonging to the current speaker. Resolution
+     * priority: explicit characterId first, exact id/name match second —
+     * there is no zone fallback here (highlighting the wrong sprite by
+     * zone guesswork is worse than highlighting none).
+     */
+    _setSpeakingCharacter(speakerName, characterId) {
         const sprites = Array.from(document.querySelectorAll('#character-layer .character-sprite'));
         if (!sprites.length) return;
 
-        if (!speakerName) {
+        const normalizedSpeaker = String(speakerName || '').trim().toUpperCase();
+        const normalizedCharacterId = String(characterId || '').trim().toUpperCase();
+        const isSpecialSpeaker = ['NARRATION', 'SYSTEM', 'CHOICE', 'FINAL CHOICE'].includes(normalizedSpeaker);
+
+        if (isSpecialSpeaker || (!normalizedSpeaker && !normalizedCharacterId)) {
             sprites.forEach(sprite => sprite.classList.remove('is-speaking'));
             return;
         }
 
-        const normalizedSpeaker = String(speakerName).trim().toUpperCase();
-        if (!normalizedSpeaker || normalizedSpeaker === 'NARRATION' || normalizedSpeaker === 'SYSTEM' || normalizedSpeaker === 'CHOICE' || normalizedSpeaker === 'FINAL CHOICE') {
-            sprites.forEach(sprite => sprite.classList.remove('is-speaking'));
-            return;
+        // Priority 1: explicit characterId
+        let matchingSprite = normalizedCharacterId
+            ? sprites.find(sprite => (sprite.dataset.characterId || '').toUpperCase() === normalizedCharacterId)
+            : null;
+
+        // Priority 2: exact id/name match via the speaker string
+        if (!matchingSprite && normalizedSpeaker) {
+            matchingSprite = sprites.find(sprite => {
+                const byName = (sprite.dataset.characterName || '').toUpperCase() === normalizedSpeaker;
+                if (byName) return true;
+
+                const spriteCharacterId = (sprite.dataset.characterId || '').toUpperCase();
+                if (spriteCharacterId && spriteCharacterId === normalizedSpeaker) return true;
+
+                const spriteId = (sprite.id || '').replace(/^char-/, '').toUpperCase();
+                return spriteId && spriteId === normalizedSpeaker;
+            });
         }
-
-        const matchingSprite = sprites.find(sprite => {
-            const byName = (sprite.dataset.characterName || '').toUpperCase() === normalizedSpeaker;
-            if (byName) return true;
-
-            const characterId = (sprite.dataset.characterId || '').toUpperCase();
-            if (characterId && characterId === normalizedSpeaker) return true;
-
-            const spriteId = (sprite.id || '').replace(/^char-/, '').toUpperCase();
-            return spriteId && spriteId === normalizedSpeaker;
-        });
 
         sprites.forEach(sprite => {
             sprite.classList.toggle('is-speaking', sprite === matchingSprite);
@@ -5210,7 +5325,7 @@ const sceneRenderer = {
         try {
             this._bindDialogueTapHandlers();
             gameState.currentDialogueEntry = dialogueEntry;
-            this._setSpeakingCharacter(dialogueEntry?.speaker);
+            this._setSpeakingCharacter(dialogueEntry?.speaker, dialogueEntry?.characterId);
             // Pagination state resets completely for every new entry — see
             // dialoguePager.reset() (also called from _closeDialogueThen()
             // and clearScene() for the close/scene-transition cases).
@@ -5475,7 +5590,18 @@ const sceneRenderer = {
         }
     },
 
+    /**
+     * Speaker -> sprite resolution priority: explicit dialogueEntry.characterId
+     * first (exact, unambiguous), then exact character id/name match, then
+     * fuzzy name matching, then zone fallback last.
+     */
     _resolveDialogueCharacter(zoneName, dialogueEntry) {
+        const characterId = (dialogueEntry?.characterId || '').trim();
+        if (characterId) {
+            const byCharacterId = document.querySelector(`#character-layer .character-sprite[data-character-id="${characterId}"]`);
+            if (byCharacterId) return byCharacterId;
+        }
+
         const speakerName = (dialogueEntry?.speaker || '').toUpperCase().trim();
         const normalizeSpeakerToken = (value) => (value || '')
             .toUpperCase()
@@ -5555,13 +5681,24 @@ const sceneRenderer = {
         const isRightZone = zoneName.startsWith('right');
         const isSecondaryZone = zoneName.endsWith('-2');
 
-        // Anchor point: above character head (scene-container local coords)
-        // Secondary speakers get a slight inward bias so the bubble reads like the examples.
+        // Anchor point: above character head (scene-container local coords).
+        // headAnchorX/headAnchorY (fractions 0-1 of the sprite's OWN box)
+        // are authored per-character metadata for where the visible head
+        // actually sits — most sprite PNGs have transparent padding above
+        // the head, so charRect.top alone is not the head. When a character
+        // doesn't carry that metadata, fall back to the previous zone-based
+        // heuristic (secondary speakers get a slight inward bias) so
+        // existing scenes render identically.
         const innerAnchorRatio = isLeftZone ? 0.58 : 0.42;
         const defaultAnchorRatio = 0.5;
-        const anchorRatio = isSecondaryZone ? innerAnchorRatio : defaultAnchorRatio;
+        const headAnchorXFrac = parseFloat(characterEl.dataset.headAnchorX);
+        const headAnchorYFrac = parseFloat(characterEl.dataset.headAnchorY);
+        const anchorRatio = Number.isFinite(headAnchorXFrac)
+            ? headAnchorXFrac
+            : (isSecondaryZone ? innerAnchorRatio : defaultAnchorRatio);
         const anchorX = charRect.left - containerRect.left + (charRect.width * anchorRatio);
-        const headY = (charRect.top - containerRect.top);
+        const headY = (charRect.top - containerRect.top)
+            + (Number.isFinite(headAnchorYFrac) ? charRect.height * headAnchorYFrac : 0);
         const extraLift = isSecondaryZone ? (isMobile ? 8 : 14) : 0;
         let topPx = headY - boxRect.height - gap - extraLift;
 
@@ -8835,10 +8972,19 @@ function hbBuildLayoutSnapshot() {
             return {
                 id: el.dataset.characterId || null,
                 zone: el.dataset.zone || null,
+                slot: el.dataset.slot || null,
                 name: el.dataset.characterName || null,
                 rect,
                 visible: el.classList.contains('visible'),
-                outsideSafeArea: hbRectOutsideArea(rect, safeArea)
+                outsideSafeArea: hbRectOutsideArea(rect, safeArea),
+                layout: {
+                    scale: parseFloat(el.style.getPropertyValue('--char-scale')) || 1,
+                    offsetX: parseFloat(el.dataset.offsetX) || 0,
+                    offsetY: parseFloat(el.dataset.offsetY) || 0,
+                    zIndex: el.style.zIndex || null,
+                    headAnchorX: el.dataset.headAnchorX != null ? parseFloat(el.dataset.headAnchorX) : null,
+                    headAnchorY: el.dataset.headAnchorY != null ? parseFloat(el.dataset.headAnchorY) : null,
+                }
             };
         });
 
@@ -8857,6 +9003,7 @@ function hbBuildLayoutSnapshot() {
                 choices
             },
             characters,
+            characterLayoutWarnings: (sceneRenderer._lastCharacterLayoutWarnings || []).filter(w => w.sceneId === gameState.currentSceneId),
             missingAssets: hbGetMissingAssetInfo()
         };
     } catch (error) {
@@ -8910,14 +9057,20 @@ function hbValidateLayout() {
             }
         });
 
-        // Missing visible speaker sprite (character-speech dialogue only)
+        // Missing visible speaker sprite (character-speech dialogue only).
+        // Resolution mirrors sceneRenderer's own priority: characterId
+        // first (exact), then exact name match.
         const isNarration = !entry || !entry.speaker || entry.speaker === 'NARRATION' || entry.speaker === 'SYSTEM';
         const isChoiceEntry = entry && (entry.speaker === 'CHOICE' || entry.speaker === 'FINAL CHOICE');
         if (entry && !isNarration && !isChoiceEntry) {
             const speakerName = String(entry.speaker || '').toUpperCase();
-            const match = snapshot.characters.find(c => (c.name || '').toUpperCase() === speakerName);
+            const characterId = entry.characterId || null;
+            const match = characterId
+                ? snapshot.characters.find(c => c.id === characterId)
+                : snapshot.characters.find(c => (c.name || '').toUpperCase() === speakerName);
             if (!match) {
-                violations.push({ type: 'missing-speaker-sprite', severity: 'error', message: `No character sprite found in scene for speaker "${entry.speaker}"` });
+                const label = characterId ? `characterId "${characterId}"` : `speaker "${entry.speaker}"`;
+                violations.push({ type: 'missing-speaker-sprite', severity: 'error', message: `No character sprite found in scene for ${label}` });
             } else if (!match.visible || !match.rect || !match.rect.visible) {
                 violations.push({ type: 'missing-speaker-sprite', severity: 'error', message: `Speaker "${entry.speaker}" sprite is present but not visibly rendered`, character: match });
             }
@@ -8933,6 +9086,14 @@ function hbValidateLayout() {
             if (count > 1) {
                 violations.push({ type: 'duplicate-character-id', severity: 'error', message: `Character id "${id}" appears ${count} times in the scene`, id, count });
             }
+        });
+
+        // Duplicate slots — recorded by normalizeCharacterZones() when two
+        // scene characters claim the same slot/position instead of one
+        // silently being remapped.
+        (snapshot.characterLayoutWarnings || []).forEach(w => {
+            if (w.type !== 'duplicate-slot') return;
+            violations.push({ type: 'duplicate-slot', severity: 'error', message: `Duplicate character slot "${w.slot}" claimed by: ${w.characters.join(', ')}`, slot: w.slot, characters: w.characters });
         });
 
         // Missing image assets already reported by the loader
