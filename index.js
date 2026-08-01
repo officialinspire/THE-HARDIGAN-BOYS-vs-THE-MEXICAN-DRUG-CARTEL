@@ -3395,6 +3395,559 @@ const positioningSystem = {
 };
 
 
+// ===== DIALOGUE PAGINATION SYSTEM =====
+// THE single system that decides how dialogue text (speech AND narration)
+// is split across pages, and what the action area (continue/more/choices)
+// looks like on each page. Replaces two previously-overlapping systems (a
+// dead "bubble paging" implementation and a live "generic dialogue paging"
+// implementation) that measured fit by mutating the LIVE typewriter DOM and
+// only discovered the continue-button/choices footprint after deciding
+// whether text fit.
+//
+// Pipeline (see render()):
+//   1. resolve final dialogue layout rectangle   (sceneRenderer.layoutDialogue)
+//   2. wait for required fonts                   (document.fonts.ready, timeout)
+//   3. calculate available content height         (_getAvailableContentHeightPx)
+//   4. measure speaker, text, action area, padding (_measure, offscreen clone)
+//   5. paginate text at word/sentence boundaries   (_paginate)
+//   6. render/type the selected page               (_renderPage)
+//   7. render the correct action area               (_finalizePageAction)
+//   8. run a final overflow assertion                (_assertNoOverflow)
+//
+// Font size is NOT dynamically shrunk anywhere in this system — floors are
+// the CSS clamp() values already in styles.css (see --dlg-text-size etc.),
+// which are the single source of truth for "explicit readable font floors".
+// Pagination is the only adaptive mechanism for making content fit.
+const dialoguePager = {
+    FONTS_READY_TIMEOUT_MS: 300,
+    PAGE_SAFETY_MARGIN_PX: 4,
+
+    // State for the entry currently being displayed. Fully replaced (never
+    // patched) by render(), and cleared by reset() — see reset() call sites
+    // in sceneRenderer (showDialogue, _closeDialogueThen, clearScene) for
+    // the "resets completely between entries and scenes" guarantee.
+    state: null,
+    _activeToken: 0,
+    _measureClone: null,
+
+    reset() {
+        this.state = null;
+        this._activeToken++;
+        const choicesDiv = document.getElementById('dialogue-choices');
+        if (choicesDiv) choicesDiv.style.maxHeight = '';
+    },
+
+    // ===== offscreen measurement clone =====
+    // A hidden, off-screen mirror of #dialogue-content's structure. All
+    // pagination measurement happens against this clone's elements, never
+    // against the live #dialogue-text/#dialogue-speaker/#dialogue-choices —
+    // so measuring never corrupts (or races with) the live typewriter DOM.
+    _getMeasureClone() {
+        if (this._measureClone && document.body.contains(this._measureClone.root)) {
+            return this._measureClone;
+        }
+
+        const root = document.createElement('div');
+        root.className = 'dlg-measure-root';
+        root.setAttribute('aria-hidden', 'true');
+
+        const content = document.createElement('div');
+        content.className = 'dlg-measure-content';
+        const speaker = document.createElement('div');
+        speaker.className = 'dlg-measure-speaker';
+        const text = document.createElement('div');
+        text.className = 'dlg-measure-text';
+        const actionArea = document.createElement('div');
+        actionArea.className = 'dlg-measure-action';
+        const choices = document.createElement('div');
+        choices.className = 'dlg-measure-choices';
+        const continueBtn = document.createElement('div');
+        continueBtn.className = 'dlg-measure-continue';
+
+        actionArea.appendChild(choices);
+        actionArea.appendChild(continueBtn);
+        content.appendChild(speaker);
+        content.appendChild(text);
+        content.appendChild(actionArea);
+        root.appendChild(content);
+        document.body.appendChild(root);
+
+        const clone = { root, content, speaker, text, actionArea, choices, continueBtn };
+        this._measureClone = clone;
+        return clone;
+    },
+
+    /** Copies the resolved (computed) styles that affect sizing from the live, correctly-CSS-matched elements onto the clone's inline styles. */
+    _syncMeasureClone(clone, live, containerWidthPx) {
+        const copyProps = (from, to, props) => {
+            const cs = getComputedStyle(from);
+            props.forEach(p => { to.style[p] = cs[p]; });
+        };
+
+        clone.content.style.width = containerWidthPx + 'px';
+        copyProps(live.content, clone.content, ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'rowGap', 'columnGap', 'gap']);
+
+        copyProps(live.speaker, clone.speaker, [
+            'fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'letterSpacing',
+            'textTransform', 'marginBottom', 'marginTop', 'whiteSpace', 'width'
+        ]);
+        clone.speaker.style.textAlign = getComputedStyle(live.speaker).textAlign;
+
+        copyProps(live.text, clone.text, [
+            'fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'letterSpacing',
+            'marginBottom', 'padding', 'wordBreak', 'overflowWrap', 'hyphens', 'width'
+        ]);
+        clone.text.style.whiteSpace = 'pre-wrap';
+        clone.text.style.textAlign = getComputedStyle(live.text).textAlign;
+        clone.text.style.maxHeight = 'none';
+
+        copyProps(live.continueBtn, clone.continueBtn, ['fontSize', 'fontFamily', 'padding', 'minHeight', 'minWidth', 'lineHeight', 'marginTop']);
+
+        const choicesCs = getComputedStyle(live.choices);
+        clone.choices.style.display = choicesCs.display;
+        clone.choices.style.flexDirection = choicesCs.flexDirection;
+        clone.choices.style.gap = choicesCs.gap;
+        clone.choices.style.marginTop = choicesCs.marginTop;
+        clone.choices.style.width = choicesCs.width;
+    },
+
+    /** One real (but detached/invisible) choice button, styled like the live ones, for accurate height measurement. */
+    _buildMeasureChoiceButton(liveClassSample, text) {
+        const btn = document.createElement('button');
+        btn.className = 'dialogue-choice';
+        btn.textContent = text;
+        btn.style.position = 'static';
+        return btn;
+    },
+
+    // ===== fonts =====
+    async _waitForFonts() {
+        if (!document.fonts || !document.fonts.ready) return;
+        try {
+            await Promise.race([
+                document.fonts.ready,
+                new Promise(resolve => setTimeout(resolve, this.FONTS_READY_TIMEOUT_MS))
+            ]);
+        } catch (_) {
+            // Font loading failed/unsupported — proceed with whatever fonts
+            // are currently active rather than blocking dialogue forever.
+        }
+    },
+
+    // ===== available height =====
+    _getAvailableContentHeightPx(dialogueBox, container, content) {
+        const containerStyle = getComputedStyle(container);
+        let maxH = parseFloat(container.style.maxHeight);
+        if (!Number.isFinite(maxH)) maxH = parseFloat(containerStyle.maxHeight);
+
+        if (!Number.isFinite(maxH)) {
+            // No explicit cap active (e.g. character/top-center placement, or
+            // a mode with no matching max-height rule) — fall back to the
+            // live safe area so pages are never planned to overlap the HUD
+            // or run off-screen.
+            const safe = positioningSystem.getDialogueSafeRect();
+            const boxRect = dialogueBox.getBoundingClientRect();
+            maxH = safe ? Math.max(120, safe.bottom - boxRect.top) : 300;
+        }
+
+        const contentStyle = getComputedStyle(content);
+        const paddingV = (parseFloat(contentStyle.paddingTop) || 0) + (parseFloat(contentStyle.paddingBottom) || 0);
+        return Math.max(60, maxH - paddingV);
+    },
+
+    // ===== measuring speaker / action area / budget =====
+    _measure(dialogueBox, dialogueEntry) {
+        const container = document.getElementById('dialogue-container');
+        const content = document.getElementById('dialogue-content');
+        const speakerEl = document.getElementById('dialogue-speaker');
+        const textEl = document.getElementById('dialogue-text');
+        const choicesEl = document.getElementById('dialogue-choices');
+        const continueEl = document.getElementById('dialogue-continue');
+
+        const clone = this._getMeasureClone();
+        const containerWidthPx = container.getBoundingClientRect().width;
+        this._syncMeasureClone(clone, { content, speaker: speakerEl, text: textEl, choices: choicesEl, continueBtn: continueEl }, containerWidthPx);
+
+        const availableContentHeight = this._getAvailableContentHeightPx(dialogueBox, container, content);
+
+        // Speaker: an empty speaker (narration) costs nothing; otherwise
+        // measure its real border-box height on the clone. getBoundingClientRect()
+        // never includes margin, so margin-bottom (the actual inter-block spacing
+        // in speech-bubble/default mode — narrative mode uses #dialogue-content's
+        // gap instead) is measured separately below and added on top.
+        const speakerText = speakerEl.textContent || '';
+        clone.speaker.textContent = speakerText;
+        const speakerHeight = speakerText ? clone.speaker.getBoundingClientRect().height : 0;
+        const speakerMarginPx = speakerHeight > 0 ? (parseFloat(getComputedStyle(clone.speaker).marginBottom) || 0) : 0;
+        const textMarginPx = parseFloat(getComputedStyle(clone.text).marginBottom) || 0;
+
+        // Action area: whichever will actually be shown once the FINAL page
+        // is reached — choices (if any) are always taller than a single
+        // continue button, so budgeting for them up front means the last
+        // page never has to fight the choices panel for space afterward.
+        const hasChoices = Array.isArray(dialogueEntry.choices) && dialogueEntry.choices.length > 0;
+        let actionAreaHeight = 0;
+        let actionAreaMarginPx = 0;
+        if (hasChoices) {
+            clone.choices.innerHTML = '';
+            dialogueEntry.choices.forEach(choice => {
+                clone.choices.appendChild(this._buildMeasureChoiceButton(null, choice.text || ''));
+            });
+            actionAreaHeight = clone.choices.getBoundingClientRect().height;
+            actionAreaMarginPx = parseFloat(getComputedStyle(clone.choices).marginTop) || 0;
+        } else if (dialogueEntry.next) {
+            clone.continueBtn.textContent = 'continue';
+            actionAreaHeight = clone.continueBtn.getBoundingClientRect().height;
+            actionAreaMarginPx = parseFloat(getComputedStyle(clone.continueBtn).marginTop) || 0;
+        }
+
+        const contentStyle = getComputedStyle(content);
+        const gapPx = parseFloat(contentStyle.rowGap) || parseFloat(contentStyle.gap) || 0;
+        const blockCount = 1 + (speakerHeight > 0 ? 1 : 0) + (actionAreaHeight > 0 ? 1 : 0);
+        const gapsTotal = gapPx * Math.max(0, blockCount - 1);
+
+        const textBudgetPx = Math.max(24, availableContentHeight - speakerHeight - speakerMarginPx - actionAreaHeight - actionAreaMarginPx - gapsTotal - textMarginPx - this.PAGE_SAFETY_MARGIN_PX);
+
+        return { clone, container, content, speakerEl, textEl, choicesEl, continueEl, availableContentHeight, speakerHeight, actionAreaHeight, textBudgetPx, hasChoices };
+    },
+
+    // ===== pagination =====
+    /** Splits fullText into pages that each fit within textBudgetPx, using the offscreen clone. Sentence boundaries are preferred, then words. Never caps the page count — a page that would still overflow is split further instead of being merged. */
+    _paginate(metrics, fullText) {
+        const clone = metrics.clone;
+        const textBudgetPx = metrics.textBudgetPx;
+
+        // Preserve intentional line breaks (the typewriter supports them —
+        // see getCharDelay's '\n' handling) but collapse incidental runs of
+        // horizontal whitespace/blank lines from source formatting.
+        const txt = String(fullText || '')
+            .replace(/[ \t]+/g, ' ')
+            .replace(/\n{3,}/g, '\n\n')
+            .replace(/ *\n */g, '\n')
+            .trim();
+        if (!txt) return [''];
+
+        const fits = (candidate) => {
+            clone.text.textContent = candidate;
+            return clone.text.scrollHeight <= textBudgetPx + 0.5;
+        };
+
+        if (fits(txt)) return [txt];
+
+        // Prefer paragraph, then sentence, then word boundaries.
+        const paragraphs = txt.split(/\n{2,}/);
+        const sentenceUnits = [];
+        paragraphs.forEach((para, i) => {
+            const sentences = para.split(/(?<=[.!?])\s+/).filter(Boolean);
+            sentences.forEach((s, j) => {
+                sentenceUnits.push(j === 0 && i > 0 ? '\n\n' + s : s);
+            });
+        });
+        const units = sentenceUnits.length > 1 ? sentenceUnits : txt.split(' ');
+
+        const splitToWords = (unit) => {
+            const words = unit.split(' ');
+            const result = [];
+            let buf = '';
+            for (const w of words) {
+                const trial = buf ? `${buf} ${w}` : w;
+                if (fits(trial)) {
+                    buf = trial;
+                } else {
+                    if (buf) result.push(buf);
+                    // A lone word that still doesn't fit the budget is a
+                    // floor/box-size mismatch pagination can't solve by
+                    // itself — emit it anyway rather than looping forever;
+                    // the final overflow assertion will flag it in dev.
+                    buf = w;
+                }
+            }
+            if (buf) result.push(buf);
+            return result.length ? result : [unit];
+        };
+
+        const pages = [];
+        let current = '';
+        for (const unit of units) {
+            const next = current ? `${current} ${unit}` : unit;
+            if (fits(next)) {
+                current = next;
+                continue;
+            }
+            if (current) pages.push(current);
+            if (fits(unit)) {
+                current = unit;
+            } else {
+                const forced = splitToWords(unit);
+                pages.push(...forced.slice(0, -1));
+                current = forced[forced.length - 1] || '';
+            }
+        }
+        if (current) pages.push(current);
+
+        return pages.length ? pages : [txt];
+    },
+
+    // ===== choices panel clamp (post-render, after real buttons exist) =====
+    /** For many/long choices: makes ONLY #dialogue-choices internally scrollable within the remaining safe-panel space, rather than letting it overflow the container or hiding the overflow outright. */
+    _clampChoicesPanel(dialogueBox) {
+        const container = document.getElementById('dialogue-container');
+        const content = document.getElementById('dialogue-content');
+        const speakerEl = document.getElementById('dialogue-speaker');
+        const textEl = document.getElementById('dialogue-text');
+        const choicesEl = document.getElementById('dialogue-choices');
+        if (!container || !content || !choicesEl) return;
+
+        const availableContentHeight = this._getAvailableContentHeightPx(dialogueBox, container, content);
+        const contentStyle = getComputedStyle(content);
+        const gapPx = parseFloat(contentStyle.rowGap) || parseFloat(contentStyle.gap) || 0;
+        const speakerH = speakerEl && speakerEl.textContent ? speakerEl.getBoundingClientRect().height : 0;
+        const speakerMarginPx = speakerH > 0 ? (parseFloat(getComputedStyle(speakerEl).marginBottom) || 0) : 0;
+        const textH = textEl ? textEl.getBoundingClientRect().height : 0;
+        const textMarginPx = textEl ? (parseFloat(getComputedStyle(textEl).marginBottom) || 0) : 0;
+        const choicesMarginPx = parseFloat(getComputedStyle(choicesEl).marginTop) || 0;
+        const blockCount = 1 + (speakerH > 0 ? 1 : 0) + (textH > 0 ? 1 : 0);
+        const usedBySiblings = speakerH + speakerMarginPx + textH + textMarginPx + choicesMarginPx + gapPx * Math.max(0, blockCount - 1);
+        const choicesBudget = Math.max(60, availableContentHeight - usedBySiblings);
+
+        if (choicesEl.scrollHeight > choicesBudget + 1) {
+            choicesEl.style.maxHeight = choicesBudget + 'px';
+        } else {
+            choicesEl.style.maxHeight = '';
+        }
+    },
+
+    // ===== final overflow assertion =====
+    /** Marks dialogueBox.dataset.overflow and warns in DEBUG if the container/content/text still overflow their own box after everything has rendered. An element whose own overflow-y is auto/scroll is excluded — that's a deliberate, reachable scrollbar (e.g. #dialogue-container.narrative-mode's compact-landscape fallback, or #dialogue-choices — see _clampChoicesPanel), not silent clipping. */
+    _assertNoOverflow(dialogueBox) {
+        const container = document.getElementById('dialogue-container');
+        const content = document.getElementById('dialogue-content');
+        const text = document.getElementById('dialogue-text');
+
+        const isScrollable = (el) => {
+            const overflowY = getComputedStyle(el).overflowY;
+            return overflowY === 'auto' || overflowY === 'scroll';
+        };
+        const overflowing = [container, content, text].some(el =>
+            el && el.scrollHeight > el.clientHeight + 1 && !isScrollable(el)
+        );
+        dialogueBox.dataset.overflow = overflowing ? 'true' : 'false';
+
+        if (overflowing && DEBUG) {
+            console.warn('[dialoguePager] dialogue box still overflows after pagination — this should not happen; the final page/floor combination does not fit.', {
+                speaker: this.state?.entry?.speaker,
+                page: this.state ? `${this.state.pageIndex + 1}/${this.state.pages.length}` : null,
+                container: container && { scrollHeight: container.scrollHeight, clientHeight: container.clientHeight },
+                content: content && { scrollHeight: content.scrollHeight, clientHeight: content.clientHeight },
+                text: text && { scrollHeight: text.scrollHeight, clientHeight: text.clientHeight },
+            });
+        }
+    },
+
+    // ===== main pipeline =====
+    /** Steps 1-5: resolve layout, wait for fonts, measure, and paginate. Does not render anything yet — call renderCurrentPage() (via sceneRenderer) to show the first page. */
+    async prepare(dialogueBox, dialogueEntry, sceneRendererRef) {
+        const token = ++this._activeToken;
+
+        // 1. resolve final dialogue layout rectangle
+        let layoutMode = sceneRendererRef.layoutDialogue(dialogueBox, dialogueEntry);
+
+        // 2. wait for required fonts (safe timeout)
+        await this._waitForFonts();
+        if (token !== this._activeToken) return null; // superseded by a newer entry
+
+        // Geometry can shift slightly once web fonts swap in — re-resolve
+        // before measuring so step 3/4 read the settled box.
+        layoutMode = sceneRendererRef.layoutDialogue(dialogueBox, dialogueEntry);
+
+        // 3 + 4. calculate available height; measure speaker/text/action-area/padding
+        const metrics = this._measure(dialogueBox, dialogueEntry);
+
+        // 5. paginate text at word/sentence boundaries
+        const pages = this._paginate(metrics, dialogueEntry.text || '');
+
+        this.state = { entry: dialogueEntry, pages, pageIndex: 0, layoutMode, metrics, token };
+        return this.state;
+    },
+
+    /** Steps 6-8 for the current page: type it out, wire the tap/click
+     * advance behavior, and (once typing finishes) render the correct
+     * action area and run the overflow assertion. */
+    renderCurrentPage(dialogueBox, sceneRendererRef) {
+        const s = this.state;
+        if (!s) return;
+        const { pages, pageIndex } = s;
+        const pageText = pages[pageIndex];
+        const isLastPage = pageIndex === pages.length - 1;
+        const textEl = document.getElementById('dialogue-text');
+        const continueBtn = document.getElementById('dialogue-continue');
+        const choicesDiv = document.getElementById('dialogue-choices');
+
+        sceneRendererRef._cleanupTypewriter(textEl);
+        textEl.textContent = '';
+        choicesDiv.innerHTML = '';
+        choicesDiv.style.maxHeight = '';
+
+        // The continue/more button is always the visible action while a page
+        // is typing — choices (if any) only replace it once the LAST page's
+        // text has fully finished (see _finalizePageAction).
+        continueBtn.classList.remove('hidden');
+        continueBtn.textContent = isLastPage ? 'continue' : 'more...';
+        continueBtn.setAttribute('aria-label', isLastPage ? 'Continue dialogue' : 'Show more dialogue');
+        continueBtn.onclick = () => this._onActionClick(dialogueBox, sceneRendererRef);
+
+        sceneRendererRef.typeText(textEl, pageText, {
+            onFinish: () => {
+                this._finalizePageAction(dialogueBox, sceneRendererRef, isLastPage);
+                this._assertNoOverflow(dialogueBox);
+            }
+        });
+    },
+
+    /** First tap while typing completes the current page; the next tap
+     * advances (to the next page, or — on the last page with no choices —
+     * to whatever the entry's `next` specifies). */
+    _onActionClick(dialogueBox, sceneRendererRef) {
+        const textEl = document.getElementById('dialogue-text');
+        if (sceneRendererRef.isTyping) {
+            sceneRendererRef.finishTypeText(textEl);
+            return;
+        }
+        if (gameState.actionLock || sceneRendererRef.isTransitioning) return;
+
+        const s = this.state;
+        if (!s) return;
+        const isLastPage = s.pageIndex === s.pages.length - 1;
+
+        if (!isLastPage) {
+            SFXGenerator.playContinueButton();
+            s.pageIndex++;
+            this.renderCurrentPage(dialogueBox, sceneRendererRef);
+            return;
+        }
+
+        // Last page, no choices — choices replace the continue button
+        // entirely once typing finishes, so reaching here means a plain
+        // `next` advance (scene change, function, or next dialogue line).
+        gameState.actionLock = true;
+        gameState.dialogueLock = false;
+        SFXGenerator.playContinueButton();
+        sceneRendererRef._closeDialogueThen(() => {
+            sceneRendererRef._advanceDialogueEntry(s.entry);
+            gameState.actionLock = false;
+        });
+    },
+
+    /** Step 7: render the action area appropriate to this entry, once the
+     * last page's text has fully typed out. Intermediate pages keep the
+     * "more..." button already wired by renderCurrentPage(). */
+    _finalizePageAction(dialogueBox, sceneRendererRef, isLastPage) {
+        if (!isLastPage) return;
+
+        const entry = this.state.entry;
+        const continueBtn = document.getElementById('dialogue-continue');
+
+        if (entry.choices && entry.choices.length > 0) {
+            continueBtn.classList.add('hidden');
+            continueBtn.onclick = null;
+            this._renderChoices(entry, sceneRendererRef);
+            // Measure/clamp AFTER the real choice buttons are in the DOM.
+            this._clampChoicesPanel(dialogueBox);
+        } else if (entry.next) {
+            continueBtn.classList.remove('hidden');
+            continueBtn.textContent = 'continue';
+            continueBtn.setAttribute('aria-label', 'Continue dialogue');
+            // onclick is already _onActionClick from renderCurrentPage, which
+            // now resolves to "last page, no choices" -> advance the entry.
+        } else {
+            continueBtn.classList.add('hidden');
+            setTimeout(() => {
+                gameState.dialogueLock = false;
+                sceneRendererRef._closeDialogueThen(() => sceneRendererRef.nextDialogue());
+            }, 3000);
+        }
+    },
+
+    /** Builds the real, interactive choice buttons (single implementation —
+     * previously duplicated once for single-page entries and once inside
+     * the old per-page pagination renderer). */
+    _renderChoices(dialogueEntry, sceneRendererRef) {
+        const choicesDiv = document.getElementById('dialogue-choices');
+        choicesDiv.innerHTML = '';
+
+        dialogueEntry.choices.forEach(choice => {
+            const btn = document.createElement('button');
+            btn.className = 'dialogue-choice';
+            btn.textContent = choice.text;
+            let touchStartTime = 0;
+            let touchStartPos = null;
+
+            const handleChoiceClick = () => {
+                if (gameState.actionLock || sceneRendererRef.isTransitioning) return;
+                gameState.actionLock = true;
+                gameState.dialogueLock = false;
+                SFXGenerator.playButtonClick();
+                if (choice.action) choice.action();
+                gameState.actionLock = false;
+            };
+
+            const handleInteraction = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.type === 'click' && touchStartTime > Date.now() - 500) return;
+                if (e.type === 'touchend' && touchStartPos) {
+                    const t = e.changedTouches[0];
+                    if (Math.abs(t.clientX - touchStartPos.x) > 10 || Math.abs(t.clientY - touchStartPos.y) > 10) return;
+                }
+                handleChoiceClick();
+            };
+
+            btn.addEventListener('touchstart', (e) => {
+                touchStartTime = Date.now();
+                const t = e.touches[0];
+                touchStartPos = { x: t.clientX, y: t.clientY };
+            }, { passive: true });
+            btn.addEventListener('touchend', handleInteraction, { passive: false });
+            btn.addEventListener('click', handleInteraction);
+            choicesDiv.appendChild(btn);
+        });
+
+        // Preload assets for scenes the choices might lead to (gives the
+        // player's reading time as a preload window).
+        dialogueEntry.choices.forEach(choice => {
+            if (!choice.action) return;
+            const actionStr = choice.action.toString();
+            Object.keys(SCENES).forEach(sceneId => {
+                if (actionStr.includes(`'${sceneId}'`) || actionStr.includes(`"${sceneId}"`)) {
+                    const targetScene = SCENES[sceneId];
+                    if (targetScene) {
+                        assetLoader.lazyLoadSceneAssets(targetScene);
+                        if (targetScene.background) {
+                            assetLoader.preloadSingleAsset(targetScene.background, { logErrors: false });
+                        }
+                    }
+                }
+            });
+        });
+    },
+
+    /** Called on resize/orientation change for an already-displayed entry.
+     * Repositioning itself is handled by sceneRenderer (layoutDialogue +
+     * clamp) before this runs — this only re-clamps the choices panel (its
+     * budget depends on the container's current size) and re-asserts
+     * overflow. Never re-paginates: jumping the reader to a different page
+     * mid-read would be more jarring than a rare, brief size mismatch.
+     */
+    reflow(dialogueBox) {
+        if (!this.state) return;
+        const choicesDiv = document.getElementById('dialogue-choices');
+        if (choicesDiv && choicesDiv.children.length > 0) {
+            this._clampChoicesPanel(dialogueBox);
+        }
+        this._assertNoOverflow(dialogueBox);
+    },
+};
+
 // ===== SCENE RENDERING =====
 const sceneRenderer = {
     currentScene: null,
@@ -3419,20 +3972,6 @@ const sceneRenderer = {
     },
     isTyping: false,
 
-    // Bubble pagination state
-    _bubblePages: null,
-    _bubblePageIndex: 0,
-    _bubblePagingActive: false,
-    _bubbleFullText: '',
-    _bubbleTypingDone: true,
-
-    // Generic dialogue pagination state (covers all layout types)
-    _dialoguePages: null,
-    _dialoguePageIndex: 0,
-    _dialoguePagingActive: false,
-    _dialogueFullText: '',
-    _dialoguePagingMeta: null,
-
     _bindDialogueTapHandlers() {
         const dialogueBox = document.getElementById('dialogue-box');
         if (!dialogueBox || dialogueBox.dataset.tapHandlerBound === 'true') return;
@@ -3451,18 +3990,10 @@ const sceneRenderer = {
                 return;
             }
 
-            // If generic paging is active, tap delegates to the Continue button
-            if (this._dialoguePagingActive) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (continueBtn && !continueBtn.classList.contains('hidden')) {
-                    continueBtn.click();
-                } else if (this.isTyping) {
-                    this._finishTypewriterInstant();
-                }
-                return;
-            }
-
+            // dialoguePager wires #dialogue-continue's onclick identically for
+            // every page (single or multi) — first tap finishes typing (via
+            // this same isTyping check), the next tap advances. No separate
+            // "paging active" branch needed.
             if (this.isTyping) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -3615,13 +4146,6 @@ const sceneRenderer = {
         if (!el?._typeTextController) return false;
         el._typeTextController.finish();
         return true;
-    },
-
-    _finishTypewriterInstant() {
-        const textEl = document.getElementById('dialogue-text');
-        if (!textEl) return;
-        this.finishTypeText(textEl);
-        this._bubbleTypingDone = true;
     },
 
     cancelTypeText(el) {
@@ -4425,6 +4949,7 @@ const sceneRenderer = {
                 document.getElementById('hotspot-layer').replaceChildren();
                 this.currentHotspots = [];
                 this._cleanupTypewriter(document.getElementById('dialogue-text'));
+                dialoguePager.reset();
                 document.getElementById('dialogue-box').classList.add('hidden');
 
                 // Remove police light effect if present
@@ -4686,6 +5211,10 @@ const sceneRenderer = {
             this._bindDialogueTapHandlers();
             gameState.currentDialogueEntry = dialogueEntry;
             this._setSpeakingCharacter(dialogueEntry?.speaker);
+            // Pagination state resets completely for every new entry — see
+            // dialoguePager.reset() (also called from _closeDialogueThen()
+            // and clearScene() for the close/scene-transition cases).
+            dialoguePager.reset();
 
             // Block dialogue during scene transitions
             if (this.isTransitioning) {
@@ -4759,7 +5288,7 @@ const sceneRenderer = {
             dialogueBox.classList.add('dialogue-positioning');
             // Make the box layout-visible (but opacity-hidden) before measurements.
             // .hidden uses display:none !important which makes getBoundingClientRect()
-            // return all-zeros, breaking _fitSpeechBubbleText and positioning logic.
+            // return all-zeros, breaking dialoguePager measurement and positioning logic.
             dialogueBox.classList.remove('hidden');
 
             // Clear previous position/size classes and inline overrides from the prior
@@ -4817,50 +5346,29 @@ const sceneRenderer = {
                 dialogueBox.dataset.zone = pos;
             }
 
-            // Canonical layout pass 1 (pre-fit): establishes box geometry (position,
-            // and width/height for authored/zone-slot modes) via layoutDialogue() so
-            // _fitSpeechBubbleText() below measures against the correct box width.
-            // See layoutDialogue() for the full precedence and single-source-of-truth
-            // rationale — this replaces the old duplicate bubbleLayout application.
-            this.layoutDialogue(dialogueBox, dialogueEntry);
-
-            const dialogueText = dialogueEntry.text || '';
-
             this._activeDialogueEntry = dialogueEntry;
 
-            this._bubblePagingActive = false;
-            this._bubblePages = null;
-            this._bubblePageIndex = 0;
-            this._bubbleFullText = '';
-            this._bubbleTypingDone = true;
-            this._setBubblePagingUI?.(dialogueBox, false);
-            this._resetDialoguePaging();
+            // The dialoguePager pipeline (see its own docstring for the full
+            // 8-step breakdown):
+            //   1. resolve layout rect      -> layoutDialogue() (pre-fit pass)
+            //   2. wait for fonts           -> document.fonts.ready + timeout
+            //   3-4. measure available height, speaker, action area, padding
+            //   5. paginate at word/sentence boundaries
+            // prepare() runs 1-5 and returns null only if a newer entry
+            // superseded this call while awaiting fonts.
+            const pagerState = await dialoguePager.prepare(dialogueBox, dialogueEntry, this);
+            if (!pagerState) return;
 
-            // Reserve the continue-button/choices footprint BEFORE measuring —
-            // they're normally hidden until after typing starts, so without
-            // this the fit/pagination checks below under-count the bubble's
-            // true final height and text can end up taller than the visible
-            // container once the button/choices are revealed. Released again
-            // just before typeText() (single-page path) or inside
-            // _showDialoguePage() (paginated path, which rebuilds them anyway).
-            this._reserveActionSpaceForFit(dialogueEntry);
-
-            // Fit text into stable bubble container (speech-bubble mode only, all screen sizes)
-            this._fitSpeechBubbleText(dialogueBox, dialogueText);
-
-            // Canonical layout pass 2 (post-fit): re-resolves the SAME entry through
-            // layoutDialogue(), finalizing position now that box size has settled.
-            // This never "changes" the mode — it's a pure function of dialogueEntry —
-            // it only refines the pixel output for modes whose placement depends on
-            // current box size (character-relative, narrative centering).
-            let layoutMode = this.layoutDialogue(dialogueBox, dialogueEntry);
+            this._debugAssertAuthoredLayout(dialogueBox, dialogueEntry, pagerState.layoutMode);
+            this._clampDialogueToViewport(dialogueBox, { preserveCentered: pagerState.layoutMode === 'narrative' });
+            Dev.layout.applySavedLayouts();
 
             // The delayed re-anchor exists so a still-sliding-in character can be
             // re-measured once its animation settles. Only meaningful for explicit
             // character-relative mode — authored/zone-slot rects never depend on
             // character position, so they must never be re-anchored here.
             clearTimeout(this._dialogueReanchorTimer);
-            if (layoutMode === 'character') {
+            if (pagerState.layoutMode === 'character') {
                 this._dialogueReanchorTimer = setTimeout(() => {
                     if (this._activeDialogueEntry !== dialogueEntry || dialogueBox.classList.contains('hidden')) return;
                     this.layoutDialogue(dialogueBox, dialogueEntry);
@@ -4868,150 +5376,24 @@ const sceneRenderer = {
                 }, 180);
             }
 
-            this._debugAssertAuthoredLayout(dialogueBox, dialogueEntry, layoutMode);
-            this._clampDialogueToViewport(dialogueBox, { preserveCentered: layoutMode === 'narrative' });
+            // 6-8: type the first page, wire tap/advance, render the action
+            // area once typing finishes, and assert no overflow.
+            dialoguePager.renderCurrentPage(dialogueBox, this);
 
-            // Generic pagination: check all layout types for overflow before displaying
-            const pages = this._splitIntoDialoguePages(dialogueBox, dialogueText, 6);
-            if (pages.length > 1) {
-                this._dialoguePages = pages;
-                this._dialoguePageIndex = 0;
-                this._dialogueFullText = dialogueText;
-                this._dialoguePagingActive = true;
-                this._dialoguePagingMeta = {
-                    speaker: dialogueEntry.speaker || '',
-                    position: dialogueEntry.position || '',
-                    entryRef: dialogueEntry
-                };
-                // Ensure bubble tap hint is hidden — Continue button drives pagination
-                this._setBubblePagingUI(dialogueBox, false);
-                this._releaseReservedActionSpace();
-                this._showDialoguePage(pages[0], dialogueEntry);
-                // Reveal after positioning settles. Reapply the already-resolved
-                // mode once more (never re-deciding it) so late-settling fonts/
-                // bubble art don't leave a stale rect from the pre-settle pass.
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        const settledMode = this.layoutDialogue(dialogueBox, dialogueEntry);
-                        this._clampDialogueToViewport(dialogueBox, { preserveCentered: settledMode === 'narrative' });
-                        dialogueBox.classList.remove('dialogue-positioning');
-                        this._animateDialogueEntry();
-                    });
-                });
-                return;
-            }
-
-            this._releaseReservedActionSpace();
-
-            this.typeText(text, dialogueText, {
-                onFinish: () => this._updateDialogueOverflowIndicator(text)
-            });
-            // Check for text overflow and add indicator
-            requestAnimationFrame(() => {
-                this._updateDialogueOverflowIndicator(text);
-            });
-            this._clampDialogueToViewport(dialogueBox, { preserveCentered: layoutMode === 'narrative' });
-            Dev.layout.applySavedLayouts();
-            this._fitMobileDialogueText(dialogueBox);
-            requestAnimationFrame(() => {
-                this._updateDialogueOverflowIndicator(text);
-            });
-
-            // Reveal after positioning settles (double-rAF ensures layout is applied).
-            // Reapply the same resolved mode once more for late-settling fonts/assets —
-            // see layoutDialogue()'s docstring for why this never changes the mode.
+            // Reveal after positioning settles (double-rAF ensures layout is
+            // applied). Reapply the same resolved mode once more for
+            // late-settling fonts/assets — see layoutDialogue()'s docstring
+            // for why this never changes the mode — then let the pager
+            // re-clamp the choices panel/re-assert against the settled box.
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
-                    layoutMode = this.layoutDialogue(dialogueBox, dialogueEntry);
-                    this._clampDialogueToViewport(dialogueBox, { preserveCentered: layoutMode === 'narrative' });
+                    const settledMode = this.layoutDialogue(dialogueBox, dialogueEntry);
+                    this._clampDialogueToViewport(dialogueBox, { preserveCentered: settledMode === 'narrative' });
+                    dialoguePager.reflow(dialogueBox);
                     dialogueBox.classList.remove('dialogue-positioning');
                     this._animateDialogueEntry();
                 });
             });
-
-            if (dialogueEntry.choices && dialogueEntry.choices.length > 0) {
-                dialogueEntry.choices.forEach(choice => {
-                    const btn = document.createElement('button');
-                    btn.className = 'dialogue-choice';
-                    btn.textContent = choice.text;
-                    let touchStartTime = 0;
-                    let touchStartPos = null;
-
-                    const handleChoiceClick = () => {
-                        if (gameState.actionLock || this.isTransitioning) return;
-                        gameState.actionLock = true;
-                        gameState.dialogueLock = false;
-                        SFXGenerator.playButtonClick();
-                        if (choice.action) {
-                            choice.action();
-                        }
-                        gameState.actionLock = false;
-                    };
-
-                    const handleInteraction = (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-
-                        // Prevent double-firing on devices that support both touch and click
-                        if (e.type === 'click' && touchStartTime > Date.now() - 500) {
-                            return;
-                        }
-
-                        // For touch events, check if this was a tap (not a scroll)
-                        if (e.type === 'touchend' && touchStartPos) {
-                            const touch = e.changedTouches[0];
-                            const deltaX = Math.abs(touch.clientX - touchStartPos.x);
-                            const deltaY = Math.abs(touch.clientY - touchStartPos.y);
-
-                            // If moved more than 10px, treat as scroll not tap
-                            if (deltaX > 10 || deltaY > 10) {
-                                return;
-                            }
-                        }
-
-                        handleChoiceClick();
-                    };
-
-                    btn.addEventListener('touchstart', (e) => {
-                        touchStartTime = Date.now();
-                        const touch = e.touches[0];
-                        touchStartPos = { x: touch.clientX, y: touch.clientY };
-                    }, { passive: true });
-
-                    btn.addEventListener('touchend', handleInteraction, { passive: false });
-                    btn.addEventListener('click', handleInteraction);
-                    choicesDiv.appendChild(btn);
-                });
-
-                // Preload assets for scenes that choices might lead to
-                // (Gives the player's reading time as preload window)
-                if (dialogueEntry.choices) {
-                    dialogueEntry.choices.forEach(choice => {
-                        // Check if the action function source mentions a scene ID
-                        if (choice.action) {
-                            const actionStr = choice.action.toString();
-                            Object.keys(SCENES).forEach(sceneId => {
-                                if (actionStr.includes(`'${sceneId}'`) || actionStr.includes(`"${sceneId}"`)) {
-                                    const targetScene = SCENES[sceneId];
-                                    if (targetScene) {
-                                        assetLoader.lazyLoadSceneAssets(targetScene);
-                                        if (targetScene.background) {
-                                            assetLoader.preloadSingleAsset(targetScene.background, { logErrors: false });
-                                        }
-                                    }
-                                }
-                            });
-                        }
-                    });
-                }
-            } else if (dialogueEntry.next) {
-                this._setupDialogueContinueButton(continueBtn, text, dialogueEntry);
-            } else {
-                setTimeout(() => {
-                    gameState.dialogueLock = false;
-                    this._closeDialogueThen(() => this.nextDialogue());
-                }, 3000);
-            }
         } catch (error) {
             errorLogger.log('dialogue-render', error, { sceneId: gameState.currentSceneId, dialogueEntry });
             const dialogueBox = document.getElementById('dialogue-box');
@@ -5024,80 +5406,22 @@ const sceneRenderer = {
         }
     },
 
-    _setupDialogueContinueButton(continueBtn, textEl, dialogueEntry) {
-        continueBtn.classList.remove('hidden');
-        continueBtn.textContent = 'continue';
-        continueBtn.setAttribute('aria-label', 'Continue dialogue');
-        continueBtn.onclick = () => {
-            if (this.isTyping) {
-                this.finishTypeText(textEl);
-                return;
-            }
-            if (gameState.actionLock || this.isTransitioning) return;
-            gameState.actionLock = true;
-            gameState.dialogueLock = false;
-            SFXGenerator.playContinueButton();
-            this._closeDialogueThen(() => {
-                if (dialogueEntry.next === 'NEXT_DIALOGUE') {
-                    this.nextDialogue();
-                } else if (typeof dialogueEntry.next === 'function') {
-                    dialogueEntry.next();
-                } else {
-                    this.loadScene(dialogueEntry.next);
-                }
-                gameState.actionLock = false;
-            });
-        };
-    },
-
-    _showBubblePage(dialogueBox, pos, dialogueEntry) {
-        const textEl = document.getElementById('dialogue-text');
-        const continueBtn = document.getElementById('dialogue-continue');
-        if (!dialogueBox || !textEl || !continueBtn || !this._bubblePages?.length) return;
-
-        const pageText = this._bubblePages[this._bubblePageIndex] || '';
-        this._bubbleTypingDone = false;
-        continueBtn.classList.add('hidden');
-
-        this._fitSpeechBubbleText(dialogueBox, pageText);
-        this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
-        this._applyDialogueBubbleTail(dialogueBox, pos);
-        this._clampDialogueToViewport(dialogueBox);
-
-        this.typeText(textEl, pageText, {
-            onFinish: () => {
-                this._bubbleTypingDone = true;
-                this._updateDialogueOverflowIndicator(textEl);
-                if (this._bubblePageIndex === this._bubblePages.length - 1) {
-                    // Last page: disable paging and show the normal continue button
-                    this._bubblePagingActive = false;
-                    this._setBubblePagingUI(dialogueBox, false);
-                    if (dialogueEntry?.next) {
-                        this._setupDialogueContinueButton(continueBtn, textEl, dialogueEntry);
-                    } else {
-                        setTimeout(() => {
-                            gameState.dialogueLock = false;
-                            this._closeDialogueThen(() => this.nextDialogue());
-                        }, 3000);
-                    }
-                } else {
-                    // Intermediate page: show a visible "more..." button so the player
-                    // can advance without having to know to tap the bubble.
-                    continueBtn.textContent = 'more...';
-                    continueBtn.setAttribute('aria-label', 'Show more dialogue');
-                    continueBtn.classList.remove('hidden');
-                    continueBtn.onclick = () => {
-                        if (gameState.actionLock || this.isTransitioning) return;
-                        SFXGenerator.playContinueButton();
-                        this._bubblePageIndex++;
-                        this._updateBubblePageIndicator();
-                        const activeEntry = gameState.currentDialogueEntry || null;
-                        const p = this.normalizeZoneName((activeEntry?.position) || 'left');
-                        this._showBubblePage(dialogueBox, p, activeEntry || {});
-                    };
-                }
-            }
-        });
+    /**
+     * Resolves a dialogue entry's `next` field — 'NEXT_DIALOGUE' advances
+     * within the current scene, a function runs arbitrary logic (scene
+     * change, flag updates, etc.), and a string loads that scene directly.
+     * Single implementation used by dialoguePager's continue-button handler
+     * (previously duplicated inline for the single-page and per-page-
+     * pagination code paths).
+     */
+    _advanceDialogueEntry(dialogueEntry) {
+        if (dialogueEntry.next === 'NEXT_DIALOGUE') {
+            this.nextDialogue();
+        } else if (typeof dialogueEntry.next === 'function') {
+            dialogueEntry.next();
+        } else if (dialogueEntry.next) {
+            this.loadScene(dialogueEntry.next);
+        }
     },
 
     _clampDialogueToViewport(dialogueBox, options = {}) {
@@ -5494,512 +5818,6 @@ const sceneRenderer = {
         }
     },
 
-    _updateDialogueOverflowIndicator(textEl = document.getElementById('dialogue-text')) {
-        if (!textEl) return;
-
-        if (textEl.scrollHeight > textEl.clientHeight) {
-            textEl.classList.add('has-overflow');
-        } else {
-            textEl.classList.remove('has-overflow');
-        }
-    },
-
-    _isSpeechBubble(dialogueBox) {
-        return !!dialogueBox && dialogueBox.dataset?.layoutPanel === 'speech-bubble';
-    },
-
-    _setBubblePagingUI(dialogueBox, enabled) {
-        const hint = document.getElementById('bubble-continue-hint');
-        const ind = document.getElementById('bubble-page-indicator');
-        if (!dialogueBox) return;
-        if (enabled) {
-            dialogueBox.classList.add('is-paginated');
-            if (hint) hint.style.display = 'block';
-        } else {
-            dialogueBox.classList.remove('is-paginated');
-            if (hint) hint.style.display = 'none';
-            if (ind) ind.textContent = '';
-        }
-    },
-
-    _updateBubblePageIndicator() {
-        const ind = document.getElementById('bubble-page-indicator');
-        if (!ind) return;
-        if (!this._bubblePagingActive || !this._bubblePages?.length) {
-            ind.textContent = '';
-            return;
-        }
-        ind.textContent = `${this._bubblePageIndex + 1}/${this._bubblePages.length}`;
-    },
-
-    _fitMobileDialogueText(dialogueBox) {
-        // Run on any screen under 1024px, not just 768px
-        if (!window.matchMedia('(max-width: 1024px)').matches || !dialogueBox) return;
-        // Speech-bubble mode is handled by _fitSpeechBubbleText
-        if (dialogueBox.dataset.layoutPanel === 'speech-bubble') return;
-
-        const textEl = document.getElementById('dialogue-text');
-        const speakerEl = document.getElementById('dialogue-speaker');
-        const contentEl = document.getElementById('dialogue-content');
-        if (!textEl || !contentEl) return;
-
-        const isSmallPhone = window.matchMedia('(max-width: 640px)').matches;
-        const isVerySmall = window.matchMedia('(max-width: 480px)').matches;
-        const isLandscape = window.matchMedia('(orientation: landscape)').matches;
-
-        // Reset inline styles so we read the CSS-computed value as the starting point.
-        // This lets CSS do the sizing work; we only shrink as a last resort if a
-        // single page still overflows after pagination has already been applied.
-        textEl.style.fontSize = '';
-        if (speakerEl) speakerEl.style.fontSize = '';
-
-        let textSize = parseFloat(getComputedStyle(textEl).fontSize) || 14;
-        let speakerSize = speakerEl ? (parseFloat(getComputedStyle(speakerEl).fontSize) || 14) : 0;
-
-        textEl.style.fontSize = `${textSize}px`;
-        textEl.style.lineHeight = isSmallPhone ? '1.15' : '1.2';
-        if (speakerEl) {
-            speakerEl.style.fontSize = `${speakerSize}px`;
-            speakerEl.style.lineHeight = '1.1';
-        }
-
-        // Higher floors: prefer readable text over extreme shrinking.
-        const minTextSize = isVerySmall ? 13 : 15;
-        const minSpeakerSize = isVerySmall ? 14 : 16;
-
-        let guard = 0;
-
-        while (guard < 6 && (contentEl.scrollHeight > contentEl.clientHeight || textEl.scrollHeight > textEl.clientHeight)) {
-            guard += 1;
-
-            if (textSize > minTextSize) {
-                textSize -= 0.5;
-                textEl.style.fontSize = `${textSize}px`;
-            }
-
-            if (speakerEl && speakerSize > minSpeakerSize && contentEl.scrollHeight > contentEl.clientHeight) {
-                speakerSize -= 0.5;
-                speakerEl.style.fontSize = `${speakerSize}px`;
-            }
-
-            if (textSize <= minTextSize && (!speakerEl || speakerSize <= minSpeakerSize)) {
-                break;
-            }
-        }
-    },
-
-    /**
-     * The continue button is normally hidden until after typing starts, but
-     * it lives in the same flex column as #dialogue-text (inside
-     * #dialogue-content) and competes for the same limited height in
-     * speech-bubble mode. Reserving its true footprint before
-     * _fitSpeechBubbleText() measures the bubble means that check sees the
-     * bubble's real final layout instead of under-counting it (which
-     * otherwise lets text fit "on paper" but overflow once the button is
-     * actually revealed). Pair with _releaseReservedActionSpace() once
-     * positioning/measurement is done — the real reveal logic further down
-     * replaces this placeholder state.
-     *
-     * Choice buttons are deliberately NOT reserved here: they only ever
-     * render in narrative mode (never speech-bubble, so _fitSpeechBubbleText
-     * is a no-op for them anyway) and always appear *after* a prompt is
-     * fully shown, not competing with it for space during pagination's fit
-     * check — reserving them there previously caused false-positive
-     * pagination on short choice prompts.
-     */
-    _reserveActionSpaceForFit(dialogueEntry) {
-        const continueBtn = document.getElementById('dialogue-continue');
-        if (!continueBtn || !dialogueEntry) return;
-        if (!dialogueEntry.choices?.length && dialogueEntry.next) {
-            continueBtn.textContent = 'continue';
-            continueBtn.classList.remove('hidden');
-        }
-    },
-
-    _releaseReservedActionSpace() {
-        const continueBtn = document.getElementById('dialogue-continue');
-        if (continueBtn) continueBtn.classList.add('hidden');
-    },
-
-    _fitSpeechBubbleText(dialogueBox, fullText) {
-        if (!dialogueBox) return;
-        if (dialogueBox.dataset.layoutPanel !== 'speech-bubble') return;
-
-        const textEl = document.getElementById('dialogue-text');
-        const speakerEl = document.getElementById('dialogue-speaker');
-        const contentEl = document.getElementById('dialogue-content');
-        if (!textEl || !contentEl) return;
-
-        // Set full text temporarily for measurement (typewriter will reuse computed sizes)
-        const prev = textEl.textContent;
-        textEl.textContent = fullText || '';
-
-        // Reset to CSS defaults so repeated calls don't keep shrinking
-        textEl.style.fontSize = '';
-        if (speakerEl) speakerEl.style.fontSize = '';
-
-        const minText = 14;     // floor: readable on desktop + Android
-        const minSpeaker = 15;
-
-        let guard = 0;
-        while (guard < 20 && (textEl.scrollHeight > textEl.clientHeight || contentEl.scrollHeight > contentEl.clientHeight)) {
-            guard++;
-            const csT = parseFloat(getComputedStyle(textEl).fontSize) || 16;
-            const csS = speakerEl ? (parseFloat(getComputedStyle(speakerEl).fontSize) || 16) : 0;
-
-            // Math.max clamps the step so a 0.5px decrement can never overshoot
-            // below the floor (e.g. 14.19px - 0.5 would land at 13.69px).
-            if (csT > minText) textEl.style.fontSize = Math.max(minText, csT - 0.5) + 'px';
-            if (speakerEl && csS > minSpeaker && contentEl.scrollHeight > contentEl.clientHeight) {
-                speakerEl.style.fontSize = Math.max(minSpeaker, csS - 0.5) + 'px';
-            }
-
-            if ((parseFloat(getComputedStyle(textEl).fontSize) <= minText) &&
-                (!speakerEl || parseFloat(getComputedStyle(speakerEl).fontSize) <= minSpeaker)) {
-                break;
-            }
-        }
-
-        // Restore for typewriter (computed sizes stay in place via inline style)
-        textEl.textContent = prev;
-    },
-
-    _measureSpeechBubbleFit(dialogueBox, candidateText) {
-        const textEl = document.getElementById('dialogue-text');
-        const contentEl = document.getElementById('dialogue-content');
-        if (!textEl || !contentEl) return { fits: true };
-
-        const prev = textEl.textContent;
-        textEl.textContent = candidateText || '';
-
-        const fitsNow = !(textEl.scrollHeight > textEl.clientHeight || contentEl.scrollHeight > contentEl.clientHeight);
-
-        textEl.textContent = prev;
-        return { fits: fitsNow };
-    },
-
-    _splitChunkToFitBubble(dialogueBox, chunkText) {
-        const normalized = String(chunkText || '').replace(/\s+/g, ' ').trim();
-        if (!normalized) return [''];
-
-        if (this._measureSpeechBubbleFit(dialogueBox, normalized).fits) {
-            return [normalized];
-        }
-
-        const words = normalized.split(' ');
-        if (words.length <= 1) return [normalized];
-
-        const pages = [];
-        let index = 0;
-
-        while (index < words.length) {
-            let candidate = words[index];
-            let lastFit = this._measureSpeechBubbleFit(dialogueBox, candidate).fits ? candidate : '';
-            let lastFitIndex = lastFit ? index : index - 1;
-
-            for (let i = index + 1; i < words.length; i++) {
-                const next = `${candidate} ${words[i]}`;
-                if (this._measureSpeechBubbleFit(dialogueBox, next).fits) {
-                    candidate = next;
-                    lastFit = next;
-                    lastFitIndex = i;
-                    continue;
-                }
-                break;
-            }
-
-            if (!lastFit) {
-                // If even a single token doesn't fit (extremely unlikely), emit it to avoid loops.
-                pages.push(words[index]);
-                index += 1;
-            } else {
-                pages.push(lastFit);
-                index = lastFitIndex + 1;
-            }
-        }
-
-        return pages.filter(Boolean);
-    },
-
-    _splitIntoBubblePages(dialogueBox, fullText, maxPages = 6) {
-        const txt = String(fullText || '').replace(/\s+/g, ' ').trim();
-        if (!txt) return [''];
-
-        // Prefer sentence-ish splits
-        let chunks = txt.split(/(?<=[.!?])\s+/);
-
-        // fallback: word chunking
-        if (chunks.length === 1) {
-            const words = txt.split(' ');
-            chunks = [];
-            for (let i = 0; i < words.length; i += 12) {
-                chunks.push(words.slice(i, i + 12).join(' '));
-            }
-        }
-
-        const pages = [];
-        let cur = '';
-
-        const ok = (s) => this._measureSpeechBubbleFit(dialogueBox, s).fits;
-
-        for (let i = 0; i < chunks.length; i++) {
-            const next = cur ? (cur + ' ' + chunks[i]) : chunks[i];
-
-            if (ok(next)) {
-                cur = next;
-                continue;
-            }
-
-            if (cur) pages.push(cur);
-            cur = chunks[i];
-
-            if (!ok(cur)) {
-                const forcedPages = this._splitChunkToFitBubble(dialogueBox, cur);
-                if (forcedPages.length > 1) {
-                    pages.push(...forcedPages.slice(0, -1));
-                    cur = forcedPages[forcedPages.length - 1] || '';
-                }
-            }
-
-            if (pages.length >= maxPages - 1) {
-                const rest = [cur].concat(chunks.slice(i + 1)).join(' ').trim();
-                const remainderPages = this._splitChunkToFitBubble(dialogueBox, rest);
-                pages.push(...remainderPages);
-                return pages.filter(Boolean);
-            }
-        }
-
-        if (cur) {
-            const tailPages = this._splitChunkToFitBubble(dialogueBox, cur);
-            pages.push(...tailPages);
-        }
-        return pages.filter(Boolean);
-    },
-
-    // ===== GENERIC DIALOGUE PAGINATION HELPERS =====
-
-    _resetDialoguePaging() {
-        this._dialoguePagingActive = false;
-        this._dialoguePages = null;
-        this._dialoguePageIndex = 0;
-        this._dialogueFullText = '';
-        this._dialoguePagingMeta = null;
-    },
-
-    _isDialoguePagingActive() {
-        return this._dialoguePagingActive === true;
-    },
-
-    /** Measure fit for non-bubble layouts using scrollHeight checks. */
-    _measureDialogueContainerFit(dialogueBox, candidateText) {
-        const textEl = document.getElementById('dialogue-text');
-        const contentEl = document.getElementById('dialogue-content');
-        if (!textEl || !contentEl) return { fits: true };
-        const prev = textEl.textContent;
-        textEl.textContent = candidateText || '';
-        const fits = !(textEl.scrollHeight > textEl.clientHeight || contentEl.scrollHeight > contentEl.clientHeight);
-        textEl.textContent = prev;
-        return { fits };
-    },
-
-    /**
-     * Split fullText into pages that each fit inside dialogueBox.
-     * Works for both speech-bubble and non-bubble layouts.
-     */
-    _splitIntoDialoguePages(dialogueBox, fullText, maxPages = 10) {
-        const isBubble = this._isSpeechBubble(dialogueBox);
-        const measureFit = (text) => isBubble
-            ? this._measureSpeechBubbleFit(dialogueBox, text).fits
-            : this._measureDialogueContainerFit(dialogueBox, text).fits;
-
-        const txt = String(fullText || '').replace(/\s+/g, ' ').trim();
-        if (!txt) return [''];
-
-        const sentenceChunksRaw = txt.split(/(?<=[.!?])\s+/).filter(Boolean);
-        const shouldForceSentencePaging = sentenceChunksRaw.length > 2 && txt.length > 170;
-
-        if (measureFit(txt) && !shouldForceSentencePaging) return [txt];
-
-        // Prefer sentence-boundary splits
-        let chunks = sentenceChunksRaw;
-        if (chunks.length === 1) {
-            const words = txt.split(' ');
-            chunks = [];
-            for (let i = 0; i < words.length; i += 10) {
-                chunks.push(words.slice(i, i + 10).join(' '));
-            }
-        }
-
-        // Force word-by-word split when a chunk doesn't fit by itself
-        const forceWordSplit = (text) => {
-            const words = text.split(' ');
-            const result = [];
-            let buf = '';
-            for (const w of words) {
-                const trial = buf ? buf + ' ' + w : w;
-                if (measureFit(trial)) {
-                    buf = trial;
-                } else {
-                    if (buf) result.push(buf);
-                    buf = w;
-                }
-            }
-            if (buf) result.push(buf);
-            return result.length ? result : [text];
-        };
-
-        const pages = [];
-        let cur = '';
-        let curSentenceCount = 0;
-
-        for (let i = 0; i < chunks.length; i++) {
-            const next = cur ? cur + ' ' + chunks[i] : chunks[i];
-            const currentChunkIsSentence = /[.!?]["')\]]*$/.test(chunks[i]);
-            const nextSentenceCount = curSentenceCount + (currentChunkIsSentence ? 1 : 0);
-            const exceedsSentenceLimit = shouldForceSentencePaging && cur && nextSentenceCount > 2;
-
-            if (!exceedsSentenceLimit && measureFit(next)) {
-                cur = next;
-                curSentenceCount = nextSentenceCount;
-                continue;
-            }
-            if (cur) pages.push(cur);
-            cur = chunks[i];
-            curSentenceCount = currentChunkIsSentence ? 1 : 0;
-            if (!measureFit(cur)) {
-                const forced = forceWordSplit(cur);
-                pages.push(...forced.slice(0, -1));
-                cur = forced[forced.length - 1] || '';
-                curSentenceCount = /[.!?]["')\]]*$/.test(cur) ? 1 : 0;
-            }
-            if (pages.length >= maxPages - 1) {
-                const rest = ([cur]).concat(chunks.slice(i + 1)).join(' ').trim();
-                pages.push(...forceWordSplit(rest));
-                return pages.filter(Boolean);
-            }
-        }
-
-        if (cur) pages.push(...forceWordSplit(cur));
-        return pages.filter(Boolean);
-    },
-
-    /**
-     * Render one page of paginated dialogue via typeText.
-     * Manages the Continue button for skip-typing / advance / finish.
-     */
-    _showDialoguePage(pageText, dialogueEntry) {
-        const textEl = document.getElementById('dialogue-text');
-        const continueBtn = document.getElementById('dialogue-continue');
-        const dialogueBox = document.getElementById('dialogue-box');
-        const choicesDiv = document.getElementById('dialogue-choices');
-        if (!textEl || !continueBtn || !dialogueBox) return;
-
-        this._setSpeakingCharacter(dialogueEntry?.speaker);
-
-        // Wipe previous text and cancel any in-progress typewriter
-        this._cleanupTypewriter(textEl);
-        textEl.textContent = '';
-        if (choicesDiv) choicesDiv.innerHTML = '';
-
-        const isLastPage = this._dialoguePageIndex === this._dialoguePages.length - 1;
-
-        // Show the Continue button BEFORE fitting/measuring — it's always
-        // visible during pagination, so the fit check must see its true
-        // footprint or it can under-count the bubble's final height (the
-        // button competes with #dialogue-text for the same flex space).
-        continueBtn.classList.remove('hidden');
-        continueBtn.textContent = isLastPage ? 'continue' : 'more...';
-        continueBtn.setAttribute('aria-label', isLastPage ? 'Continue dialogue' : 'Show more dialogue');
-
-        // For speech-bubble: re-fit bubble geometry to page text, then run the
-        // SAME canonical layout pass showDialogue() uses — a paginated authored
-        // entry must resolve to 'authored' here too, never character-relative.
-        if (this._isSpeechBubble(dialogueBox) && dialogueEntry) {
-            this._fitSpeechBubbleText(dialogueBox, pageText);
-            const pageLayoutMode = this.layoutDialogue(dialogueBox, dialogueEntry);
-            this._debugAssertAuthoredLayout(dialogueBox, dialogueEntry, pageLayoutMode);
-            this._clampDialogueToViewport(dialogueBox, { preserveCentered: pageLayoutMode === 'narrative' });
-        }
-
-        // Always hide the bubble tap hint — Continue button is the advance mechanism
-        this._setBubblePagingUI(dialogueBox, false);
-
-        continueBtn.onclick = () => {
-            // First click while typing: finish instantly
-            if (this.isTyping) {
-                this.finishTypeText(textEl);
-                return;
-            }
-            if (gameState.actionLock || this.isTransitioning) return;
-            SFXGenerator.playContinueButton();
-
-            if (!isLastPage) {
-                // Advance to next page
-                this._dialoguePageIndex++;
-                this._showDialoguePage(this._dialoguePages[this._dialoguePageIndex], dialogueEntry);
-            }
-            // If last page, onclick is replaced in the typeText onFinish below
-        };
-
-        // Type the page text
-        this.typeText(textEl, pageText, {
-            onFinish: () => {
-                this._updateDialogueOverflowIndicator(textEl);
-                if (!isLastPage) return;
-
-                // Last page finished — disable paging and resume normal entry flow
-                this._dialoguePagingActive = false;
-
-                if (dialogueEntry?.choices?.length) {
-                    // Render choices now that all text has been shown
-                    continueBtn.classList.add('hidden');
-                    continueBtn.onclick = null;
-                    dialogueEntry.choices.forEach(choice => {
-                        const btn = document.createElement('button');
-                        btn.className = 'dialogue-choice';
-                        btn.textContent = choice.text;
-                        let tStart = 0;
-                        let tPos = null;
-                        const handleChoiceClick = () => {
-                            if (gameState.actionLock || this.isTransitioning) return;
-                            gameState.actionLock = true;
-                            gameState.dialogueLock = false;
-                            SFXGenerator.playButtonClick();
-                            if (choice.action) choice.action();
-                            gameState.actionLock = false;
-                        };
-                        const handleInteraction = (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (e.type === 'click' && tStart > Date.now() - 500) return;
-                            if (e.type === 'touchend' && tPos) {
-                                const t = e.changedTouches[0];
-                                if (Math.abs(t.clientX - tPos.x) > 10 || Math.abs(t.clientY - tPos.y) > 10) return;
-                            }
-                            handleChoiceClick();
-                        };
-                        btn.addEventListener('touchstart', (e) => {
-                            tStart = Date.now();
-                            const t = e.touches[0];
-                            tPos = { x: t.clientX, y: t.clientY };
-                        }, { passive: true });
-                        btn.addEventListener('touchend', handleInteraction, { passive: false });
-                        btn.addEventListener('click', handleInteraction);
-                        choicesDiv.appendChild(btn);
-                    });
-                } else if (dialogueEntry?.next) {
-                    this._setupDialogueContinueButton(continueBtn, textEl, dialogueEntry);
-                } else {
-                    continueBtn.classList.add('hidden');
-                    setTimeout(() => {
-                        gameState.dialogueLock = false;
-                        this._closeDialogueThen(() => this.nextDialogue());
-                    }, 3000);
-                }
-            }
-        });
-    },
-
     repositionActiveDialogue() {
         const dialogueBox = document.getElementById('dialogue-box');
         if (!dialogueBox || dialogueBox.classList.contains('hidden')) return;
@@ -6013,15 +5831,12 @@ const sceneRenderer = {
             || this.currentScene?.dialogue?.[gameState.currentDialogueIndex];
         if (!dialogueEntry) return;
 
-        // Re-fit speech-bubble text first so box height is stable before the
-        // canonical layout pass positions it (mirrors showDialogue()'s ordering).
-        if (this._isSpeechBubble(dialogueBox)) {
-            this._fitSpeechBubbleText(dialogueBox, dialogueEntry.text || '');
-        }
-
+        // No re-pagination here — dialoguePager.reflow() only re-clamps the
+        // choices panel and re-asserts overflow against the settled geometry.
         const layoutMode = this.layoutDialogue(dialogueBox, dialogueEntry);
         this._debugAssertAuthoredLayout(dialogueBox, dialogueEntry, layoutMode);
         this._clampDialogueToViewport(dialogueBox, { preserveCentered: layoutMode === 'narrative' });
+        dialoguePager.reflow(dialogueBox);
     },
 
     nextDialogue() {
@@ -6063,6 +5878,7 @@ const sceneRenderer = {
         const dialogueBox = document.getElementById('dialogue-box');
         const textEl = document.getElementById('dialogue-text');
         this._cleanupTypewriter(textEl);
+        dialoguePager.reset();
         if (!dialogueBox || dialogueBox.classList.contains('hidden')) {
             gameState.dialogueLock = false; // Safety release
             if (typeof nextAction === 'function') nextAction();

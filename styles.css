@@ -700,6 +700,11 @@ body.main-menu #scene-title {
 }
 #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-text {
     flex: 1;
+    /* Unprotected flex-shrink lets this get crushed below dialoguePager's
+       paginated content height whenever speaker+text+action-area's natural
+       size is tight against #dialogue-container's max-height — the same
+       crush risk narrative-mode #dialogue-text guards against below. */
+    flex-shrink: 0;
     overflow: hidden;
     -webkit-overflow-scrolling: auto;
     hyphens: auto;
@@ -1063,11 +1068,11 @@ body.main-menu #scene-title {
     }
 
     #dialogue-speaker {
-        font-size: clamp(11px, 2.0vw, 14px);
+        font-size: clamp(15px, 2.0vw, 16px);
     }
 
     #dialogue-text {
-        font-size: clamp(10px, 1.8vw, 13px);
+        font-size: clamp(14px, 1.8vw, 15px);
         line-height: 1.2;
     }
 }
@@ -1087,11 +1092,11 @@ body.main-menu #scene-title {
     }
 
     #dialogue-speaker {
-        font-size: clamp(10px, 1.8vw, 12px);
+        font-size: clamp(15px, 1.8vw, 16px);
     }
 
     #dialogue-text {
-        font-size: clamp(9px, 1.6vw, 11px);
+        font-size: clamp(14px, 1.6vw, 15px);
         overflow: hidden;
     }
 }
@@ -1099,7 +1104,7 @@ body.main-menu #scene-title {
 /* NARRATION STYLING - GOLD/YELLOW */
 #dialogue-speaker.narration {
     font-family: 'Creepster', 'Comic Sans MS', cursive;
-    font-size: clamp(12px, 2.2vw, 22px);
+    font-size: clamp(15px, 2.2vw, 22px);
     color: #FFD700;
     text-shadow: 2px 2px 6px rgba(0, 0, 0, 1),
                  0 0 12px rgba(255, 215, 0, 0.9);
@@ -1108,7 +1113,7 @@ body.main-menu #scene-title {
 
 #dialogue-text.narration {
     font-family: 'Comic Sans MS', 'Trebuchet MS', sans-serif;
-    font-size: clamp(10px, 1.8vw, 17px);
+    font-size: clamp(14px, 1.8vw, 17px);
     color: #FFD700;
     text-shadow: 2px 2px 6px rgba(0, 0, 0, 1),
                  0 0 10px rgba(255, 215, 0, 0.7);
@@ -1120,7 +1125,7 @@ body.main-menu #scene-title {
 /* CHOICE STYLING - YELLOW AND LARGER */
 #dialogue-speaker.choice-speaker {
     font-family: 'Bangers', 'Impact', 'Arial Black', sans-serif;
-    font-size: clamp(14px, 3vw, 26px);
+    font-size: clamp(15px, 3vw, 26px);
     color: #FFD700;
     text-shadow: 3px 3px 8px rgba(0, 0, 0, 1),
                  0 0 16px rgba(255, 215, 0, 0.9);
@@ -1129,7 +1134,7 @@ body.main-menu #scene-title {
 
 #dialogue-text.choice-text {
     font-family: 'Comic Sans MS', 'Trebuchet MS', sans-serif;
-    font-size: clamp(10px, 2.2vw, 20px);
+    font-size: clamp(14px, 2.2vw, 20px);
     color: #FFD700;
     text-shadow: 2px 2px 6px rgba(0, 0, 0, 1),
                  0 0 12px rgba(255, 215, 0, 0.8);
@@ -1145,6 +1150,9 @@ body.main-menu #scene-title {
     margin-top: clamp(12px, 2.5vw, 18px);
     width: 100%;
     align-items: center;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
 }
 
 .dialogue-choice {
@@ -1268,24 +1276,6 @@ body.main-menu #scene-title {
     background: rgba(255, 255, 255, 0.15);
     color: #FFD700;
     border-color: rgba(255, 215, 0, 0.5);
-}
-
-/* ===== BUBBLE CONTINUE HINT & PAGE INDICATOR ===== */
-#dialogue-box .bubble-continue-hint{
-  position:absolute;
-  right:18px;
-  bottom:14px;
-  font-size:12px;
-  opacity:0.75;
-  user-select:none;
-  pointer-events:none;
-  display:none;
-  z-index:5;
-}
-#dialogue-box.is-paginated .bubble-continue-hint{ display:block; }
-#dialogue-box .bubble-page-indicator{
-  margin-left:8px;
-  opacity:0.85;
 }
 
 #dialogue-box[data-layout-panel="speech-bubble"]{ cursor:pointer; }
@@ -2170,6 +2160,14 @@ body.main-menu #scene-title {
     flex: 0 1 100%;
 }
 
+/* An empty choices panel (continue-only entries) must not reserve a
+   full-width wrapped row — its flex-basis:100% would otherwise force
+   #dialogue-continue onto a second line and silently eat vertical space
+   the pagination budget never accounts for. */
+#action-container #dialogue-choices:empty {
+    display: none;
+}
+
 .dev-layout-target {
     outline: 2px dashed #00ff88 !important;
     outline-offset: 2px;
@@ -2728,7 +2726,7 @@ body.main-menu #scene-container {
     /* Compact choice buttons for mobile */
     .dialogue-choice {
         padding: 4px 8px;
-        font-size: clamp(8px, 1.6vw, 11px);
+        font-size: clamp(14px, 1.6vw, 16px);
         min-height: 26px;
     }
 }
@@ -2741,7 +2739,7 @@ body.main-menu #scene-container {
 
     .dialogue-choice {
         padding: 3px 6px;
-        font-size: clamp(7px, 1.4vw, 9px);
+        font-size: clamp(14px, 1.4vw, 15px);
         min-height: 22px;
     }
 }
@@ -3020,7 +3018,8 @@ body.main-menu #scene-container {
 
 #dialogue-choices {
     width: min(100%, 720px);
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     gap: clamp(8px, 1.5vw, 12px);
     margin-top: clamp(8px, 1.5vw, 14px);
 }
@@ -3099,12 +3098,13 @@ body.main-menu #scene-container {
     }
 
     #dialogue-choices {
-        overflow: hidden;
+        overflow-y: auto;
+        overflow-x: hidden;
         gap: 4px;
     }
 
     .dialogue-choice {
-        font-size: clamp(13px, 2.2vw, 18px);
+        font-size: clamp(14px, 2.2vw, 18px);
         padding: clamp(8px, 1.2vh, 12px) clamp(12px, 2.2vw, 18px);
         width: min(100%, 96%);
     }
@@ -3177,7 +3177,7 @@ body.main-menu #scene-container {
     #dialogue-text,
     #dialogue-container.narrative-mode #dialogue-text,
     #dialogue-text.choice-text {
-        font-size: clamp(12px, 3.6vw, 16px);
+        font-size: clamp(14px, 3.6vw, 16px);
         line-height: 1.28;
         margin-bottom: 2px;
         padding: 0;
@@ -3188,7 +3188,7 @@ body.main-menu #scene-container {
         min-width: 112px;
         min-height: 36px;
         max-width: calc(100% - 12px);
-        font-size: clamp(12px, 3.4vw, 15px);
+        font-size: clamp(14px, 3.4vw, 15px);
         padding: 8px 14px;
     }
 }
@@ -3226,11 +3226,12 @@ body.main-menu #scene-container {
     }
 
     #dialogue-choices {
-        overflow: hidden;
+        overflow-y: auto;
+        overflow-x: hidden;
     }
 
     .dialogue-choice {
-        font-size: clamp(12px, 1.8vw, 16px);
+        font-size: clamp(14px, 1.8vw, 16px);
         padding: clamp(6px, 0.9vh, 10px) clamp(10px, 1.4vw, 16px);
     }
 
@@ -3290,7 +3291,7 @@ body.main-menu #scene-container {
         --dlg-pad-inline: clamp(10px, 2vw, 16px);
         --dlg-speaker-size: clamp(16px, 2.6vh, 22px);
         --dlg-text-size: clamp(15px, 2.4vh, 19px);
-        --dlg-choice-size: clamp(13px, 1.6vw, 16px);
+        --dlg-choice-size: clamp(14px, 1.6vw, 16px);
         --dlg-continue-h: max(44px, min(8vh, 52px));
     }
 
@@ -3356,7 +3357,7 @@ body.main-menu #scene-container {
         --dlg-narrative-max-h: 240px;
         --dlg-speaker-size: clamp(14px, 2.2vw, 19px);
         --dlg-text-size: clamp(14px, 1.8vw, 16px);
-        --dlg-choice-size: clamp(13px, 1.6vw, 14px);
+        --dlg-choice-size: clamp(14px, 1.6vw, 14px);
         --dlg-continue-h: max(44px, min(7vh, 46px));
     }
 
