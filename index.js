@@ -4718,12 +4718,16 @@ const sceneRenderer = {
             // return all-zeros, breaking _fitSpeechBubbleText and positioning logic.
             dialogueBox.classList.remove('hidden');
 
-            // Clear previous position classes and inline overrides from bounds clamping
+            // Clear previous position/size classes and inline overrides from the prior
+            // entry so a mode that doesn't set width/height (character/narrative/
+            // top-center) doesn't inherit a stale authored/zone-slot rectangle.
             dialogueBox.classList.remove('dialogue-left', 'dialogue-right', 'dialogue-center', 'dialogue-offscreen', 'dialogue-anchored');
             dialogueBox.style.left = '';
             dialogueBox.style.right = '';
             dialogueBox.style.top = '';
             dialogueBox.style.bottom = '';
+            dialogueBox.style.width = '';
+            dialogueBox.style.height = '';
             dialogueBox.style.transform = '';
 
             const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
@@ -4734,7 +4738,6 @@ const sceneRenderer = {
                 dialogueBox.dataset.layoutPanel = 'narrative-box';
                 dialogueContainer.classList.add('narrative-mode');
                 dialogueBox.classList.add('dialogue-center');
-                this._positionNarrativeDialogue(dialogueBox);
                 speaker.className = 'narration';
                 text.className = 'narration';
                 speaker.textContent = '';
@@ -4742,7 +4745,6 @@ const sceneRenderer = {
                 dialogueBox.dataset.layoutPanel = 'narrative-box';
                 dialogueContainer.classList.add('narrative-mode');
                 dialogueBox.classList.add('dialogue-center');
-                this._positionNarrativeDialogue(dialogueBox);
                 speaker.className = 'choice-speaker';
                 text.className = 'choice-text';
                 speaker.textContent = dialogueEntry.speaker;
@@ -4768,39 +4770,15 @@ const sceneRenderer = {
                 speaker.className = '';
                 text.className = '';
                 speaker.textContent = dialogueEntry.speaker;
-
-                this._positionDialogueInSlot(dialogueBox, pos, dialogueEntry);
-                dialogueBox.dataset.tail = isLeft ? 'left' : 'right';
                 dialogueBox.dataset.zone = pos;
-                this._applyDialogueBubbleTail(dialogueBox, pos);
-                dialogueBox.classList.add('dialogue-anchored');
             }
 
-            const useBubbleLayout = Boolean(dialogueEntry.bubbleLayout);
-
-            if (useBubbleLayout) {
-                const bl = dialogueEntry.bubbleLayout;
-                const rect = positioningSystem.getBackgroundRect();
-                if (rect) {
-                    // bubbleLayout values are in 1920x1080 native space — scale to current container
-                    const scaled = positioningSystem.calculateHotspotPosition(
-                        bl.left || 0, bl.top || 0, bl.width || 400, bl.height || 300
-                    );
-                    dialogueBox.style.left = scaled.left;
-                    dialogueBox.style.top = scaled.top;
-                    dialogueBox.style.width = scaled.width;
-                    dialogueBox.style.height = scaled.height;
-                } else {
-                    // Fallback: apply as percentages of reference dimensions
-                    if (Number.isFinite(bl.left)) dialogueBox.style.left = `${(bl.left / 1920) * 100}%`;
-                    if (Number.isFinite(bl.top)) dialogueBox.style.top = `${(bl.top / 1080) * 100}%`;
-                    if (Number.isFinite(bl.width)) dialogueBox.style.width = `${(bl.width / 1920) * 100}%`;
-                    if (Number.isFinite(bl.height)) dialogueBox.style.height = `${(bl.height / 1080) * 100}%`;
-                }
-                dialogueBox.style.right = 'auto';
-                dialogueBox.style.bottom = 'auto';
-                dialogueBox.style.transform = 'none';
-            }
+            // Canonical layout pass 1 (pre-fit): establishes box geometry (position,
+            // and width/height for authored/zone-slot modes) via layoutDialogue() so
+            // _fitSpeechBubbleText() below measures against the correct box width.
+            // See layoutDialogue() for the full precedence and single-source-of-truth
+            // rationale — this replaces the old duplicate bubbleLayout application.
+            this.layoutDialogue(dialogueBox, dialogueEntry);
 
             const dialogueText = dialogueEntry.text || '';
 
@@ -4817,19 +4795,28 @@ const sceneRenderer = {
             // Fit text into stable bubble container (speech-bubble mode only, all screen sizes)
             this._fitSpeechBubbleText(dialogueBox, dialogueText);
 
-            // Re-anchor position now that box size is final
-            if (!isNarration && !isChoice) {
-                const pos = this.normalizeZoneName(dialogueEntry.position || 'left');
-                this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
+            // Canonical layout pass 2 (post-fit): re-resolves the SAME entry through
+            // layoutDialogue(), finalizing position now that box size has settled.
+            // This never "changes" the mode — it's a pure function of dialogueEntry —
+            // it only refines the pixel output for modes whose placement depends on
+            // current box size (character-relative, narrative centering).
+            let layoutMode = this.layoutDialogue(dialogueBox, dialogueEntry);
 
-                clearTimeout(this._dialogueReanchorTimer);
+            // The delayed re-anchor exists so a still-sliding-in character can be
+            // re-measured once its animation settles. Only meaningful for explicit
+            // character-relative mode — authored/zone-slot rects never depend on
+            // character position, so they must never be re-anchored here.
+            clearTimeout(this._dialogueReanchorTimer);
+            if (layoutMode === 'character') {
                 this._dialogueReanchorTimer = setTimeout(() => {
                     if (this._activeDialogueEntry !== dialogueEntry || dialogueBox.classList.contains('hidden')) return;
-                    this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
+                    this.layoutDialogue(dialogueBox, dialogueEntry);
                     this._clampDialogueToViewport(dialogueBox);
                 }, 180);
             }
-            this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
+
+            this._debugAssertAuthoredLayout(dialogueBox, dialogueEntry, layoutMode);
+            this._clampDialogueToViewport(dialogueBox, { preserveCentered: layoutMode === 'narrative' });
 
             // Generic pagination: check all layout types for overflow before displaying
             const pages = this._splitIntoDialoguePages(dialogueBox, dialogueText, 6);
@@ -4846,9 +4833,13 @@ const sceneRenderer = {
                 // Ensure bubble tap hint is hidden — Continue button drives pagination
                 this._setBubblePagingUI(dialogueBox, false);
                 this._showDialoguePage(pages[0], dialogueEntry);
-                // Reveal after positioning settles
+                // Reveal after positioning settles. Reapply the already-resolved
+                // mode once more (never re-deciding it) so late-settling fonts/
+                // bubble art don't leave a stale rect from the pre-settle pass.
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => {
+                        const settledMode = this.layoutDialogue(dialogueBox, dialogueEntry);
+                        this._clampDialogueToViewport(dialogueBox, { preserveCentered: settledMode === 'narrative' });
                         dialogueBox.classList.remove('dialogue-positioning');
                         this._animateDialogueEntry();
                     });
@@ -4863,16 +4854,20 @@ const sceneRenderer = {
             requestAnimationFrame(() => {
                 this._updateDialogueOverflowIndicator(text);
             });
-            this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
+            this._clampDialogueToViewport(dialogueBox, { preserveCentered: layoutMode === 'narrative' });
             Dev.layout.applySavedLayouts();
             this._fitMobileDialogueText(dialogueBox);
             requestAnimationFrame(() => {
                 this._updateDialogueOverflowIndicator(text);
             });
 
-            // Reveal after positioning settles (double-rAF ensures layout is applied)
+            // Reveal after positioning settles (double-rAF ensures layout is applied).
+            // Reapply the same resolved mode once more for late-settling fonts/assets —
+            // see layoutDialogue()'s docstring for why this never changes the mode.
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
+                    layoutMode = this.layoutDialogue(dialogueBox, dialogueEntry);
+                    this._clampDialogueToViewport(dialogueBox, { preserveCentered: layoutMode === 'narrative' });
                     dialogueBox.classList.remove('dialogue-positioning');
                     this._animateDialogueEntry();
                 });
@@ -5245,15 +5240,103 @@ const sceneRenderer = {
         dialogueBubble.src = TAIL_IMAGE_BY_SIDE[tailSide] || TAIL_IMAGE_BY_SIDE.left;
     },
 
+    /**
+     * THE canonical dialogue layout entry point — the only method allowed to set
+     * dialogueBox position/size. Resolves exactly one placement mode per call,
+     * in strict precedence order, and applies it:
+     *
+     *   1. narration/choice        -> centered narrative layout
+     *   2. speech w/ bubbleLayout  -> authored native-coordinate rectangle
+     *   3. speech w/ a valid zone  -> DEFAULT_SPEECH_BUBBLE_SLOTS rectangle
+     *   4. layoutMode: 'character' -> character-relative placement (explicit opt-in)
+     *   5. (fallback)              -> top-center safe placement
+     *
+     * An authored bubbleLayout (tier 2) always wins over character-relative
+     * positioning — it is never re-anchored near a character. layoutDialogue()
+     * is a pure function of (dialogueEntry, current DOM/character state), so it
+     * is safe to call repeatedly (initial render, post-fit reflow, settle
+     * reflow, resize/orientation) without ever changing the resolved mode for
+     * a given entry. The resolved mode is recorded on dialogueBox.dataset.layoutMode.
+     */
+    layoutDialogue(dialogueBox, dialogueEntry, options = {}) {
+        if (!dialogueBox || !dialogueEntry) return null;
+
+        const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
+        const isChoice = dialogueEntry.speaker === 'CHOICE' || dialogueEntry.speaker === 'FINAL CHOICE';
+        const zone = this.normalizeZoneName(dialogueEntry.position || 'left');
+
+        let mode;
+        if (isNarration || isChoice) {
+            mode = 'narrative';
+            dialogueBox.classList.remove('dialogue-anchored');
+            this._positionNarrativeDialogue(dialogueBox);
+        } else if (dialogueEntry.bubbleLayout) {
+            mode = 'authored';
+            this._positionDialogueInSlot(dialogueBox, zone, dialogueEntry);
+            dialogueBox.classList.add('dialogue-anchored');
+        } else if (dialogueEntry.layoutMode === 'character') {
+            mode = 'character';
+            this._positionDialogueNearCharacter(dialogueBox, zone, dialogueEntry);
+            dialogueBox.classList.add('dialogue-anchored');
+        } else if (positioningSystem.getBackgroundRect()) {
+            mode = 'zone-slot';
+            this._positionDialogueInSlot(dialogueBox, zone, dialogueEntry);
+            dialogueBox.classList.add('dialogue-anchored');
+        } else {
+            mode = 'top-center';
+            this._positionDialogueTopCenter(dialogueBox);
+            this._applyDialogueBubbleTail(dialogueBox, zone);
+            dialogueBox.classList.add('dialogue-anchored');
+        }
+
+        dialogueBox.dataset.layoutMode = mode;
+        return mode;
+    },
+
+    /**
+     * Debug-only invariant check (no-ops outside DEBUG, never throws): confirms
+     * an authored bubbleLayout entry's applied rect still matches its scaled
+     * expected position, within tolerance, at the point right before viewport
+     * clamping runs. Exists to catch any regression that re-introduces an
+     * unconditional character-relative re-anchor after layoutDialogue().
+     */
+    _debugAssertAuthoredLayout(dialogueBox, dialogueEntry, mode, tolerancePx = 2) {
+        if (!DEBUG || !dialogueBox || mode !== 'authored' || !dialogueEntry?.bubbleLayout) return;
+        try {
+            const bl = dialogueEntry.bubbleLayout;
+            const expected = positioningSystem.calculateHotspotPosition(
+                bl.left || 0, bl.top || 0, bl.width || 400, bl.height || 300
+            );
+            const expectedLeft = parseFloat(expected.left);
+            const expectedTop = parseFloat(expected.top);
+            const actualLeft = parseFloat(dialogueBox.style.left);
+            const actualTop = parseFloat(dialogueBox.style.top);
+            const deltaLeft = Math.abs(actualLeft - expectedLeft);
+            const deltaTop = Math.abs(actualTop - expectedTop);
+            const withinTolerance = deltaLeft <= tolerancePx && deltaTop <= tolerancePx;
+            console.assert(
+                withinTolerance,
+                `[layoutDialogue] authored rect drifted before clamp — speaker=${dialogueEntry.speaker} ` +
+                `deltaLeft=${deltaLeft.toFixed(1)}px deltaTop=${deltaTop.toFixed(1)}px (tolerance ${tolerancePx}px)`,
+                { bubbleLayout: bl, expected: { left: expectedLeft, top: expectedTop }, actual: { left: actualLeft, top: actualTop } }
+            );
+        } catch (_) {
+            // Debug-only guard: an assertion must never break gameplay.
+        }
+    },
+
     _positionDialogueInSlot(dialogueBox, zoneName, dialogueEntry) {
         if (!dialogueBox || !dialogueEntry) return;
 
         // 1. Normalize zone, falling back through available values to ensure a valid string
         const zone = this.normalizeZoneName(zoneName || dialogueEntry.position || 'left');
 
-        // If positioningSystem cannot report a background rect, use the legacy character-relative method
+        // If positioningSystem cannot report a background rect yet, fall back to the
+        // final tier (top-center) rather than character-relative positioning — an
+        // authored/zone-slot entry must never be re-anchored near a character.
         if (!positioningSystem.getBackgroundRect()) {
-            this._positionDialogueNearCharacter(dialogueBox, zone, dialogueEntry);
+            this._positionDialogueTopCenter(dialogueBox);
+            this._applyDialogueBubbleTail(dialogueBox, zone);
             return;
         }
 
@@ -5696,13 +5779,14 @@ const sceneRenderer = {
 
         const isLastPage = this._dialoguePageIndex === this._dialoguePages.length - 1;
 
-        // For speech-bubble: re-fit bubble geometry to page text
-        if (this._isSpeechBubble(dialogueBox)) {
+        // For speech-bubble: re-fit bubble geometry to page text, then run the
+        // SAME canonical layout pass showDialogue() uses — a paginated authored
+        // entry must resolve to 'authored' here too, never character-relative.
+        if (this._isSpeechBubble(dialogueBox) && dialogueEntry) {
             this._fitSpeechBubbleText(dialogueBox, pageText);
-            const pos = this.normalizeZoneName((dialogueEntry?.position) || 'left');
-            this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
-            this._applyDialogueBubbleTail(dialogueBox, pos);
-            this._clampDialogueToViewport(dialogueBox);
+            const pageLayoutMode = this.layoutDialogue(dialogueBox, dialogueEntry);
+            this._debugAssertAuthoredLayout(dialogueBox, dialogueEntry, pageLayoutMode);
+            this._clampDialogueToViewport(dialogueBox, { preserveCentered: pageLayoutMode === 'narrative' });
         }
 
         // Always hide the bubble tap hint — Continue button is the advance mechanism
@@ -5793,48 +5877,24 @@ const sceneRenderer = {
         const dialogueBox = document.getElementById('dialogue-box');
         if (!dialogueBox || dialogueBox.classList.contains('hidden')) return;
 
-        const scene = this.currentScene;
-        const dialogueEntry = scene?.dialogue?.[gameState.currentDialogueIndex];
+        // Use the entry actually on screen, not scene.dialogue[currentDialogueIndex] —
+        // that index can be stale (e.g. dialogue shown ad hoc via onClick handlers,
+        // or via the debug API) and previously caused resize to follow different
+        // rules than the initial render.
+        const dialogueEntry = this._activeDialogueEntry
+            || gameState.currentDialogueEntry
+            || this.currentScene?.dialogue?.[gameState.currentDialogueIndex];
         if (!dialogueEntry) return;
 
-        const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
-        const isChoice = dialogueEntry.speaker === 'CHOICE' || dialogueEntry.speaker === 'FINAL CHOICE';
-
-        if (isNarration || isChoice) {
-            dialogueBox.classList.remove('dialogue-anchored');
-            this._positionNarrativeDialogue(dialogueBox);
-            this._clampDialogueToViewport(dialogueBox, { preserveCentered: true });
-            return;
+        // Re-fit speech-bubble text first so box height is stable before the
+        // canonical layout pass positions it (mirrors showDialogue()'s ordering).
+        if (this._isSpeechBubble(dialogueBox)) {
+            this._fitSpeechBubbleText(dialogueBox, dialogueEntry.text || '');
         }
 
-        const useBubbleLayout = Boolean(dialogueEntry.bubbleLayout);
-
-        if (useBubbleLayout) {
-            const bl = dialogueEntry.bubbleLayout;
-            const rect = positioningSystem.getBackgroundRect();
-            if (rect) {
-                const scaled = positioningSystem.calculateHotspotPosition(
-                    bl.left || 0, bl.top || 0, bl.width || 400, bl.height || 300
-                );
-                dialogueBox.style.left = scaled.left;
-                dialogueBox.style.top = scaled.top;
-                dialogueBox.style.width = scaled.width;
-                dialogueBox.style.height = scaled.height;
-                dialogueBox.style.right = 'auto';
-                dialogueBox.style.bottom = 'auto';
-                dialogueBox.style.transform = 'none';
-            }
-            this._clampDialogueToViewport(dialogueBox);
-            return;
-        }
-
-        const zoneName = this.normalizeZoneName(dialogueEntry.position || 'left');
-        // Re-fit text first so box height is stable before positioning
-        this._fitSpeechBubbleText(dialogueBox, dialogueEntry.text || '');
-        this._positionDialogueNearCharacter(dialogueBox, zoneName, dialogueEntry);
-        this._applyDialogueBubbleTail(dialogueBox, zoneName);
-        dialogueBox.classList.add('dialogue-anchored');
-        this._clampDialogueToViewport(dialogueBox);
+        const layoutMode = this.layoutDialogue(dialogueBox, dialogueEntry);
+        this._debugAssertAuthoredLayout(dialogueBox, dialogueEntry, layoutMode);
+        this._clampDialogueToViewport(dialogueBox, { preserveCentered: layoutMode === 'narrative' });
     },
 
     nextDialogue() {
