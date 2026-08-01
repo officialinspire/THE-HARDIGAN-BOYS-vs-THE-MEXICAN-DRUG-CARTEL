@@ -3095,29 +3095,73 @@ const positioningSystem = {
         };
     },
 
-    getDialogueSafeRect(padPx = 12) {
+    /** Reads a plain-pixel CSS custom property (e.g. "8px") off :root. */
+    _getCSSPixelVar(varName, fallbackPx) {
+        try {
+            const raw = getComputedStyle(document.documentElement).getPropertyValue(varName);
+            const px = parseFloat(raw);
+            return Number.isFinite(px) ? px : fallbackPx;
+        } catch (_) {
+            return fallbackPx;
+        }
+    },
+
+    /**
+     * The HUD's actual reserved band, measured from the live #hud::before bar
+     * (its computed top+height) rather than assumed. This tracks whichever
+     * breakpoint's HUD sizing is currently active instead of a single fixed
+     * reference constant applied uniformly to every viewport.
+     */
+    _getHUDBottomPx(rect) {
+        try {
+            const hudEl = document.getElementById('hud');
+            if (hudEl) {
+                const hudBefore = getComputedStyle(hudEl, '::before');
+                const hudTop = parseFloat(hudBefore.top);
+                const hudHeight = parseFloat(hudBefore.height);
+                if (Number.isFinite(hudTop) && Number.isFinite(hudHeight)) {
+                    return hudTop + hudHeight;
+                }
+            }
+        } catch (_) {
+            // fall through to the reference-scaled estimate below
+        }
+        return rect ? (this.HUD_TOP * rect.nativeScaleY) : this.HUD_TOP;
+    },
+
+    /**
+     * Safe placement rectangle for the dialogue box, in scene-container-local
+     * pixels. Pass an explicit padPx to override; otherwise the pad and HUD
+     * reservation are derived from live CSS (--dlg-safe-pad, --dlg-bottom-safe,
+     * #hud::before) so compact-landscape breakpoints get their own correctly
+     * scaled reservation instead of one fixed reference-space assumption.
+     */
+    getDialogueSafeRect(padPx) {
         const rect = this.getBackgroundRect();
         const container = document.getElementById('scene-container');
         if (!container) return null;
 
+        const resolvedPad = Number.isFinite(padPx) ? padPx : this._getCSSPixelVar('--dlg-safe-pad', 12);
+
         // Fallback if background rect isn't available yet
         if (!rect) {
             return {
-                left: padPx,
-                top: padPx,
-                right: container.clientWidth - padPx,
-                bottom: container.clientHeight - padPx
+                left: resolvedPad,
+                top: resolvedPad,
+                right: container.clientWidth - resolvedPad,
+                bottom: container.clientHeight - resolvedPad
             };
         }
 
-        const hudPx = this.HUD_TOP * rect.nativeScaleY;
-        const dialoguePx = this.DIALOGUE_BOTTOM * rect.nativeScaleY;
+        // Never reserve above the visible background art's own top edge.
+        const hudBottomPx = Math.max(rect.offsetY, this._getHUDBottomPx(rect));
+        const bottomPad = resolvedPad + this._getCSSPixelVar('--dlg-bottom-safe', 8);
 
         return {
-            left: rect.offsetX + padPx,
-            right: rect.offsetX + rect.renderedW - padPx,
-            top: rect.offsetY + hudPx + padPx,
-            bottom: rect.offsetY + rect.renderedH - dialoguePx - padPx
+            left: rect.offsetX + resolvedPad,
+            right: rect.offsetX + rect.renderedW - resolvedPad,
+            top: hudBottomPx + resolvedPad,
+            bottom: rect.offsetY + rect.renderedH - bottomPad
         };
     },
 
@@ -4792,6 +4836,15 @@ const sceneRenderer = {
             this._setBubblePagingUI?.(dialogueBox, false);
             this._resetDialoguePaging();
 
+            // Reserve the continue-button/choices footprint BEFORE measuring —
+            // they're normally hidden until after typing starts, so without
+            // this the fit/pagination checks below under-count the bubble's
+            // true final height and text can end up taller than the visible
+            // container once the button/choices are revealed. Released again
+            // just before typeText() (single-page path) or inside
+            // _showDialoguePage() (paginated path, which rebuilds them anyway).
+            this._reserveActionSpaceForFit(dialogueEntry);
+
             // Fit text into stable bubble container (speech-bubble mode only, all screen sizes)
             this._fitSpeechBubbleText(dialogueBox, dialogueText);
 
@@ -4832,6 +4885,7 @@ const sceneRenderer = {
                 };
                 // Ensure bubble tap hint is hidden — Continue button drives pagination
                 this._setBubblePagingUI(dialogueBox, false);
+                this._releaseReservedActionSpace();
                 this._showDialoguePage(pages[0], dialogueEntry);
                 // Reveal after positioning settles. Reapply the already-resolved
                 // mode once more (never re-deciding it) so late-settling fonts/
@@ -4846,6 +4900,8 @@ const sceneRenderer = {
                 });
                 return;
             }
+
+            this._releaseReservedActionSpace();
 
             this.typeText(text, dialogueText, {
                 onFinish: () => this._updateDialogueOverflowIndicator(text)
@@ -5051,9 +5107,9 @@ const sceneRenderer = {
         if (!container) return;
         const containerRect = container.getBoundingClientRect();
         const boxRect = dialogueBox.getBoundingClientRect();
-        const isMobile = window.matchMedia('(max-width: 1024px)').matches;
-
-        const safe = positioningSystem.getDialogueSafeRect(isMobile ? 10 : 12);
+        // Pad/HUD reservation now comes from live CSS (--dlg-safe-pad,
+        // #hud::before) via getDialogueSafeRect() itself — no isMobile heuristic needed.
+        const safe = positioningSystem.getDialogueSafeRect();
         if (!safe) return;
 
         const minLeft = safe.left;
@@ -5166,8 +5222,9 @@ const sceneRenderer = {
         const isMobile = window.matchMedia('(max-width: 1024px)').matches;
         const gap = isMobile ? 2 : 8;
 
-        // Safe placement area (inside rendered background & below HUD)
-        const safe = positioningSystem.getDialogueSafeRect(isMobile ? 10 : 12);
+        // Safe placement area (inside rendered background & below HUD).
+        // Pad/HUD reservation comes from live CSS via getDialogueSafeRect() itself.
+        const safe = positioningSystem.getDialogueSafeRect();
         if (!safe) return;
 
         const isLeftZone = zoneName.startsWith('left');
@@ -5241,6 +5298,16 @@ const sceneRenderer = {
     },
 
     /**
+     * True on phone/tablet landscape viewports where vertical space is scarce
+     * enough that an authored/zone bubble height must be treated as a cap
+     * rather than a fixed value. Mirrors the CSS compact-landscape queries.
+     */
+    _isCompactLandscape() {
+        return window.matchMedia('(max-width: 1024px) and (orientation: landscape)').matches
+            || window.matchMedia('(max-height: 500px)').matches;
+    },
+
+    /**
      * THE canonical dialogue layout entry point — the only method allowed to set
      * dialogueBox position/size. Resolves exactly one placement mode per call,
      * in strict precedence order, and applies it:
@@ -5260,6 +5327,11 @@ const sceneRenderer = {
      */
     layoutDialogue(dialogueBox, dialogueEntry, options = {}) {
         if (!dialogueBox || !dialogueEntry) return null;
+
+        // Clear any compact-landscape height cap left by a previous call/entry —
+        // the branches below re-derive it fresh for whichever mode resolves.
+        const containerEl = document.getElementById('dialogue-container');
+        if (containerEl) containerEl.style.maxHeight = '';
 
         const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
         const isChoice = dialogueEntry.speaker === 'CHOICE' || dialogueEntry.speaker === 'FINAL CHOICE';
@@ -5355,10 +5427,27 @@ const sceneRenderer = {
         dialogueBox.style.left      = pos.left;
         dialogueBox.style.top       = pos.top;
         dialogueBox.style.width     = pos.width;
-        dialogueBox.style.height    = pos.height;
         dialogueBox.style.right     = 'auto';
         dialogueBox.style.bottom    = 'auto';
         dialogueBox.style.transform = 'none';
+
+        // #dialogue-container (the element that actually renders the bubble
+        // art/text) does not inherit #dialogue-box's height — it sizes itself
+        // via CSS min/max-height. On desktop/portrait those CSS ranges were
+        // tuned to match the scaled rect, so setting a fixed height here is
+        // safe. In compact landscape, a scaled authored/zone height can fall
+        // below the CSS min-height floor, so treat it as a MAX instead: the
+        // box auto-sizes to content (never forced taller than needed) but is
+        // capped at the authored footprint (never taller than intended,
+        // overflow handled by the existing pagination system).
+        const containerEl = document.getElementById('dialogue-container');
+        if (this._isCompactLandscape()) {
+            dialogueBox.style.height = 'auto';
+            if (containerEl) containerEl.style.maxHeight = pos.height;
+        } else {
+            dialogueBox.style.height = pos.height;
+            if (containerEl) containerEl.style.maxHeight = '';
+        }
 
         // 6. Tail side: left-side zones get a left tail, right-side zones get a right tail
         const tailSide = zone.startsWith('right') ? 'right' : 'left';
@@ -5499,6 +5588,39 @@ const sceneRenderer = {
         }
     },
 
+    /**
+     * The continue button is normally hidden until after typing starts, but
+     * it lives in the same flex column as #dialogue-text (inside
+     * #dialogue-content) and competes for the same limited height in
+     * speech-bubble mode. Reserving its true footprint before
+     * _fitSpeechBubbleText() measures the bubble means that check sees the
+     * bubble's real final layout instead of under-counting it (which
+     * otherwise lets text fit "on paper" but overflow once the button is
+     * actually revealed). Pair with _releaseReservedActionSpace() once
+     * positioning/measurement is done — the real reveal logic further down
+     * replaces this placeholder state.
+     *
+     * Choice buttons are deliberately NOT reserved here: they only ever
+     * render in narrative mode (never speech-bubble, so _fitSpeechBubbleText
+     * is a no-op for them anyway) and always appear *after* a prompt is
+     * fully shown, not competing with it for space during pagination's fit
+     * check — reserving them there previously caused false-positive
+     * pagination on short choice prompts.
+     */
+    _reserveActionSpaceForFit(dialogueEntry) {
+        const continueBtn = document.getElementById('dialogue-continue');
+        if (!continueBtn || !dialogueEntry) return;
+        if (!dialogueEntry.choices?.length && dialogueEntry.next) {
+            continueBtn.textContent = 'continue';
+            continueBtn.classList.remove('hidden');
+        }
+    },
+
+    _releaseReservedActionSpace() {
+        const continueBtn = document.getElementById('dialogue-continue');
+        if (continueBtn) continueBtn.classList.add('hidden');
+    },
+
     _fitSpeechBubbleText(dialogueBox, fullText) {
         if (!dialogueBox) return;
         if (dialogueBox.dataset.layoutPanel !== 'speech-bubble') return;
@@ -5525,9 +5647,11 @@ const sceneRenderer = {
             const csT = parseFloat(getComputedStyle(textEl).fontSize) || 16;
             const csS = speakerEl ? (parseFloat(getComputedStyle(speakerEl).fontSize) || 16) : 0;
 
-            if (csT > minText) textEl.style.fontSize = (csT - 0.5) + 'px';
+            // Math.max clamps the step so a 0.5px decrement can never overshoot
+            // below the floor (e.g. 14.19px - 0.5 would land at 13.69px).
+            if (csT > minText) textEl.style.fontSize = Math.max(minText, csT - 0.5) + 'px';
             if (speakerEl && csS > minSpeaker && contentEl.scrollHeight > contentEl.clientHeight) {
-                speakerEl.style.fontSize = (csS - 0.5) + 'px';
+                speakerEl.style.fontSize = Math.max(minSpeaker, csS - 0.5) + 'px';
             }
 
             if ((parseFloat(getComputedStyle(textEl).fontSize) <= minText) &&
@@ -5779,6 +5903,14 @@ const sceneRenderer = {
 
         const isLastPage = this._dialoguePageIndex === this._dialoguePages.length - 1;
 
+        // Show the Continue button BEFORE fitting/measuring — it's always
+        // visible during pagination, so the fit check must see its true
+        // footprint or it can under-count the bubble's final height (the
+        // button competes with #dialogue-text for the same flex space).
+        continueBtn.classList.remove('hidden');
+        continueBtn.textContent = isLastPage ? 'continue' : 'more...';
+        continueBtn.setAttribute('aria-label', isLastPage ? 'Continue dialogue' : 'Show more dialogue');
+
         // For speech-bubble: re-fit bubble geometry to page text, then run the
         // SAME canonical layout pass showDialogue() uses — a paginated authored
         // entry must resolve to 'authored' here too, never character-relative.
@@ -5791,11 +5923,6 @@ const sceneRenderer = {
 
         // Always hide the bubble tap hint — Continue button is the advance mechanism
         this._setBubblePagingUI(dialogueBox, false);
-
-        // Show Continue button immediately (click = skip typing or advance page)
-        continueBtn.classList.remove('hidden');
-        continueBtn.textContent = isLastPage ? 'continue' : 'more...';
-        continueBtn.setAttribute('aria-label', isLastPage ? 'Continue dialogue' : 'Show more dialogue');
 
         continueBtn.onclick = () => {
             // First click while typing: finish instantly
@@ -9026,14 +9153,17 @@ const HBDebugAPI = {
         return hbToJSONSafe(sceneRenderer._activeDialogueEntry || null);
     },
 
-    showDialogue(entry) {
+    async showDialogue(entry) {
         if (!entry || typeof entry !== 'object') {
             return { ok: false, error: 'showDialogue requires a dialogue entry object' };
         }
         // Debug override: clear any lock left by a prior line the test never
         // clicked through, so this call is deterministic regardless of state.
         gameState.dialogueLock = false;
-        sceneRenderer.showDialogue(entry);
+        // Awaited (not fire-and-forget) so callers — e.g. Playwright driving
+        // this over page.evaluate() — can rely on layout having fully settled
+        // by the time this call resolves.
+        await sceneRenderer.showDialogue(entry);
         return { ok: true };
     },
 
