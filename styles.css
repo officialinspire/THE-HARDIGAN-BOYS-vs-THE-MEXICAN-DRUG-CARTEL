@@ -3305,6 +3305,18 @@ body.main-menu #scene-container {
     }
 }
 
+/* ===== DEBUG: FORCE-DISABLE ANIMATIONS =====
+   Toggled via ?noAnimations=1 or window.__HB_DEBUG__.setAnimationsEnabled(false).
+   Only applied when body has this class, so normal play is unaffected. */
+.hb-no-animations,
+.hb-no-animations * {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0ms !important;
+}
+
 
 .status-toast {
     position: fixed;

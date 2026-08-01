@@ -6,7 +6,8 @@
 // ===== GAMEBOY-STYLE SFX GENERATOR =====
 const SFXGenerator = {
     audioContext: null,
-    
+    muted: false, // set by __HB_DEBUG__.setAudioEnabled() / ?mute=1
+
     init() {
         try {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -45,7 +46,7 @@ const SFXGenerator = {
     },
 
     _ensureAudioContext() {
-        if (!this.audioContext) return false;
+        if (!this.audioContext || this.muted) return false;
         
         if (this.audioContext.state === 'suspended') {
             this.audioContext.resume().catch(err => {
@@ -213,6 +214,17 @@ const DEBUG = window.location.hostname === 'localhost' ||
               window.location.hostname === '127.0.0.1' ||
               window.location.search.includes('debug=true');
 const DEV_FORCE_WHITE_STRIP = false;
+
+// ===== DEBUG/TESTING URL FLAGS =====
+// ?debug=true unlocks window.__HB_DEBUG__, a deterministic test API (see bottom of file).
+// ?skipIntro=1 bypasses the studio intro video and loads the main menu directly.
+// ?mute=1 silences music/SFX from boot. ?noAnimations=1 disables CSS animations/transitions.
+// None of these flags change behavior unless explicitly present in the URL.
+const HB_URL_PARAMS = new URLSearchParams(window.location.search);
+const HB_DEBUG_ENABLED = HB_URL_PARAMS.get('debug') === 'true';
+const HB_FLAG_SKIP_INTRO = HB_URL_PARAMS.get('skipIntro') === '1';
+const HB_FLAG_MUTE = HB_URL_PARAMS.get('mute') === '1';
+const HB_FLAG_NO_ANIMATIONS = HB_URL_PARAMS.get('noAnimations') === '1';
 
 const SETTINGS_STORAGE_KEY = 'HB_SETTINGS_V1';
 
@@ -2401,16 +2413,29 @@ const audioManager = {
     },
     maxConcurrentSfx: 2,
     activeSfx: 0,
-    
+    muted: false, // set by __HB_DEBUG__.setAudioEnabled() / ?mute=1
+
     init() {
         this.musicPlayer = document.getElementById('music-player');
         this.sfxPlayer = document.getElementById('sfx-player');
         this.updateVolumes();
         SFXGenerator.init();
     },
-    
+
+    // Debug/testing hook: mute or restore music+SFX playback deterministically.
+    setMuted(muted) {
+        this.muted = muted;
+        if (muted) {
+            if (this.musicPlayer) { try { this.musicPlayer.pause(); } catch (_) {} this.musicPlayer.volume = 0; }
+            if (this.sfxPlayer) { try { this.sfxPlayer.pause(); } catch (_) {} this.sfxPlayer.volume = 0; }
+        } else {
+            this.updateVolumes();
+        }
+    },
+
     playMusic(filename, fadeIn = true) {
         try {
+            if (this.muted) return;
             if (!filename || this.currentTrack === filename) return;
 
             const fadeOut = () => {
@@ -2474,6 +2499,7 @@ const audioManager = {
     
     playSFX(filename) {
         try {
+            if (this.muted) return;
             if (!filename) return;
             if (this.activeSfx >= this.maxConcurrentSfx) {
                 return;
@@ -8531,6 +8557,9 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
 
     setupViewportHeightHandlers();
 
+    // ?noAnimations=1 — apply before any scene/UI renders so nothing animates in.
+    if (HB_FLAG_NO_ANIMATIONS) document.body.classList.add('hb-no-animations');
+
     // Restore persisted settings before audio/UI init so volumes apply immediately
     loadSettingsFromStorage();
 
@@ -8543,6 +8572,11 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
 
     // Initialize audio
     audioManager.init();
+    // ?mute=1 — silence music/SFX from boot, before any track starts playing.
+    if (HB_FLAG_MUTE) {
+        SFXGenerator.muted = true;
+        audioManager.setMuted(true);
+    }
     mobileOptimizer.init();
 
     // Normalize scene data before the first scene loads.
@@ -8616,6 +8650,12 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
     setTimeout(() => {
         assetLoader.hideLoadingScreen();
 
+        // ?skipIntro=1 — bypass the studio intro video entirely.
+        if (HB_FLAG_SKIP_INTRO) {
+            sceneRenderer.loadScene('S0_MAIN_MENU');
+            return;
+        }
+
         const introScreen = document.getElementById('intro-video-screen');
         const introVideo = document.getElementById('intro-video');
         const skipBtn = document.getElementById('intro-skip-btn');
@@ -8658,3 +8698,326 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
 
     console.log('✅ Game initialized successfully!');
 }, 'bootstrap'));
+
+// ============================================
+// ===== DEBUG / TESTING API (window.__HB_DEBUG__) =====
+// ============================================
+// Only attached when the page is loaded with ?debug=true (see HB_DEBUG_ENABLED
+// above). Provides deterministic hooks for automated layout/regression testing
+// without touching game content, story flags, or any production code path.
+// Documented in DEVELOPMENT.md.
+
+// Deep-clones a value into a plain, JSON-safe structure: functions are
+// dropped, Sets/Maps become arrays/objects, and circular refs are guarded.
+function hbToJSONSafe(value, seen, depth) {
+    seen = seen || new WeakSet();
+    depth = depth || 0;
+    if (value === null || value === undefined) return value;
+    const type = typeof value;
+    if (type === 'function') return undefined;
+    if (type !== 'object') return value;
+    if (depth > 6) return '[Truncated]';
+    if (value instanceof Set) return Array.from(value).map(v => hbToJSONSafe(v, seen, depth + 1));
+    if (value instanceof Map) return hbToJSONSafe(Object.fromEntries(value), seen, depth + 1);
+    if (Array.isArray(value)) return value.map(v => hbToJSONSafe(v, seen, depth + 1));
+    if (value instanceof Node) return undefined; // never serialize DOM nodes
+    if (seen.has(value)) return '[Circular]';
+    seen.add(value);
+    const out = {};
+    Object.keys(value).forEach(key => {
+        const v = hbToJSONSafe(value[key], seen, depth + 1);
+        if (v !== undefined) out[key] = v;
+    });
+    return out;
+}
+
+// Viewport-relative bounding rect plus a best-effort visibility check.
+function hbGetRect(el) {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const style = window.getComputedStyle(el);
+    const visible = style.display !== 'none' && style.visibility !== 'hidden' &&
+        parseFloat(style.opacity || '1') > 0.01 && r.width > 0 && r.height > 0;
+    return {
+        left: r.left, top: r.top, right: r.right, bottom: r.bottom,
+        width: r.width, height: r.height, visible
+    };
+}
+
+// The "scene safe area" is the rendered background frame (letterboxed/pillarboxed
+// as needed), in viewport coordinates — the same frame validateCurrentLayout()
+// checks other rectangles against.
+function hbGetSafeAreaRect() {
+    const container = document.getElementById('scene-container');
+    if (!container) return null;
+    const containerRect = container.getBoundingClientRect();
+    const bgRect = positioningSystem.getBackgroundRect();
+    if (!bgRect) {
+        return {
+            left: containerRect.left, top: containerRect.top,
+            right: containerRect.right, bottom: containerRect.bottom,
+            width: containerRect.width, height: containerRect.height
+        };
+    }
+    return {
+        left: containerRect.left + bgRect.offsetX,
+        top: containerRect.top + bgRect.offsetY,
+        right: containerRect.left + bgRect.offsetX + bgRect.renderedW,
+        bottom: containerRect.top + bgRect.offsetY + bgRect.renderedH,
+        width: bgRect.renderedW,
+        height: bgRect.renderedH
+    };
+}
+
+// True when `rect` extends outside `area` by more than `tolerance` px.
+// Rects with no rendered size (hidden elements) are never flagged.
+function hbRectOutsideArea(rect, area, tolerance) {
+    tolerance = tolerance || 1;
+    if (!rect || !area) return null;
+    if (rect.width <= 0 && rect.height <= 0) return false;
+    return (
+        rect.left < area.left - tolerance ||
+        rect.top < area.top - tolerance ||
+        rect.right > area.right + tolerance ||
+        rect.bottom > area.bottom + tolerance
+    );
+}
+
+function hbGetOverflow(el) {
+    if (!el) return null;
+    return {
+        scrollWidth: el.scrollWidth,
+        scrollHeight: el.scrollHeight,
+        clientWidth: el.clientWidth,
+        clientHeight: el.clientHeight,
+        overflowX: Math.max(0, el.scrollWidth - el.clientWidth),
+        overflowY: Math.max(0, el.scrollHeight - el.clientHeight)
+    };
+}
+
+// Images currently showing the "missing asset" SVG placeholder, plus any
+// srcs assetLoader already recorded as failed preloads.
+function hbGetMissingAssetInfo() {
+    const placeholders = Array.from(document.querySelectorAll('img'))
+        .filter(img => typeof img.src === 'string' && img.src.startsWith('data:image/svg'))
+        .map(img => ({ id: img.id || null, alt: img.alt || null }));
+    return {
+        preloadErrors: [...assetLoader.errors],
+        placeholderImagesInDom: placeholders
+    };
+}
+
+function hbBuildLayoutSnapshot() {
+    try {
+        const dialogueBox = document.getElementById('dialogue-box');
+        const dialogueContent = document.getElementById('dialogue-content');
+        const dialogueText = document.getElementById('dialogue-text');
+        const dialogueSpeaker = document.getElementById('dialogue-speaker');
+        const continueBtn = document.getElementById('dialogue-continue');
+        const choicesDiv = document.getElementById('dialogue-choices');
+
+        const safeArea = hbGetSafeAreaRect();
+        const dialogueBoxRect = hbGetRect(dialogueBox);
+        const continueRect = hbGetRect(continueBtn);
+
+        const choices = choicesDiv
+            ? Array.from(choicesDiv.querySelectorAll('.dialogue-choice')).map(btn => {
+                const rect = hbGetRect(btn);
+                return { text: btn.textContent, rect, outsideSafeArea: hbRectOutsideArea(rect, safeArea) };
+            })
+            : [];
+
+        const characters = Array.from(document.querySelectorAll('.character-sprite')).map(el => {
+            const rect = hbGetRect(el);
+            return {
+                id: el.dataset.characterId || null,
+                zone: el.dataset.zone || null,
+                name: el.dataset.characterName || null,
+                rect,
+                visible: el.classList.contains('visible'),
+                outsideSafeArea: hbRectOutsideArea(rect, safeArea)
+            };
+        });
+
+        return {
+            timestamp: Date.now(),
+            sceneId: gameState.currentSceneId,
+            viewport: { width: window.innerWidth, height: window.innerHeight },
+            backgroundRect: safeArea,
+            activeDialogueEntry: hbToJSONSafe(sceneRenderer._activeDialogueEntry || null),
+            dialogue: {
+                box: { rect: dialogueBoxRect, outsideSafeArea: hbRectOutsideArea(dialogueBoxRect, safeArea) },
+                content: { rect: hbGetRect(dialogueContent), overflow: hbGetOverflow(dialogueContent) },
+                text: { rect: hbGetRect(dialogueText), overflow: hbGetOverflow(dialogueText) },
+                speaker: { rect: hbGetRect(dialogueSpeaker) },
+                continueButton: { rect: continueRect, outsideSafeArea: hbRectOutsideArea(continueRect, safeArea) },
+                choices
+            },
+            characters,
+            missingAssets: hbGetMissingAssetInfo()
+        };
+    } catch (error) {
+        errorLogger.log('debug-getLayoutSnapshot', error);
+        return { error: String((error && error.message) || error) };
+    }
+}
+
+function hbValidateLayout() {
+    try {
+        const snapshot = hbBuildLayoutSnapshot();
+        if (snapshot.error) {
+            return { ok: false, violations: [{ type: 'snapshot-error', severity: 'error', message: snapshot.error }], snapshot };
+        }
+
+        const violations = [];
+        const entry = snapshot.activeDialogueEntry;
+
+        // Dialogue outside the rendered game frame
+        const boxRect = snapshot.dialogue.box.rect;
+        if (boxRect && boxRect.width > 0 && snapshot.dialogue.box.outsideSafeArea) {
+            violations.push({ type: 'dialogue-outside-frame', severity: 'error', message: 'Dialogue box renders outside the visible background frame', rect: boxRect });
+        }
+
+        // Text / content overflow
+        const textOverflow = snapshot.dialogue.text.overflow;
+        if (textOverflow && (textOverflow.overflowX > 1 || textOverflow.overflowY > 1)) {
+            violations.push({ type: 'text-overflow', severity: 'warning', message: 'Dialogue text overflows its container', overflow: textOverflow });
+        }
+        const contentOverflow = snapshot.dialogue.content.overflow;
+        if (contentOverflow && (contentOverflow.overflowX > 1 || contentOverflow.overflowY > 1)) {
+            violations.push({ type: 'content-overflow', severity: 'warning', message: 'Dialogue content overflows its container', overflow: contentOverflow });
+        }
+
+        // Hidden or offscreen continue button (only when dialogue actually expects one)
+        const expectsContinue = !!(entry && entry.next && (!entry.choices || entry.choices.length === 0));
+        if (expectsContinue) {
+            const rect = snapshot.dialogue.continueButton.rect;
+            const isHiddenOrOffscreen = !rect || !rect.visible ||
+                rect.right <= 0 || rect.bottom <= 0 ||
+                rect.left >= snapshot.viewport.width || rect.top >= snapshot.viewport.height;
+            if (isHiddenOrOffscreen) {
+                violations.push({ type: 'continue-button-hidden-or-offscreen', severity: 'error', message: 'Continue button is hidden or offscreen while dialogue expects continuation', rect });
+            }
+        }
+
+        // Choices outside the safe area
+        snapshot.dialogue.choices.forEach((choice, idx) => {
+            if (choice.outsideSafeArea) {
+                violations.push({ type: 'choice-outside-safe-area', severity: 'error', message: `Choice button "${choice.text}" renders outside the safe area`, index: idx, rect: choice.rect });
+            }
+        });
+
+        // Missing visible speaker sprite (character-speech dialogue only)
+        const isNarration = !entry || !entry.speaker || entry.speaker === 'NARRATION' || entry.speaker === 'SYSTEM';
+        const isChoiceEntry = entry && (entry.speaker === 'CHOICE' || entry.speaker === 'FINAL CHOICE');
+        if (entry && !isNarration && !isChoiceEntry) {
+            const speakerName = String(entry.speaker || '').toUpperCase();
+            const match = snapshot.characters.find(c => (c.name || '').toUpperCase() === speakerName);
+            if (!match) {
+                violations.push({ type: 'missing-speaker-sprite', severity: 'error', message: `No character sprite found in scene for speaker "${entry.speaker}"` });
+            } else if (!match.visible || !match.rect || !match.rect.visible) {
+                violations.push({ type: 'missing-speaker-sprite', severity: 'error', message: `Speaker "${entry.speaker}" sprite is present but not visibly rendered`, character: match });
+            }
+        }
+
+        // Duplicate character IDs
+        const idCounts = new Map();
+        snapshot.characters.forEach(c => {
+            if (!c.id) return;
+            idCounts.set(c.id, (idCounts.get(c.id) || 0) + 1);
+        });
+        idCounts.forEach((count, id) => {
+            if (count > 1) {
+                violations.push({ type: 'duplicate-character-id', severity: 'error', message: `Character id "${id}" appears ${count} times in the scene`, id, count });
+            }
+        });
+
+        // Missing image assets already reported by the loader
+        snapshot.missingAssets.preloadErrors.forEach(src => {
+            violations.push({ type: 'missing-asset', severity: 'error', message: `Asset failed to preload: ${src}`, src });
+        });
+        snapshot.missingAssets.placeholderImagesInDom.forEach(img => {
+            violations.push({ type: 'missing-asset', severity: 'error', message: `Placeholder image currently rendered in DOM (${img.id || img.alt || 'unknown'})`, image: img });
+        });
+
+        return { ok: violations.length === 0, violations, snapshot };
+    } catch (error) {
+        errorLogger.log('debug-validateCurrentLayout', error);
+        return { ok: false, violations: [{ type: 'internal-error', severity: 'error', message: String((error && error.message) || error) }], snapshot: null };
+    }
+}
+
+const HBDebugAPI = {
+    listScenes() {
+        return Object.keys(SCENES).map(id => ({
+            id,
+            title: SCENES[id]?.title || null,
+            background: SCENES[id]?.background || null
+        }));
+    },
+
+    jumpToScene(sceneId) {
+        if (!SCENES[sceneId]) return { ok: false, error: `Unknown scene id: ${sceneId}` };
+        sceneRenderer.loadScene(sceneId);
+        return { ok: true, sceneId };
+    },
+
+    getActiveDialogue() {
+        return hbToJSONSafe(sceneRenderer._activeDialogueEntry || null);
+    },
+
+    showDialogue(entry) {
+        if (!entry || typeof entry !== 'object') {
+            return { ok: false, error: 'showDialogue requires a dialogue entry object' };
+        }
+        // Debug override: clear any lock left by a prior line the test never
+        // clicked through, so this call is deterministic regardless of state.
+        gameState.dialogueLock = false;
+        sceneRenderer.showDialogue(entry);
+        return { ok: true };
+    },
+
+    finishTyping() {
+        const textEl = document.getElementById('dialogue-text');
+        return { ok: sceneRenderer.finishTypeText(textEl) };
+    },
+
+    advanceDialogue() {
+        const textEl = document.getElementById('dialogue-text');
+        const continueBtn = document.getElementById('dialogue-continue');
+        if (sceneRenderer.isTyping) {
+            sceneRenderer.finishTypeText(textEl);
+            return { ok: true, action: 'finished-typing' };
+        }
+        if (continueBtn && !continueBtn.classList.contains('hidden') && typeof continueBtn.onclick === 'function') {
+            continueBtn.onclick();
+            return { ok: true, action: 'advanced' };
+        }
+        return { ok: false, action: 'no-op', reason: 'no active continue button (choices pending or dialogue idle)' };
+    },
+
+    getLayoutSnapshot() {
+        return hbBuildLayoutSnapshot();
+    },
+
+    validateCurrentLayout() {
+        return hbValidateLayout();
+    },
+
+    setAnimationsEnabled(enabled) {
+        document.body.classList.toggle('hb-no-animations', enabled === false);
+        return { ok: true, animationsEnabled: enabled !== false };
+    },
+
+    setAudioEnabled(enabled) {
+        const muted = enabled === false;
+        SFXGenerator.muted = muted;
+        audioManager.setMuted(muted);
+        return { ok: true, audioEnabled: !muted };
+    }
+};
+
+if (HB_DEBUG_ENABLED) {
+    window.__HB_DEBUG__ = HBDebugAPI;
+    console.log('[HB_DEBUG] window.__HB_DEBUG__ enabled (?debug=true) — see DEVELOPMENT.md');
+}
