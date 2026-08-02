@@ -2551,17 +2551,6 @@ body.main-menu #scene-container {
 }
 
 /* ===== ANIMATIONS ===== */
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.6; }
-}
-
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-5px); }
-    75% { transform: translateX(5px); }
-}
-
 @keyframes menuFadeIn {
     0% {
         opacity: 0;
@@ -2573,14 +2562,6 @@ body.main-menu #scene-container {
     }
 }
 
-.pulse {
-    animation: pulse 2s ease-in-out infinite;
-}
-
-.shake {
-    animation: shake 0.5s ease-in-out;
-}
-
 /* ===== UTILITY CLASSES ===== */
 .hidden {
     display: none !important;
@@ -2588,10 +2569,6 @@ body.main-menu #scene-container {
 
 .invisible {
     opacity: 0 !important;
-}
-
-.no-pointer {
-    pointer-events: none !important;
 }
 
 /* ===== UX TUNING: DIALOGUE + MENUS ===== */
