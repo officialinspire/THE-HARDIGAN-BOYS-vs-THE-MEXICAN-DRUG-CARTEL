@@ -1,0 +1,21 @@
+{
+  "entry": {
+    "index": 2,
+    "speaker": "JONAH",
+    "textLength": 50,
+    "hasBubbleLayout": true
+  },
+  "allViolations": [],
+  "failingViolations": [],
+  "newConsoleErrors": [],
+  "bubbleTolerance": {
+    "expectedLeft": 766.4,
+    "expectedTop": 221.15555555555557,
+    "actualLeft": 766.4,
+    "actualTop": 221.156,
+    "deltaLeft": 0,
+    "deltaTop": 0.00044444444444025066,
+    "expectedWithinSafe": true
+  },
+  "saveWriteCheck": null
+}

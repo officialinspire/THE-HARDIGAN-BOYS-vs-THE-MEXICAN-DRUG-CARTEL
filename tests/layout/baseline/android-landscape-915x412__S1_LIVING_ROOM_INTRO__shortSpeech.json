@@ -1,0 +1,27 @@
+{
+  "entry": {
+    "index": 2,
+    "speaker": "JONAH",
+    "textLength": 50,
+    "hasBubbleLayout": true
+  },
+  "allViolations": [
+    {
+      "type": "missing-speaker-sprite",
+      "severity": "error",
+      "message": "No character sprite found in scene for speaker \"JONAH\""
+    }
+  ],
+  "failingViolations": [],
+  "newConsoleErrors": [],
+  "bubbleTolerance": {
+    "expectedLeft": 410.740625,
+    "expectedTop": 118.64074074074074,
+    "actualLeft": 410.741,
+    "actualTop": 118.641,
+    "deltaLeft": 0.0003749999999627107,
+    "deltaTop": 0.0002592592592662868,
+    "expectedWithinSafe": true
+  },
+  "saveWriteCheck": null
+}

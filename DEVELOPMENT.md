@@ -229,9 +229,10 @@ name. The HTML report (`test-results/html-report/index.html`) and the raw
 ### Known layout findings (recorded, not fixed here)
 
 The suite is left red on these — deliberately, per its own "record failures,
-don't hide them" mandate — rather than loosened to pass. Each is a real
-rendering bug independently reproduced outside the suite (not a harness
-timing artifact):
+don't hide them" mandate — rather than loosened to pass. As of the last
+recorded run (`tests/layout/baseline/`, 87 passed / 8 failed / 89 skipped /
+19 did not run), the failures fall into three root causes, each independently
+reproduced outside the suite (not a harness timing artifact):
 
 - **`S9_FINAL_WAREHOUSE_SHOWDOWN` `shortSpeech` — `content-overflow`**
   (laptop-1366x768, android-landscape-915x412, iphone-landscape-844x390).
@@ -244,14 +245,21 @@ timing artifact):
   these two smallest viewports; the resulting overflow then gets absorbed by
   `_clampDialogueToViewport()` shifting `left`, landing ~17px off the
   authored position.
-- **`S7B_CARTEL_TARGETING` / `S8B_HANK_DISGUISE_BRIEFING` `narration` —
-  `dialogue-outside-frame`** (small-landscape-740x360; `S7B` also on
-  iphone-se-landscape-667x375). `showDialogue()`'s settle pass
-  (index.js, the double-`requestAnimationFrame` callback) calls
-  `_clampDialogueToViewport()` *before* `dialoguePager.reflow()` grows a
-  narrative-mode box up toward its CSS max-height; the box's final rendered
+- **Narrative (`narration`) entries — `dialogue-outside-frame`**, seen on
+  `S8B_HANK_DISGUISE_BRIEFING` and `S9_FINAL_WAREHOUSE_SHOWDOWN`
+  (small-landscape-740x360) and `S7B_CARTEL_TARGETING`
+  (iphone-se-landscape-667x375). `showDialogue()`'s settle pass (index.js,
+  the double-`requestAnimationFrame` callback) calls
+  `_clampDialogueToViewport()` *before* `dialoguePager.reflow()` can grow a
+  narrative-mode box up toward its CSS max-height once pagination/content
+  measurement finishes; when that growth happens, the box's final rendered
   height overflows past the already-computed centered position, pushing its
-  bottom edge below the visible frame.
+  bottom edge below the visible frame. Which exact scene/viewport
+  combinations trip this depends on how much a given narration's content
+  needs to grow during reflow, so the precise set has varied slightly
+  between runs (e.g. `S7B` on small-landscape-740x360 individually
+  reproduces the same failure) — the underlying clamp-before-reflow
+  ordering bug is the same one every time.
 
 ## Character layout schema
 

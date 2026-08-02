@@ -1,0 +1,42 @@
+{
+  "entry": {
+    "index": 0,
+    "speaker": "NARRATION",
+    "textLength": 54
+  },
+  "allViolations": [
+    {
+      "type": "dialogue-outside-frame",
+      "severity": "error",
+      "message": "Dialogue box renders outside the visible background frame",
+      "rect": {
+        "left": 270,
+        "top": 128.8125,
+        "right": 470,
+        "bottom": 368.8125,
+        "width": 200,
+        "height": 240,
+        "visible": true
+      }
+    }
+  ],
+  "failingViolations": [
+    {
+      "type": "dialogue-outside-frame",
+      "severity": "error",
+      "message": "Dialogue box renders outside the visible background frame",
+      "rect": {
+        "left": 270,
+        "top": 128.8125,
+        "right": 470,
+        "bottom": 368.8125,
+        "width": 200,
+        "height": 240,
+        "visible": true
+      }
+    }
+  ],
+  "newConsoleErrors": [],
+  "bubbleTolerance": null,
+  "saveWriteCheck": null
+}
