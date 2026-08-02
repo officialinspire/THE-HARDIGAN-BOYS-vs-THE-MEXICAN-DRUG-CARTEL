@@ -7644,7 +7644,11 @@ const SCENES = {
                                     sceneRenderer.showDialogue({
                                         speaker: 'JONAH',
                                         text: "Did she say three minutes? What happens at three minutes?",
-                                        position: 'right',
+                                        // Jonah's actual scene slot is left-2 (see
+                                        // scene.characters below) — 'right' put his
+                                        // bubble on the opposite side of the screen
+                                        // from his sprite.
+                                        position: 'left-2',
                                         next: 'NEXT_DIALOGUE'
                                     });
                                 }
