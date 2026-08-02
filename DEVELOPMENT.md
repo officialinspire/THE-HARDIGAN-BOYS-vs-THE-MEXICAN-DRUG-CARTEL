@@ -226,6 +226,33 @@ name. The HTML report (`test-results/html-report/index.html`) and the raw
 | `test-results/` | No (gitignored) | Screenshots, JSON layout snapshots, HTML report, traces — regenerated every run. |
 | `tests/layout/baseline/` | **Yes** | The one approved reference artifact set, only updated deliberately via `npm run test:layout:update` — see that directory's `README.md`. |
 
+### Known layout findings (recorded, not fixed here)
+
+The suite is left red on these — deliberately, per its own "record failures,
+don't hide them" mandate — rather than loosened to pass. Each is a real
+rendering bug independently reproduced outside the suite (not a harness
+timing artifact):
+
+- **`S9_FINAL_WAREHOUSE_SHOWDOWN` `shortSpeech` — `content-overflow`**
+  (laptop-1366x768, android-landscape-915x412, iphone-landscape-844x390).
+  Mendoza's short line overflows its bubble on these three viewports.
+- **`S1_LIVING_ROOM_INTRO` `shortSpeech` — `bubbleLayoutTolerance`**
+  (small-landscape-740x360, iphone-se-landscape-667x375). JONAH's authored
+  `bubbleLayout` width is overridden by the generic
+  `@media (max-width: 1024px) #dialogue-box { min-width: min(240px, 86vw); }`
+  rule (styles.css), which forces the box wider than the authored rect on
+  these two smallest viewports; the resulting overflow then gets absorbed by
+  `_clampDialogueToViewport()` shifting `left`, landing ~17px off the
+  authored position.
+- **`S7B_CARTEL_TARGETING` / `S8B_HANK_DISGUISE_BRIEFING` `narration` —
+  `dialogue-outside-frame`** (small-landscape-740x360; `S7B` also on
+  iphone-se-landscape-667x375). `showDialogue()`'s settle pass
+  (index.js, the double-`requestAnimationFrame` callback) calls
+  `_clampDialogueToViewport()` *before* `dialoguePager.reflow()` grows a
+  narrative-mode box up toward its CSS max-height; the box's final rendered
+  height overflows past the already-computed centered position, pushing its
+  bottom edge below the visible frame.
+
 ## Character layout schema
 
 Scene `characters` entries support an explicit layout schema, resolved by

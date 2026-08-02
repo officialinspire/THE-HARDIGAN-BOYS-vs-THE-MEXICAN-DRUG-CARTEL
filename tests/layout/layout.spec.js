@@ -59,6 +59,16 @@ function isExpectedSpriteFallbackNoise(url) {
   return /\/assets\/characters\//.test(url);
 }
 
+// screen.orientation.lock() is a real, gracefully try/caught call
+// (index.js's requestLandscapeOrientation()) that simply isn't supported
+// outside an actual mobile/PWA context — headless Chromium included. It's
+// already non-fatal in the app (only errorLogger.log()s, which happens to
+// go through console.error), so it isn't a regression to fail this suite
+// on.
+function isExpectedOrientationLockNoise(text) {
+  return /orientation-lock/i.test(text);
+}
+
 /**
  * Browser-generated "Failed to load resource: ..." console messages carry
  * no URL in msg.text() — Chromium doesn't put it there — so filtering them
@@ -79,6 +89,7 @@ function attachConsoleCapture(page) {
     if (msg.type() !== 'error') return;
     const text = msg.text();
     if (/Failed to load resource/i.test(text)) return;
+    if (isExpectedOrientationLockNoise(text)) return;
     errors.push(text);
   });
 

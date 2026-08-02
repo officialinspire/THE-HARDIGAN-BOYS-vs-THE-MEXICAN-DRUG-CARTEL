@@ -120,11 +120,22 @@ async function showDialogueEntryByIndex({ sceneId, index }) {
   return { ok: true };
 }
 
-/** Predicate for page.waitForFunction: true once typing has finished and
- * (for choice entries) the real choice buttons have rendered. */
+/** Predicate for page.waitForFunction: true once typing has finished, the
+ * real choice buttons have rendered (for choice entries), and showDialogue()'s
+ * final settle pass has run. That settle pass (layoutDialogue() +
+ * _clampDialogueToViewport() re-run inside a double-requestAnimationFrame
+ * callback — see showDialogue() in index.js) is what produces the box's
+ * final, real height/position; it removes the 'dialogue-positioning' class
+ * when done, which is a more reliable signal than any fixed wait, since the
+ * two rAF ticks it depends on can be delayed arbitrarily under CPU load
+ * (e.g. several Playwright workers running scenes in parallel). Reading the
+ * layout before this class clears catches the box mid-transition — still at
+ * its pre-measurement CSS max-height rather than its content-fitted size. */
 function isDialogueSettled(expectChoices) {
   if (typeof sceneRenderer === 'undefined') return false;
   if (sceneRenderer.isTyping) return false;
+  const box = document.getElementById('dialogue-box');
+  if (!box || box.classList.contains('dialogue-positioning')) return false;
   if (expectChoices) {
     return document.querySelectorAll('#dialogue-choices .dialogue-choice').length > 0;
   }
