@@ -1,0 +1,17 @@
+# Node tooling (Playwright layout smoke tests only — the GitHub Pages
+# build itself is plain static files and needs none of this; see
+# DEVELOPMENT.md "Layout regression tests").
+node_modules/
+
+# Transient Playwright output — screenshots, JSON layout snapshots, HTML
+# report, traces, results.json. Regenerated on every `npm run test:layout`.
+# The one intentionally tracked artifact set lives in
+# tests/layout/baseline/ (see that directory's README.md) and is NOT
+# matched by this pattern.
+test-results/
+playwright-report/
+playwright/.cache/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db

@@ -19,8 +19,12 @@ html, body {
     font-family: 'Courier New', 'Consolas', monospace;
     background: #000;
     color: #e0e0e0;
-    /* iPhone notch support */
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    /* Safe-area insets are applied per-element (HUD, dialogue box, buttons —
+       search for env(safe-area-inset) below), not here. #game-root is sized
+       from raw window.innerHeight/100dvh in JS/CSS; a blanket padding here
+       would double-count that same inset on top of every element's own
+       env() offset, silently eating extra height/width on notched phones
+       (most visible in landscape, where the notch lands on a side edge). */
     overscroll-behavior: none;
     -webkit-overflow-scrolling: auto;
 }
@@ -381,6 +385,10 @@ body.main-menu #scene-container::after {
     transition: filter 180ms ease, transform 180ms ease, opacity 0.6s ease;
     filter: drop-shadow(2px 4px 6px rgba(0, 0, 0, 0.8))
             drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+    /* Per-character scale (addCharacter() sets this inline). Composed into
+       every transform below via calc/var so a scaled character never
+       fights the slide-in/visible animation's translateX. */
+    --char-scale: 1;
 }
 
 .character-sprite.is-speaking {
@@ -390,24 +398,24 @@ body.main-menu #scene-container::after {
 
 /* Slide-in animations */
 .character-sprite.slide-in-left {
-    transform: translateX(-100%);
+    transform: translateX(-100%) scale(var(--char-scale));
     opacity: 0;
 }
 
 .character-sprite.slide-in-right {
-    transform: translateX(100%);
+    transform: translateX(100%) scale(var(--char-scale));
     opacity: 0;
 }
 
 /* Visible state after slide-in completes */
 .character-sprite.visible {
-    transform: translateX(0);
+    transform: translateX(0) scale(var(--char-scale));
     opacity: 1;
 }
 
 /* Center-zone characters need translateX(-50%) even when visible */
 .character-sprite.char-center.visible {
-    transform: translateX(-50%);
+    transform: translateX(-50%) scale(var(--char-scale));
 }
 
 /* Fallback position classes (overridden by inline pixel styles from positioningSystem) */
@@ -696,6 +704,11 @@ body.main-menu #scene-title {
 }
 #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-text {
     flex: 1;
+    /* Unprotected flex-shrink lets this get crushed below dialoguePager's
+       paginated content height whenever speaker+text+action-area's natural
+       size is tight against #dialogue-container's max-height — the same
+       crush risk narrative-mode #dialogue-text guards against below. */
+    flex-shrink: 0;
     overflow: hidden;
     -webkit-overflow-scrolling: auto;
     hyphens: auto;
@@ -953,6 +966,12 @@ body.main-menu #scene-title {
     justify-content: center;
     gap: clamp(8px, 1.2vw, 14px);
     min-height: 100%;
+    /* #dialogue-content is itself a flex item of #dialogue-container (also a
+       flex column) — without this it can be compressed below its content's
+       natural size the same way its own children can (see #dialogue-text
+       above), silently clipping even though the container has overflow-y:auto
+       to fall back on. */
+    flex-shrink: 0;
 }
 
 #dialogue-bubble {
@@ -996,6 +1015,9 @@ body.main-menu #scene-title {
     line-height: 1.2;
     width: 100%;
     text-align: center;
+    /* See #dialogue-container.narrative-mode #dialogue-text — same flex
+       column, same crush risk under a tight compact-landscape container. */
+    flex-shrink: 0;
     text-shadow: 2px 2px 0px rgba(255, 255, 255, 0.4),
                  -1px -1px 0px rgba(0, 0, 0, 0.2);
     -webkit-font-smoothing: antialiased;
@@ -1028,6 +1050,15 @@ body.main-menu #scene-title {
     margin-bottom: 0;
     overflow: hidden;
     padding-inline: clamp(6px, 1vw, 14px);
+    /* #dialogue-content is a flex column (speaker/text/choices) with no
+       flex-basis set on its children, so when their combined natural size
+       exceeds the container, flexbox's default shrink behavior compresses
+       whichever child has no floor — normally the text, down to near
+       nothing, well before it touches the choice buttons (which resist
+       shrinking because of their own min-height). Protect the text instead;
+       any leftover overflow is still reachable via the container's
+       overflow-y (see the compact-landscape rules below). */
+    flex-shrink: 0;
 }
 
 /* Mobile: adjust dialogue box positioning and spacing */
@@ -1041,11 +1072,11 @@ body.main-menu #scene-title {
     }
 
     #dialogue-speaker {
-        font-size: clamp(11px, 2.0vw, 14px);
+        font-size: clamp(15px, 2.0vw, 16px);
     }
 
     #dialogue-text {
-        font-size: clamp(10px, 1.8vw, 13px);
+        font-size: clamp(14px, 1.8vw, 15px);
         line-height: 1.2;
     }
 }
@@ -1065,11 +1096,11 @@ body.main-menu #scene-title {
     }
 
     #dialogue-speaker {
-        font-size: clamp(10px, 1.8vw, 12px);
+        font-size: clamp(15px, 1.8vw, 16px);
     }
 
     #dialogue-text {
-        font-size: clamp(9px, 1.6vw, 11px);
+        font-size: clamp(14px, 1.6vw, 15px);
         overflow: hidden;
     }
 }
@@ -1077,7 +1108,7 @@ body.main-menu #scene-title {
 /* NARRATION STYLING - GOLD/YELLOW */
 #dialogue-speaker.narration {
     font-family: 'Creepster', 'Comic Sans MS', cursive;
-    font-size: clamp(12px, 2.2vw, 22px);
+    font-size: clamp(15px, 2.2vw, 22px);
     color: #FFD700;
     text-shadow: 2px 2px 6px rgba(0, 0, 0, 1),
                  0 0 12px rgba(255, 215, 0, 0.9);
@@ -1086,7 +1117,7 @@ body.main-menu #scene-title {
 
 #dialogue-text.narration {
     font-family: 'Comic Sans MS', 'Trebuchet MS', sans-serif;
-    font-size: clamp(10px, 1.8vw, 17px);
+    font-size: clamp(14px, 1.8vw, 17px);
     color: #FFD700;
     text-shadow: 2px 2px 6px rgba(0, 0, 0, 1),
                  0 0 10px rgba(255, 215, 0, 0.7);
@@ -1098,7 +1129,7 @@ body.main-menu #scene-title {
 /* CHOICE STYLING - YELLOW AND LARGER */
 #dialogue-speaker.choice-speaker {
     font-family: 'Bangers', 'Impact', 'Arial Black', sans-serif;
-    font-size: clamp(14px, 3vw, 26px);
+    font-size: clamp(15px, 3vw, 26px);
     color: #FFD700;
     text-shadow: 3px 3px 8px rgba(0, 0, 0, 1),
                  0 0 16px rgba(255, 215, 0, 0.9);
@@ -1107,7 +1138,7 @@ body.main-menu #scene-title {
 
 #dialogue-text.choice-text {
     font-family: 'Comic Sans MS', 'Trebuchet MS', sans-serif;
-    font-size: clamp(10px, 2.2vw, 20px);
+    font-size: clamp(14px, 2.2vw, 20px);
     color: #FFD700;
     text-shadow: 2px 2px 6px rgba(0, 0, 0, 1),
                  0 0 12px rgba(255, 215, 0, 0.8);
@@ -1123,6 +1154,9 @@ body.main-menu #scene-title {
     margin-top: clamp(12px, 2.5vw, 18px);
     width: 100%;
     align-items: center;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
 }
 
 .dialogue-choice {
@@ -1246,24 +1280,6 @@ body.main-menu #scene-title {
     background: rgba(255, 255, 255, 0.15);
     color: #FFD700;
     border-color: rgba(255, 215, 0, 0.5);
-}
-
-/* ===== BUBBLE CONTINUE HINT & PAGE INDICATOR ===== */
-#dialogue-box .bubble-continue-hint{
-  position:absolute;
-  right:18px;
-  bottom:14px;
-  font-size:12px;
-  opacity:0.75;
-  user-select:none;
-  pointer-events:none;
-  display:none;
-  z-index:5;
-}
-#dialogue-box.is-paginated .bubble-continue-hint{ display:block; }
-#dialogue-box .bubble-page-indicator{
-  margin-left:8px;
-  opacity:0.85;
 }
 
 #dialogue-box[data-layout-panel="speech-bubble"]{ cursor:pointer; }
@@ -2148,6 +2164,14 @@ body.main-menu #scene-title {
     flex: 0 1 100%;
 }
 
+/* An empty choices panel (continue-only entries) must not reserve a
+   full-width wrapped row — its flex-basis:100% would otherwise force
+   #dialogue-continue onto a second line and silently eat vertical space
+   the pagination budget never accounts for. */
+#action-container #dialogue-choices:empty {
+    display: none;
+}
+
 .dev-layout-target {
     outline: 2px dashed #00ff88 !important;
     outline-offset: 2px;
@@ -2454,18 +2478,11 @@ body.main-menu #scene-container {
         /* keep centered in landscape */
     }
 
-    #dialogue-container {
-        min-height: 36px;
-    }
-
-    #dialogue-speaker {
-        font-size: clamp(16px, 2.2vw, 23px);
-    }
-
-    #dialogue-text {
-        font-size: clamp(9px, 1.4vw, 12px);
-        overflow: hidden;
-    }
+    /* #dialogue-container/#dialogue-speaker/#dialogue-text sizing for this
+       breakpoint now lives in the "COMPACT LANDSCAPE DIALOGUE SYSTEM" section
+       near the end of this file (CSS-variable driven, shared with the
+       max-width:1024+landscape query) — this avoided a 9px text floor here
+       that was below the readability minimum. */
 
     .character-sprite {
         max-height: 60%;
@@ -2534,17 +2551,6 @@ body.main-menu #scene-container {
 }
 
 /* ===== ANIMATIONS ===== */
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.6; }
-}
-
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-5px); }
-    75% { transform: translateX(5px); }
-}
-
 @keyframes menuFadeIn {
     0% {
         opacity: 0;
@@ -2556,14 +2562,6 @@ body.main-menu #scene-container {
     }
 }
 
-.pulse {
-    animation: pulse 2s ease-in-out infinite;
-}
-
-.shake {
-    animation: shake 0.5s ease-in-out;
-}
-
 /* ===== UTILITY CLASSES ===== */
 .hidden {
     display: none !important;
@@ -2571,10 +2569,6 @@ body.main-menu #scene-container {
 
 .invisible {
     opacity: 0 !important;
-}
-
-.no-pointer {
-    pointer-events: none !important;
 }
 
 /* ===== UX TUNING: DIALOGUE + MENUS ===== */
@@ -2713,7 +2707,7 @@ body.main-menu #scene-container {
     /* Compact choice buttons for mobile */
     .dialogue-choice {
         padding: 4px 8px;
-        font-size: clamp(8px, 1.6vw, 11px);
+        font-size: clamp(14px, 1.6vw, 16px);
         min-height: 26px;
     }
 }
@@ -2726,7 +2720,7 @@ body.main-menu #scene-container {
 
     .dialogue-choice {
         padding: 3px 6px;
-        font-size: clamp(7px, 1.4vw, 9px);
+        font-size: clamp(14px, 1.4vw, 15px);
         min-height: 22px;
     }
 }
@@ -3005,7 +2999,8 @@ body.main-menu #scene-container {
 
 #dialogue-choices {
     width: min(100%, 720px);
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     gap: clamp(8px, 1.5vw, 12px);
     margin-top: clamp(8px, 1.5vw, 14px);
 }
@@ -3084,12 +3079,13 @@ body.main-menu #scene-container {
     }
 
     #dialogue-choices {
-        overflow: hidden;
+        overflow-y: auto;
+        overflow-x: hidden;
         gap: 4px;
     }
 
     .dialogue-choice {
-        font-size: clamp(13px, 2.2vw, 18px);
+        font-size: clamp(14px, 2.2vw, 18px);
         padding: clamp(8px, 1.2vh, 12px) clamp(12px, 2.2vw, 18px);
         width: min(100%, 96%);
     }
@@ -3162,7 +3158,7 @@ body.main-menu #scene-container {
     #dialogue-text,
     #dialogue-container.narrative-mode #dialogue-text,
     #dialogue-text.choice-text {
-        font-size: clamp(12px, 3.6vw, 16px);
+        font-size: clamp(14px, 3.6vw, 16px);
         line-height: 1.28;
         margin-bottom: 2px;
         padding: 0;
@@ -3173,7 +3169,7 @@ body.main-menu #scene-container {
         min-width: 112px;
         min-height: 36px;
         max-width: calc(100% - 12px);
-        font-size: clamp(12px, 3.4vw, 15px);
+        font-size: clamp(14px, 3.4vw, 15px);
         padding: 8px 14px;
     }
 }
@@ -3211,16 +3207,171 @@ body.main-menu #scene-container {
     }
 
     #dialogue-choices {
-        overflow: hidden;
+        overflow-y: auto;
+        overflow-x: hidden;
     }
 
     .dialogue-choice {
-        font-size: clamp(12px, 1.8vw, 16px);
+        font-size: clamp(14px, 1.8vw, 16px);
         padding: clamp(6px, 0.9vh, 10px) clamp(10px, 1.4vw, 16px);
     }
 
     #dialogue-continue {
         margin-top: clamp(2px, 0.5vh, 5px);
+    }
+}
+
+/* ===== COMPACT LANDSCAPE DIALOGUE SYSTEM =====
+   Targets phone/tablet landscape (e.g. 1024x768, 915x412, 844x390, 740x360,
+   667x375) — a case earlier fixes under-served. Two root causes:
+   1. `#dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container`
+      (an ID+attribute compound selector, specificity 0-3-0) sets the desktop
+      min/max-height near the top of this file. Every later "mobile" fix for
+      that height used a bare `#dialogue-container{...}` (specificity 0-1-0),
+      which can never outrank it regardless of source order — so those fixes
+      were silently inert on this element for any viewport in speech-bubble
+      mode. Rules below repeat the same compound form so they actually win.
+   2. Authored/default bubble heights are scaled from 1920x1080 and applied
+      inline by JS; on a short viewport that scaled value can fall below
+      whatever CSS min-height is active. layoutDialogue()/_positionDialogueInSlot()
+      handle this on the JS side (inline max-height + auto height in compact
+      landscape, see sceneRenderer._isCompactLandscape()); the CSS side just
+      needs a small min-height floor and a sane max-height ceiling so content
+      without an authored rect (narrative/default) still fits the safe area.
+   Variables are redefined per breakpoint and consumed once by the rules
+   that follow, so each breakpoint's numbers live in exactly one place. */
+:root {
+    --hud-h: 70px;
+    --dlg-safe-pad: 12px;
+    --dlg-bottom-safe: 8px;
+    --dlg-bubble-max-w: 600px;
+    --dlg-bubble-min-h: 160px;
+    --dlg-bubble-max-h: 380px;
+    --dlg-narrative-max-h: 380px;
+    --dlg-pad-block: clamp(12px, 2.2vw, 24px);
+    --dlg-pad-inline: clamp(14px, 3vw, 30px);
+    --dlg-speaker-size: clamp(22px, 2.9vw, 34px);
+    --dlg-text-size: clamp(18px, 2.4vw, 28px);
+    --dlg-choice-size: clamp(14px, 1.8vw, 18px);
+    --dlg-continue-h: clamp(40px, 5vh, 52px);
+}
+
+@media (max-width: 1024px) and (orientation: landscape) {
+    :root {
+        --hud-h: 54px;
+        --dlg-safe-pad: 8px;
+        --dlg-bottom-safe: 6px;
+        --dlg-bubble-max-w: min(52vw, 480px);
+        --dlg-bubble-min-h: 84px;
+        --dlg-bubble-max-h: min(58vh, 320px);
+        /* Choice/narrative screens legitimately need more room than a single
+           short speech line (prompt + multiple buttons), so they get their
+           own, more generous ceiling instead of sharing --dlg-bubble-max-h. */
+        --dlg-narrative-max-h: min(70vh, 360px);
+        --dlg-pad-block: clamp(6px, 1.6vh, 12px);
+        --dlg-pad-inline: clamp(10px, 2vw, 16px);
+        --dlg-speaker-size: clamp(16px, 2.6vh, 22px);
+        --dlg-text-size: clamp(15px, 2.4vh, 19px);
+        --dlg-choice-size: clamp(14px, 1.6vw, 16px);
+        --dlg-continue-h: max(44px, min(8vh, 52px));
+    }
+
+    #dialogue-box[data-layout-panel="speech-bubble"] {
+        max-width: var(--dlg-bubble-max-w);
+    }
+
+    /* Compound selector required — see section note above. min-height is a
+       small floor (not the scaled authored value, which JS applies as an
+       inline max-height instead — see _positionDialogueInSlot()), so short
+       text still gets a presentable bubble without fighting the JS cap. */
+    #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container {
+        min-height: var(--dlg-bubble-min-h);
+        max-height: var(--dlg-bubble-max-h);
+        height: auto;
+    }
+
+    #dialogue-container.narrative-mode {
+        max-height: var(--dlg-narrative-max-h);
+        overflow-y: auto;
+    }
+
+    #dialogue-content {
+        padding: var(--dlg-pad-block) var(--dlg-pad-inline);
+        min-height: 0;
+    }
+
+    #dialogue-speaker {
+        font-size: var(--dlg-speaker-size);
+        margin-bottom: 4px;
+    }
+
+    #dialogue-text {
+        font-size: var(--dlg-text-size);
+        line-height: 1.25;
+    }
+
+    #dialogue-continue {
+        min-height: var(--dlg-continue-h);
+        margin-top: 4px;
+    }
+
+    .dialogue-choice {
+        font-size: var(--dlg-choice-size);
+        padding: clamp(6px, 1vh, 10px) clamp(10px, 1.5vw, 14px);
+        min-height: var(--dlg-continue-h);
+    }
+
+    #hud::before {
+        height: var(--hud-h);
+    }
+}
+
+/* Compact-height fallback: width alone isn't a reliable proxy for available
+   vertical room (a squat tablet or an unusually wide phone can still be very
+   short), so this tightens further by height and wins the cascade last for
+   any viewport that's both <=1024px wide, landscape, AND this short. */
+@media (max-height: 500px) {
+    :root {
+        --hud-h: 46px;
+        --dlg-bubble-min-h: 70px;
+        --dlg-bubble-max-h: 200px;
+        --dlg-narrative-max-h: 240px;
+        --dlg-speaker-size: clamp(14px, 2.2vw, 19px);
+        --dlg-text-size: clamp(14px, 1.8vw, 16px);
+        --dlg-choice-size: clamp(14px, 1.6vw, 14px);
+        --dlg-continue-h: max(44px, min(7vh, 46px));
+    }
+
+    #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container {
+        min-height: var(--dlg-bubble-min-h);
+        max-height: var(--dlg-bubble-max-h);
+    }
+
+    #dialogue-container.narrative-mode {
+        max-height: var(--dlg-narrative-max-h);
+        overflow-y: auto;
+    }
+
+    #dialogue-speaker {
+        font-size: var(--dlg-speaker-size);
+    }
+
+    #dialogue-text {
+        font-size: var(--dlg-text-size);
+    }
+
+    #dialogue-continue,
+    .dialogue-choice {
+        min-height: var(--dlg-continue-h);
+    }
+
+    .dialogue-choice {
+        font-size: var(--dlg-choice-size);
+        padding: clamp(5px, 0.8vh, 8px) clamp(8px, 1.4vw, 12px);
+    }
+
+    #hud::before {
+        height: var(--hud-h);
     }
 }
 
@@ -3303,6 +3454,18 @@ body.main-menu #scene-container {
         opacity: 1;
         transform: translateX(-50%) translateY(0) scale(1);
     }
+}
+
+/* ===== DEBUG: FORCE-DISABLE ANIMATIONS =====
+   Toggled via ?noAnimations=1 or window.__HB_DEBUG__.setAnimationsEnabled(false).
+   Only applied when body has this class, so normal play is unaffected. */
+.hb-no-animations,
+.hb-no-animations * {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0ms !important;
 }
 
 

@@ -1,0 +1,15 @@
+{
+  "name": "hardigan-boys-layout-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Local static server + Playwright layout smoke tests for THE HARDIGAN BOYS vs THE MEXICAN DRUG CARTEL. Not required for the GitHub Pages build (it is a plain static site) — this is dev/test tooling only.",
+  "scripts": {
+    "serve": "http-server . -p 4173 -s -c-1",
+    "test:layout": "playwright test",
+    "test:layout:update": "HB_UPDATE_BASELINE=1 playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "http-server": "^14.1.1"
+  }
+}

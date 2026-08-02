@@ -6,7 +6,8 @@
 // ===== GAMEBOY-STYLE SFX GENERATOR =====
 const SFXGenerator = {
     audioContext: null,
-    
+    muted: false, // set by __HB_DEBUG__.setAudioEnabled() / ?mute=1
+
     init() {
         try {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -45,7 +46,7 @@ const SFXGenerator = {
     },
 
     _ensureAudioContext() {
-        if (!this.audioContext) return false;
+        if (!this.audioContext || this.muted) return false;
         
         if (this.audioContext.state === 'suspended') {
             this.audioContext.resume().catch(err => {
@@ -213,6 +214,21 @@ const DEBUG = window.location.hostname === 'localhost' ||
               window.location.hostname === '127.0.0.1' ||
               window.location.search.includes('debug=true');
 const DEV_FORCE_WHITE_STRIP = false;
+
+// ===== DEBUG/TESTING URL FLAGS =====
+// ?debug=true unlocks window.__HB_DEBUG__, a deterministic test API (see bottom of file).
+// ?skipIntro=1 bypasses the studio intro video and loads the main menu directly.
+// ?mute=1 silences music/SFX from boot. ?noAnimations=1 disables CSS animations/transitions.
+// ?noSave=1 makes saveSystem.save() a no-op (still returns true) so automated
+// runs (e.g. the Playwright layout smoke tests) never touch localStorage,
+// regardless of Playwright's own per-context storage isolation.
+// None of these flags change behavior unless explicitly present in the URL.
+const HB_URL_PARAMS = new URLSearchParams(window.location.search);
+const HB_DEBUG_ENABLED = HB_URL_PARAMS.get('debug') === 'true';
+const HB_FLAG_SKIP_INTRO = HB_URL_PARAMS.get('skipIntro') === '1';
+const HB_FLAG_MUTE = HB_URL_PARAMS.get('mute') === '1';
+const HB_FLAG_NO_ANIMATIONS = HB_URL_PARAMS.get('noAnimations') === '1';
+const HB_FLAG_NO_SAVE = HB_URL_PARAMS.get('noSave') === '1';
 
 const SETTINGS_STORAGE_KEY = 'HB_SETTINGS_V1';
 
@@ -1645,6 +1661,8 @@ const Dev = {
         const exitBtn = document.getElementById('btn-exit-dev-mode');
         const floatingButton = document.getElementById('dev-floating-btn');
         const runValidateBtn = document.getElementById('dev-run-validate-now');
+        const validateAllBtn = document.getElementById('dev-validate-all-scenes');
+        const downloadValidationJsonBtn = document.getElementById('dev-download-validation-json');
         const jumpInput = document.getElementById('dev-scene-jump-input');
         const jumpBtn = document.getElementById('dev-scene-jump-btn');
 
@@ -1710,6 +1728,26 @@ const Dev = {
                 runValidateBtn.addEventListener('click', () => {
                     SFXGenerator.playButtonClick();
                     this.runValidationNow();
+                });
+            }
+
+            if (validateAllBtn) {
+                validateAllBtn.addEventListener('click', () => {
+                    SFXGenerator.playButtonClick();
+                    this.runDemoValidationAll();
+                });
+            }
+
+            if (downloadValidationJsonBtn) {
+                downloadValidationJsonBtn.addEventListener('click', () => {
+                    SFXGenerator.playButtonClick();
+                    if (!demoValidator.lastReport) {
+                        const output = document.getElementById('dev-validation-output');
+                        if (output) output.textContent = 'Run "Validate All Scenes" first — no report to download yet.';
+                        return;
+                    }
+                    const text = JSON.stringify(demoValidator.lastReport, null, 2);
+                    this.hotspots.downloadText('demo-validation-report.json', text, 'application/json');
                 });
             }
 
@@ -1941,6 +1979,23 @@ const Dev = {
         ].join('\n');
     },
 
+    /**
+     * Runs the full demo-readiness validator (demoValidator.validateAll())
+     * across every SCENES entry — structure, characters, dialogue, and live
+     * asset probes — without entering any scene. Read-only: never mutates
+     * SCENES, save data, or the currently-loaded scene/game state.
+     */
+    async runDemoValidationAll() {
+        const output = document.getElementById('dev-validation-output');
+        if (output) {
+            output.textContent = 'Running full demo validation across all scenes... this probes every referenced asset and may take a few seconds.';
+        }
+        const report = await demoValidator.validateAll();
+        if (output) output.textContent = report.markdown;
+        this.updateStatus();
+        return report;
+    },
+
     validateScenes() {
         const NON_CHARACTER_SPEAKERS = new Set(['NARRATION', 'SYSTEM', 'CHOICE', 'FINAL CHOICE']);
         const lines = [];
@@ -2156,11 +2211,13 @@ function safeAsync(handler, context) {
 const mobileOptimizer = {
     resizeDebounceMs: 300,
     init() {
-        this.syncViewportHeight();
         this.setupTouchGuards();
         this.setupIOSBouncePrevention();
         this.setupImmersiveMode();
         this.setupOrientationLock();
+        // Viewport-height sync + resize/orientationchange listeners are
+        // registered once, centrally, by setupViewportChangeHandlers() (see
+        // bottom of file) — not here.
     },
 
     isMobile() {
@@ -2188,20 +2245,6 @@ const mobileOptimizer = {
                 event.preventDefault();
             }
         }, { passive: false });
-    },
-
-    syncViewportHeight() {
-        const updateViewportHeight = () => {
-            const viewportHeight = window.visualViewport?.height || window.innerHeight;
-            document.documentElement.style.setProperty('--app-height', `${Math.round(viewportHeight)}px`);
-        };
-
-        updateViewportHeight();
-        window.visualViewport?.addEventListener('resize', updateViewportHeight);
-        window.addEventListener('resize', updateViewportHeight);
-        window.addEventListener('orientationchange', () => {
-            setTimeout(updateViewportHeight, 80);
-        });
     },
 
     setupImmersiveMode() {
@@ -2232,6 +2275,20 @@ const mobileOptimizer = {
         document.addEventListener('touchend', requestFullscreen, onceOptions);
     },
 
+    // Shows/hides the "please rotate" overlay. A real method (not a local
+    // closure) so the single consolidated resize/orientation handler (see
+    // setupViewportChangeHandlers() at the bottom of the file) can call it
+    // too, instead of this registering its own resize/orientationchange
+    // listeners that would just duplicate that work.
+    applyOrientationState() {
+        const orientationQuery = window.matchMedia('(orientation: portrait)');
+        const isPortrait = orientationQuery.matches || window.innerHeight > window.innerWidth;
+        const overlay = document.getElementById('orientation-overlay');
+        if (!overlay) return;
+        overlay.classList.toggle('hidden', !isPortrait || !this.isMobile());
+        overlay.setAttribute('aria-hidden', (!isPortrait || !this.isMobile()).toString());
+    },
+
     async setupOrientationLock() {
         if (!this.isMobile()) return;
         if (screen.orientation && screen.orientation.lock) {
@@ -2242,17 +2299,8 @@ const mobileOptimizer = {
             }
         }
 
-        const applyOrientationState = () => {
-            const orientationQuery = window.matchMedia('(orientation: portrait)');
-            const isPortrait = orientationQuery.matches || window.innerHeight > window.innerWidth;
-            const overlay = document.getElementById('orientation-overlay');
-            if (!overlay) return;
-            overlay.classList.toggle('hidden', !isPortrait || !this.isMobile());
-            overlay.setAttribute('aria-hidden', (!isPortrait || !this.isMobile()).toString());
-        };
-
         const orientationQuery = window.matchMedia('(orientation: portrait)');
-        const queryListener = () => applyOrientationState();
+        const queryListener = () => this.applyOrientationState();
 
         if (typeof orientationQuery.addEventListener === 'function') {
             orientationQuery.addEventListener('change', queryListener);
@@ -2261,17 +2309,20 @@ const mobileOptimizer = {
         }
 
         if (window.screen?.orientation?.addEventListener) {
-            window.screen.orientation.addEventListener('change', applyOrientationState);
+            window.screen.orientation.addEventListener('change', queryListener);
         }
 
-        window.addEventListener('orientationchange', applyOrientationState);
-        window.addEventListener('resize', applyOrientationState);
-        window.addEventListener('pageshow', applyOrientationState);
-        document.addEventListener('visibilitychange', applyOrientationState);
-        applyOrientationState();
+        // resize/orientationchange are NOT registered here — the
+        // consolidated viewport-change handler already calls
+        // applyOrientationState() on every resize/orientationchange it
+        // handles. pageshow/visibilitychange are genuinely distinct events
+        // (bfcache restores, tab switches) it doesn't cover, so those stay.
+        window.addEventListener('pageshow', queryListener);
+        document.addEventListener('visibilitychange', queryListener);
+        this.applyOrientationState();
 
         // Some mobile browsers (notably iOS Safari) can skip orientation events.
-        setTimeout(applyOrientationState, 250);
+        setTimeout(queryListener, 250);
     }
 };
 
@@ -2344,8 +2395,19 @@ const assetLoader = {
                 resolve();
             };
             img.onerror = () => {
-                this.errors.push(src);
+                // logErrors:false calls (lazyLoadSceneAssets' parallel
+                // sprite-candidate warm-up, next-scene background prefetch)
+                // are speculative/best-effort — an individual candidate
+                // 404ing there is expected whenever a later candidate in
+                // the same fallback chain succeeds, so it must not
+                // permanently pollute assetLoader.errors (which
+                // hbGetMissingAssetInfo()/validateCurrentLayout() treats as
+                // authoritative "this asset is missing" signals). A
+                // genuinely missing asset still surfaces via the DOM
+                // placeholder check (registerImageFallback/
+                // registerBackgroundFallback) when it's actually rendered.
                 if (logErrors) {
+                    this.errors.push(src);
                     errorLogger.log('preload-assets', new Error(`Failed to preload image`), { src });
                 }
                 resolve();
@@ -2401,16 +2463,29 @@ const audioManager = {
     },
     maxConcurrentSfx: 2,
     activeSfx: 0,
-    
+    muted: false, // set by __HB_DEBUG__.setAudioEnabled() / ?mute=1
+
     init() {
         this.musicPlayer = document.getElementById('music-player');
         this.sfxPlayer = document.getElementById('sfx-player');
         this.updateVolumes();
         SFXGenerator.init();
     },
-    
+
+    // Debug/testing hook: mute or restore music+SFX playback deterministically.
+    setMuted(muted) {
+        this.muted = muted;
+        if (muted) {
+            if (this.musicPlayer) { try { this.musicPlayer.pause(); } catch (_) {} this.musicPlayer.volume = 0; }
+            if (this.sfxPlayer) { try { this.sfxPlayer.pause(); } catch (_) {} this.sfxPlayer.volume = 0; }
+        } else {
+            this.updateVolumes();
+        }
+    },
+
     playMusic(filename, fadeIn = true) {
         try {
+            if (this.muted) return;
             if (!filename || this.currentTrack === filename) return;
 
             const fadeOut = () => {
@@ -2474,6 +2549,7 @@ const audioManager = {
     
     playSFX(filename) {
         try {
+            if (this.muted) return;
             if (!filename) return;
             if (this.activeSfx >= this.maxConcurrentSfx) {
                 return;
@@ -2510,6 +2586,9 @@ const saveSystem = {
     SAVE_KEY: 'hardigan_brothers_save',
     
     save() {
+        // ?noSave=1 — used by automated tests (see HB_FLAG_NO_SAVE) so a
+        // full playthrough of scene transitions never touches localStorage.
+        if (HB_FLAG_NO_SAVE) return true;
         const saveData = {
             currentSceneId: gameState.currentSceneId,
             inventory: gameState.inventory,
@@ -3069,29 +3148,73 @@ const positioningSystem = {
         };
     },
 
-    getDialogueSafeRect(padPx = 12) {
+    /** Reads a plain-pixel CSS custom property (e.g. "8px") off :root. */
+    _getCSSPixelVar(varName, fallbackPx) {
+        try {
+            const raw = getComputedStyle(document.documentElement).getPropertyValue(varName);
+            const px = parseFloat(raw);
+            return Number.isFinite(px) ? px : fallbackPx;
+        } catch (_) {
+            return fallbackPx;
+        }
+    },
+
+    /**
+     * The HUD's actual reserved band, measured from the live #hud::before bar
+     * (its computed top+height) rather than assumed. This tracks whichever
+     * breakpoint's HUD sizing is currently active instead of a single fixed
+     * reference constant applied uniformly to every viewport.
+     */
+    _getHUDBottomPx(rect) {
+        try {
+            const hudEl = document.getElementById('hud');
+            if (hudEl) {
+                const hudBefore = getComputedStyle(hudEl, '::before');
+                const hudTop = parseFloat(hudBefore.top);
+                const hudHeight = parseFloat(hudBefore.height);
+                if (Number.isFinite(hudTop) && Number.isFinite(hudHeight)) {
+                    return hudTop + hudHeight;
+                }
+            }
+        } catch (_) {
+            // fall through to the reference-scaled estimate below
+        }
+        return rect ? (this.HUD_TOP * rect.nativeScaleY) : this.HUD_TOP;
+    },
+
+    /**
+     * Safe placement rectangle for the dialogue box, in scene-container-local
+     * pixels. Pass an explicit padPx to override; otherwise the pad and HUD
+     * reservation are derived from live CSS (--dlg-safe-pad, --dlg-bottom-safe,
+     * #hud::before) so compact-landscape breakpoints get their own correctly
+     * scaled reservation instead of one fixed reference-space assumption.
+     */
+    getDialogueSafeRect(padPx) {
         const rect = this.getBackgroundRect();
         const container = document.getElementById('scene-container');
         if (!container) return null;
 
+        const resolvedPad = Number.isFinite(padPx) ? padPx : this._getCSSPixelVar('--dlg-safe-pad', 12);
+
         // Fallback if background rect isn't available yet
         if (!rect) {
             return {
-                left: padPx,
-                top: padPx,
-                right: container.clientWidth - padPx,
-                bottom: container.clientHeight - padPx
+                left: resolvedPad,
+                top: resolvedPad,
+                right: container.clientWidth - resolvedPad,
+                bottom: container.clientHeight - resolvedPad
             };
         }
 
-        const hudPx = this.HUD_TOP * rect.nativeScaleY;
-        const dialoguePx = this.DIALOGUE_BOTTOM * rect.nativeScaleY;
+        // Never reserve above the visible background art's own top edge.
+        const hudBottomPx = Math.max(rect.offsetY, this._getHUDBottomPx(rect));
+        const bottomPad = resolvedPad + this._getCSSPixelVar('--dlg-bottom-safe', 8);
 
         return {
-            left: rect.offsetX + padPx,
-            right: rect.offsetX + rect.renderedW - padPx,
-            top: rect.offsetY + hudPx + padPx,
-            bottom: rect.offsetY + rect.renderedH - dialoguePx - padPx
+            left: rect.offsetX + resolvedPad,
+            right: rect.offsetX + rect.renderedW - resolvedPad,
+            top: hudBottomPx + resolvedPad,
+            bottom: rect.offsetY + rect.renderedH - bottomPad
         };
     },
 
@@ -3125,10 +3248,22 @@ const positioningSystem = {
     /**
      * Calculate pixel position for a character in a named zone.
      * Returns an object with CSS properties to apply via style.
+     *
+     * `layout.offsetX`/`layout.offsetY` are the character's own authored
+     * nudge (px, in reference-image space is NOT assumed — they're applied
+     * directly in rendered pixels so they scale visually the same way the
+     * zone anchor itself does at any viewport size). Positive X moves the
+     * character right, positive Y moves it down. Baked directly into
+     * left/right/bottom (not a transform) so they never conflict with the
+     * slide-in/visible animation's translateX, and recalculateAll() must
+     * pass the same offsets back in on every resize/orientation change so a
+     * character's final position never drifts from what was authored.
      */
-    calculateCharacterPosition(zoneName) {
+    calculateCharacterPosition(zoneName, layout = {}) {
         const zone = this.zones[zoneName] || this.zones['center'];
         const rect = this.getBackgroundRect();
+        const charOffsetX = Number.isFinite(layout.offsetX) ? layout.offsetX : 0;
+        const charOffsetY = Number.isFinite(layout.offsetY) ? layout.offsetY : 0;
 
         if (!rect) {
             // Fallback: return percentage-based positioning
@@ -3145,22 +3280,25 @@ const positioningSystem = {
         const bottomFromContainer = Math.max(0, containerH - (offsetY + renderedH));
 
         const result = {
-            bottom: bottomFromContainer + 'px',
+            bottom: (bottomFromContainer - charOffsetY) + 'px',
         };
 
         if (zone.centered) {
-            // Center zone: position at 50% of container, translate to center
-            result.left = (offsetX + renderedW * zone.anchor) + 'px';
-            result.transform = 'translateX(-50%)';
+            // Center zone: position at 50% of container, translate to center.
+            // Composes --char-scale so this inline transform (which always
+            // wins over the CSS class rule of the same name) doesn't strip
+            // per-character scale from centered characters.
+            result.left = (offsetX + renderedW * zone.anchor + charOffsetX) + 'px';
+            result.transform = 'translateX(-50%) scale(var(--char-scale, 1))';
             result.right = 'auto';
         } else if (zone.side === 'right') {
             // Right-side zones: position from right edge of rendered area
             const rightFromContainer = containerW - (offsetX + renderedW) + (renderedW * zone.anchor);
-            result.right = rightFromContainer + 'px';
+            result.right = (rightFromContainer - charOffsetX) + 'px';
             result.left = 'auto';
         } else {
             // Left-side zones: position from left edge of rendered area
-            result.left = (offsetX + renderedW * zone.anchor) + 'px';
+            result.left = (offsetX + renderedW * zone.anchor + charOffsetX) + 'px';
             result.right = 'auto';
         }
 
@@ -3267,7 +3405,12 @@ const positioningSystem = {
         characters.forEach(charEl => {
             const zoneName = charEl.dataset.zone;
             if (zoneName) {
-                const pos = this.calculateCharacterPosition(zoneName);
+                // Read back the character's own authored nudge so repeated
+                // resize/orientation events keep reproducing the exact same
+                // slot + offsets rather than losing them on recalculation.
+                const offsetX = parseFloat(charEl.dataset.offsetX) || 0;
+                const offsetY = parseFloat(charEl.dataset.offsetY) || 0;
+                const pos = this.calculateCharacterPosition(zoneName, { offsetX, offsetY });
                 // Preserve existing transforms for animations
                 const isVisible = charEl.classList.contains('visible');
                 const isSlideLeft = charEl.classList.contains('slide-in-left');
@@ -3280,7 +3423,7 @@ const positioningSystem = {
                 if (pos.transform && zoneName !== 'center') {
                     // Non-center zones don't need transform
                 } else if (zoneName === 'center' && isVisible) {
-                    charEl.style.transform = 'translateX(-50%)';
+                    charEl.style.transform = 'translateX(-50%) scale(var(--char-scale, 1))';
                 }
             }
         });
@@ -3325,6 +3468,575 @@ const positioningSystem = {
 };
 
 
+// ===== DIALOGUE PAGINATION SYSTEM =====
+// THE single system that decides how dialogue text (speech AND narration)
+// is split across pages, and what the action area (continue/more/choices)
+// looks like on each page. Replaces two previously-overlapping systems (a
+// dead "bubble paging" implementation and a live "generic dialogue paging"
+// implementation) that measured fit by mutating the LIVE typewriter DOM and
+// only discovered the continue-button/choices footprint after deciding
+// whether text fit.
+//
+// Pipeline (see render()):
+//   1. resolve final dialogue layout rectangle   (sceneRenderer.layoutDialogue)
+//   2. wait for required fonts                   (document.fonts.ready, timeout)
+//   3. calculate available content height         (_getAvailableContentHeightPx)
+//   4. measure speaker, text, action area, padding (_measure, offscreen clone)
+//   5. paginate text at word/sentence boundaries   (_paginate)
+//   6. render/type the selected page               (_renderPage)
+//   7. render the correct action area               (_finalizePageAction)
+//   8. run a final overflow assertion                (_assertNoOverflow)
+//
+// Font size is NOT dynamically shrunk anywhere in this system — floors are
+// the CSS clamp() values already in styles.css (see --dlg-text-size etc.),
+// which are the single source of truth for "explicit readable font floors".
+// Pagination is the only adaptive mechanism for making content fit.
+const dialoguePager = {
+    FONTS_READY_TIMEOUT_MS: 300,
+    PAGE_SAFETY_MARGIN_PX: 4,
+
+    // State for the entry currently being displayed. Fully replaced (never
+    // patched) by render(), and cleared by reset() — see reset() call sites
+    // in sceneRenderer (showDialogue, _closeDialogueThen, clearScene) for
+    // the "resets completely between entries and scenes" guarantee.
+    state: null,
+    _activeToken: 0,
+    _measureClone: null,
+
+    reset() {
+        this.state = null;
+        this._activeToken++;
+        const choicesDiv = document.getElementById('dialogue-choices');
+        if (choicesDiv) choicesDiv.style.maxHeight = '';
+    },
+
+    // ===== offscreen measurement clone =====
+    // A hidden, off-screen mirror of #dialogue-content's structure. All
+    // pagination measurement happens against this clone's elements, never
+    // against the live #dialogue-text/#dialogue-speaker/#dialogue-choices —
+    // so measuring never corrupts (or races with) the live typewriter DOM.
+    _getMeasureClone() {
+        if (this._measureClone && document.body.contains(this._measureClone.root)) {
+            return this._measureClone;
+        }
+
+        const root = document.createElement('div');
+        root.className = 'dlg-measure-root';
+        root.setAttribute('aria-hidden', 'true');
+
+        const content = document.createElement('div');
+        content.className = 'dlg-measure-content';
+        const speaker = document.createElement('div');
+        speaker.className = 'dlg-measure-speaker';
+        const text = document.createElement('div');
+        text.className = 'dlg-measure-text';
+        const actionArea = document.createElement('div');
+        actionArea.className = 'dlg-measure-action';
+        const choices = document.createElement('div');
+        choices.className = 'dlg-measure-choices';
+        const continueBtn = document.createElement('div');
+        continueBtn.className = 'dlg-measure-continue';
+
+        actionArea.appendChild(choices);
+        actionArea.appendChild(continueBtn);
+        content.appendChild(speaker);
+        content.appendChild(text);
+        content.appendChild(actionArea);
+        root.appendChild(content);
+        document.body.appendChild(root);
+
+        const clone = { root, content, speaker, text, actionArea, choices, continueBtn };
+        this._measureClone = clone;
+        return clone;
+    },
+
+    /** Copies the resolved (computed) styles that affect sizing from the live, correctly-CSS-matched elements onto the clone's inline styles. */
+    _syncMeasureClone(clone, live, containerWidthPx) {
+        const copyProps = (from, to, props) => {
+            const cs = getComputedStyle(from);
+            props.forEach(p => { to.style[p] = cs[p]; });
+        };
+
+        clone.content.style.width = containerWidthPx + 'px';
+        copyProps(live.content, clone.content, ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'rowGap', 'columnGap', 'gap']);
+
+        copyProps(live.speaker, clone.speaker, [
+            'fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'letterSpacing',
+            'textTransform', 'marginBottom', 'marginTop', 'whiteSpace', 'width'
+        ]);
+        clone.speaker.style.textAlign = getComputedStyle(live.speaker).textAlign;
+
+        copyProps(live.text, clone.text, [
+            'fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'letterSpacing',
+            'marginBottom', 'padding', 'wordBreak', 'overflowWrap', 'hyphens', 'width'
+        ]);
+        clone.text.style.whiteSpace = 'pre-wrap';
+        clone.text.style.textAlign = getComputedStyle(live.text).textAlign;
+        clone.text.style.maxHeight = 'none';
+
+        copyProps(live.continueBtn, clone.continueBtn, ['fontSize', 'fontFamily', 'padding', 'minHeight', 'minWidth', 'lineHeight', 'marginTop']);
+
+        const choicesCs = getComputedStyle(live.choices);
+        clone.choices.style.display = choicesCs.display;
+        clone.choices.style.flexDirection = choicesCs.flexDirection;
+        clone.choices.style.gap = choicesCs.gap;
+        clone.choices.style.marginTop = choicesCs.marginTop;
+        clone.choices.style.width = choicesCs.width;
+    },
+
+    /** One real (but detached/invisible) choice button, styled like the live ones, for accurate height measurement. */
+    _buildMeasureChoiceButton(liveClassSample, text) {
+        const btn = document.createElement('button');
+        btn.className = 'dialogue-choice';
+        btn.textContent = text;
+        btn.style.position = 'static';
+        return btn;
+    },
+
+    // ===== fonts =====
+    async _waitForFonts() {
+        if (!document.fonts || !document.fonts.ready) return;
+        try {
+            await Promise.race([
+                document.fonts.ready,
+                new Promise(resolve => setTimeout(resolve, this.FONTS_READY_TIMEOUT_MS))
+            ]);
+        } catch (_) {
+            // Font loading failed/unsupported — proceed with whatever fonts
+            // are currently active rather than blocking dialogue forever.
+        }
+    },
+
+    // ===== available height =====
+    _getAvailableContentHeightPx(dialogueBox, container, content) {
+        const containerStyle = getComputedStyle(container);
+        let maxH = parseFloat(container.style.maxHeight);
+        if (!Number.isFinite(maxH)) maxH = parseFloat(containerStyle.maxHeight);
+
+        if (!Number.isFinite(maxH)) {
+            // No explicit cap active (e.g. character/top-center placement, or
+            // a mode with no matching max-height rule) — fall back to the
+            // live safe area so pages are never planned to overlap the HUD
+            // or run off-screen.
+            const safe = positioningSystem.getDialogueSafeRect();
+            const boxRect = dialogueBox.getBoundingClientRect();
+            maxH = safe ? Math.max(120, safe.bottom - boxRect.top) : 300;
+        }
+
+        const contentStyle = getComputedStyle(content);
+        const paddingV = (parseFloat(contentStyle.paddingTop) || 0) + (parseFloat(contentStyle.paddingBottom) || 0);
+        return Math.max(60, maxH - paddingV);
+    },
+
+    // ===== measuring speaker / action area / budget =====
+    _measure(dialogueBox, dialogueEntry) {
+        const container = document.getElementById('dialogue-container');
+        const content = document.getElementById('dialogue-content');
+        const speakerEl = document.getElementById('dialogue-speaker');
+        const textEl = document.getElementById('dialogue-text');
+        const choicesEl = document.getElementById('dialogue-choices');
+        const continueEl = document.getElementById('dialogue-continue');
+
+        const clone = this._getMeasureClone();
+        const containerWidthPx = container.getBoundingClientRect().width;
+        this._syncMeasureClone(clone, { content, speaker: speakerEl, text: textEl, choices: choicesEl, continueBtn: continueEl }, containerWidthPx);
+
+        const availableContentHeight = this._getAvailableContentHeightPx(dialogueBox, container, content);
+
+        // Speaker: an empty speaker (narration) costs nothing; otherwise
+        // measure its real border-box height on the clone. getBoundingClientRect()
+        // never includes margin, so margin-bottom (the actual inter-block spacing
+        // in speech-bubble/default mode — narrative mode uses #dialogue-content's
+        // gap instead) is measured separately below and added on top.
+        const speakerText = speakerEl.textContent || '';
+        clone.speaker.textContent = speakerText;
+        const speakerHeight = speakerText ? clone.speaker.getBoundingClientRect().height : 0;
+        const speakerMarginPx = speakerHeight > 0 ? (parseFloat(getComputedStyle(clone.speaker).marginBottom) || 0) : 0;
+        const textMarginPx = parseFloat(getComputedStyle(clone.text).marginBottom) || 0;
+
+        // Action area: whichever will actually be shown once the FINAL page
+        // is reached — choices (if any) are always taller than a single
+        // continue button, so budgeting for them up front means the last
+        // page never has to fight the choices panel for space afterward.
+        const hasChoices = Array.isArray(dialogueEntry.choices) && dialogueEntry.choices.length > 0;
+        let actionAreaHeight = 0;
+        let actionAreaMarginPx = 0;
+        if (hasChoices) {
+            clone.choices.innerHTML = '';
+            dialogueEntry.choices.forEach(choice => {
+                clone.choices.appendChild(this._buildMeasureChoiceButton(null, choice.text || ''));
+            });
+            actionAreaHeight = clone.choices.getBoundingClientRect().height;
+            actionAreaMarginPx = parseFloat(getComputedStyle(clone.choices).marginTop) || 0;
+        } else if (dialogueEntry.next) {
+            clone.continueBtn.textContent = 'continue';
+            actionAreaHeight = clone.continueBtn.getBoundingClientRect().height;
+            actionAreaMarginPx = parseFloat(getComputedStyle(clone.continueBtn).marginTop) || 0;
+        }
+
+        const contentStyle = getComputedStyle(content);
+        const gapPx = parseFloat(contentStyle.rowGap) || parseFloat(contentStyle.gap) || 0;
+        const blockCount = 1 + (speakerHeight > 0 ? 1 : 0) + (actionAreaHeight > 0 ? 1 : 0);
+        const gapsTotal = gapPx * Math.max(0, blockCount - 1);
+
+        const textBudgetPx = Math.max(24, availableContentHeight - speakerHeight - speakerMarginPx - actionAreaHeight - actionAreaMarginPx - gapsTotal - textMarginPx - this.PAGE_SAFETY_MARGIN_PX);
+
+        return { clone, container, content, speakerEl, textEl, choicesEl, continueEl, availableContentHeight, speakerHeight, actionAreaHeight, textBudgetPx, hasChoices };
+    },
+
+    // ===== pagination =====
+    /** Splits fullText into pages that each fit within textBudgetPx, using the offscreen clone. Sentence boundaries are preferred, then words. Never caps the page count — a page that would still overflow is split further instead of being merged. */
+    _paginate(metrics, fullText) {
+        const clone = metrics.clone;
+        const textBudgetPx = metrics.textBudgetPx;
+
+        // Preserve intentional line breaks (the typewriter supports them —
+        // see getCharDelay's '\n' handling) but collapse incidental runs of
+        // horizontal whitespace/blank lines from source formatting.
+        const txt = String(fullText || '')
+            .replace(/[ \t]+/g, ' ')
+            .replace(/\n{3,}/g, '\n\n')
+            .replace(/ *\n */g, '\n')
+            .trim();
+        if (!txt) return [''];
+
+        const fits = (candidate) => {
+            clone.text.textContent = candidate;
+            return clone.text.scrollHeight <= textBudgetPx + 0.5;
+        };
+
+        if (fits(txt)) return [txt];
+
+        // Prefer paragraph, then sentence, then word boundaries.
+        const paragraphs = txt.split(/\n{2,}/);
+        const sentenceUnits = [];
+        paragraphs.forEach((para, i) => {
+            const sentences = para.split(/(?<=[.!?])\s+/).filter(Boolean);
+            sentences.forEach((s, j) => {
+                sentenceUnits.push(j === 0 && i > 0 ? '\n\n' + s : s);
+            });
+        });
+        const units = sentenceUnits.length > 1 ? sentenceUnits : txt.split(' ');
+
+        const splitToWords = (unit) => {
+            const words = unit.split(' ');
+            const result = [];
+            let buf = '';
+            for (const w of words) {
+                const trial = buf ? `${buf} ${w}` : w;
+                if (fits(trial)) {
+                    buf = trial;
+                } else {
+                    if (buf) result.push(buf);
+                    // A lone word that still doesn't fit the budget is a
+                    // floor/box-size mismatch pagination can't solve by
+                    // itself — emit it anyway rather than looping forever;
+                    // the final overflow assertion will flag it in dev.
+                    buf = w;
+                }
+            }
+            if (buf) result.push(buf);
+            return result.length ? result : [unit];
+        };
+
+        const pages = [];
+        let current = '';
+        for (const unit of units) {
+            const next = current ? `${current} ${unit}` : unit;
+            if (fits(next)) {
+                current = next;
+                continue;
+            }
+            if (current) pages.push(current);
+            if (fits(unit)) {
+                current = unit;
+            } else {
+                const forced = splitToWords(unit);
+                pages.push(...forced.slice(0, -1));
+                current = forced[forced.length - 1] || '';
+            }
+        }
+        if (current) pages.push(current);
+
+        return pages.length ? pages : [txt];
+    },
+
+    // ===== choices panel clamp (post-render, after real buttons exist) =====
+    /** For many/long choices: makes ONLY #dialogue-choices internally scrollable within the remaining safe-panel space, rather than letting it overflow the container or hiding the overflow outright. */
+    _clampChoicesPanel(dialogueBox) {
+        const container = document.getElementById('dialogue-container');
+        const content = document.getElementById('dialogue-content');
+        const speakerEl = document.getElementById('dialogue-speaker');
+        const textEl = document.getElementById('dialogue-text');
+        const choicesEl = document.getElementById('dialogue-choices');
+        if (!container || !content || !choicesEl) return;
+
+        const availableContentHeight = this._getAvailableContentHeightPx(dialogueBox, container, content);
+        const contentStyle = getComputedStyle(content);
+        const gapPx = parseFloat(contentStyle.rowGap) || parseFloat(contentStyle.gap) || 0;
+        const speakerH = speakerEl && speakerEl.textContent ? speakerEl.getBoundingClientRect().height : 0;
+        const speakerMarginPx = speakerH > 0 ? (parseFloat(getComputedStyle(speakerEl).marginBottom) || 0) : 0;
+        const textH = textEl ? textEl.getBoundingClientRect().height : 0;
+        const textMarginPx = textEl ? (parseFloat(getComputedStyle(textEl).marginBottom) || 0) : 0;
+        const choicesMarginPx = parseFloat(getComputedStyle(choicesEl).marginTop) || 0;
+        const blockCount = 1 + (speakerH > 0 ? 1 : 0) + (textH > 0 ? 1 : 0);
+        const usedBySiblings = speakerH + speakerMarginPx + textH + textMarginPx + choicesMarginPx + gapPx * Math.max(0, blockCount - 1);
+        const choicesBudget = Math.max(60, availableContentHeight - usedBySiblings);
+
+        if (choicesEl.scrollHeight > choicesBudget + 1) {
+            choicesEl.style.maxHeight = choicesBudget + 'px';
+        } else {
+            choicesEl.style.maxHeight = '';
+        }
+    },
+
+    // ===== final overflow assertion =====
+    /** Marks dialogueBox.dataset.overflow and warns in DEBUG if the container/content/text still overflow their own box after everything has rendered. An element whose own overflow-y is auto/scroll is excluded — that's a deliberate, reachable scrollbar (e.g. #dialogue-container.narrative-mode's compact-landscape fallback, or #dialogue-choices — see _clampChoicesPanel), not silent clipping. */
+    _assertNoOverflow(dialogueBox) {
+        const container = document.getElementById('dialogue-container');
+        const content = document.getElementById('dialogue-content');
+        const text = document.getElementById('dialogue-text');
+
+        const isScrollable = (el) => {
+            const overflowY = getComputedStyle(el).overflowY;
+            return overflowY === 'auto' || overflowY === 'scroll';
+        };
+        const overflowing = [container, content, text].some(el =>
+            el && el.scrollHeight > el.clientHeight + 1 && !isScrollable(el)
+        );
+        dialogueBox.dataset.overflow = overflowing ? 'true' : 'false';
+
+        if (overflowing && DEBUG) {
+            console.warn('[dialoguePager] dialogue box still overflows after pagination — this should not happen; the final page/floor combination does not fit.', {
+                speaker: this.state?.entry?.speaker,
+                page: this.state ? `${this.state.pageIndex + 1}/${this.state.pages.length}` : null,
+                container: container && { scrollHeight: container.scrollHeight, clientHeight: container.clientHeight },
+                content: content && { scrollHeight: content.scrollHeight, clientHeight: content.clientHeight },
+                text: text && { scrollHeight: text.scrollHeight, clientHeight: text.clientHeight },
+            });
+        }
+    },
+
+    // ===== main pipeline =====
+    /** Steps 1-5: resolve layout, wait for fonts, measure, and paginate. Does not render anything yet — call renderCurrentPage() (via sceneRenderer) to show the first page. */
+    async prepare(dialogueBox, dialogueEntry, sceneRendererRef) {
+        const token = ++this._activeToken;
+
+        // 1. resolve final dialogue layout rectangle
+        let layoutMode = sceneRendererRef.layoutDialogue(dialogueBox, dialogueEntry);
+
+        // 2. wait for required fonts (safe timeout)
+        await this._waitForFonts();
+        if (token !== this._activeToken) return null; // superseded by a newer entry
+
+        // Geometry can shift slightly once web fonts swap in — re-resolve
+        // before measuring so step 3/4 read the settled box.
+        layoutMode = sceneRendererRef.layoutDialogue(dialogueBox, dialogueEntry);
+
+        // 3 + 4. calculate available height; measure speaker/text/action-area/padding
+        const metrics = this._measure(dialogueBox, dialogueEntry);
+
+        // 5. paginate text at word/sentence boundaries
+        const pages = this._paginate(metrics, dialogueEntry.text || '');
+
+        this.state = { entry: dialogueEntry, pages, pageIndex: 0, layoutMode, metrics, token };
+        return this.state;
+    },
+
+    /** Steps 6-8 for the current page: type it out, wire the tap/click
+     * advance behavior, and (once typing finishes) render the correct
+     * action area and run the overflow assertion. */
+    renderCurrentPage(dialogueBox, sceneRendererRef) {
+        const s = this.state;
+        if (!s) return;
+        const { pages, pageIndex } = s;
+        const pageText = pages[pageIndex];
+        const isLastPage = pageIndex === pages.length - 1;
+        const textEl = document.getElementById('dialogue-text');
+        const continueBtn = document.getElementById('dialogue-continue');
+        const choicesDiv = document.getElementById('dialogue-choices');
+
+        sceneRendererRef._cleanupTypewriter(textEl);
+        textEl.textContent = '';
+        choicesDiv.innerHTML = '';
+        choicesDiv.style.maxHeight = '';
+
+        // The continue/more button is always the visible action while a page
+        // is typing — choices (if any) only replace it once the LAST page's
+        // text has fully finished (see _finalizePageAction).
+        continueBtn.classList.remove('hidden');
+        continueBtn.textContent = isLastPage ? 'continue' : 'more...';
+        continueBtn.setAttribute('aria-label', isLastPage ? 'Continue dialogue' : 'Show more dialogue');
+        continueBtn.onclick = () => this._onActionClick(dialogueBox, sceneRendererRef);
+
+        sceneRendererRef.typeText(textEl, pageText, {
+            onFinish: () => {
+                this._finalizePageAction(dialogueBox, sceneRendererRef, isLastPage);
+                this._assertNoOverflow(dialogueBox);
+            }
+        });
+    },
+
+    /** First tap while typing completes the current page; the next tap
+     * advances (to the next page, or — on the last page with no choices —
+     * to whatever the entry's `next` specifies). */
+    _onActionClick(dialogueBox, sceneRendererRef) {
+        const textEl = document.getElementById('dialogue-text');
+        if (sceneRendererRef.isTyping) {
+            sceneRendererRef.finishTypeText(textEl);
+            return;
+        }
+        if (gameState.actionLock || sceneRendererRef.isTransitioning) return;
+
+        const s = this.state;
+        if (!s) return;
+        const isLastPage = s.pageIndex === s.pages.length - 1;
+
+        if (!isLastPage) {
+            SFXGenerator.playContinueButton();
+            s.pageIndex++;
+            this.renderCurrentPage(dialogueBox, sceneRendererRef);
+            return;
+        }
+
+        // Last page, no choices — choices replace the continue button
+        // entirely once typing finishes, so reaching here means a plain
+        // `next` advance (scene change, function, or next dialogue line).
+        gameState.actionLock = true;
+        gameState.dialogueLock = false;
+        SFXGenerator.playContinueButton();
+        sceneRendererRef._closeDialogueThen(() => {
+            sceneRendererRef._advanceDialogueEntry(s.entry);
+            gameState.actionLock = false;
+        });
+    },
+
+    /** Step 7: render the action area appropriate to this entry, once the
+     * last page's text has fully typed out. Intermediate pages keep the
+     * "more..." button already wired by renderCurrentPage(). */
+    _finalizePageAction(dialogueBox, sceneRendererRef, isLastPage) {
+        if (!isLastPage) return;
+
+        // typeText()'s onFinish fires asynchronously — by the time it does,
+        // a newer dialogue entry (or a scene transition, via clearScene())
+        // can already have called reset() and nulled this.state. Same guard
+        // _onActionClick() uses just above; skipping stale state here is
+        // correct, not a bug to paper over — whatever this callback would
+        // have rendered no longer belongs to the active dialogue.
+        const s = this.state;
+        if (!s) return;
+        const entry = s.entry;
+        const continueBtn = document.getElementById('dialogue-continue');
+
+        if (entry.choices && entry.choices.length > 0) {
+            continueBtn.classList.add('hidden');
+            continueBtn.onclick = null;
+            this._renderChoices(entry, sceneRendererRef);
+            // Measure/clamp AFTER the real choice buttons are in the DOM.
+            this._clampChoicesPanel(dialogueBox);
+        } else if (entry.next) {
+            continueBtn.classList.remove('hidden');
+            continueBtn.textContent = 'continue';
+            continueBtn.setAttribute('aria-label', 'Continue dialogue');
+            // onclick is already _onActionClick from renderCurrentPage, which
+            // now resolves to "last page, no choices" -> advance the entry.
+        } else {
+            continueBtn.classList.add('hidden');
+            setTimeout(() => {
+                gameState.dialogueLock = false;
+                sceneRendererRef._closeDialogueThen(() => sceneRendererRef.nextDialogue());
+            }, 3000);
+        }
+    },
+
+    /** Builds the real, interactive choice buttons (single implementation —
+     * previously duplicated once for single-page entries and once inside
+     * the old per-page pagination renderer). */
+    _renderChoices(dialogueEntry, sceneRendererRef) {
+        const choicesDiv = document.getElementById('dialogue-choices');
+        choicesDiv.innerHTML = '';
+
+        dialogueEntry.choices.forEach(choice => {
+            const btn = document.createElement('button');
+            btn.className = 'dialogue-choice';
+            btn.textContent = choice.text;
+            let touchStartTime = 0;
+            let touchStartPos = null;
+
+            const handleChoiceClick = () => {
+                if (gameState.actionLock || sceneRendererRef.isTransitioning) return;
+                gameState.actionLock = true;
+                gameState.dialogueLock = false;
+                SFXGenerator.playButtonClick();
+                if (choice.action) choice.action();
+                // Release on a short delay, like the item/hotspot click
+                // handlers — releasing synchronously right after a
+                // synchronous choice.action() call provided no real
+                // protection (nothing can run between two lines of
+                // synchronous JS), so a second real click landing in that
+                // same tick was never actually blocked by this lock.
+                setTimeout(() => {
+                    gameState.actionLock = false;
+                }, 300);
+            };
+
+            const handleInteraction = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.type === 'click' && touchStartTime > Date.now() - 500) return;
+                if (e.type === 'touchend' && touchStartPos) {
+                    const t = e.changedTouches[0];
+                    if (Math.abs(t.clientX - touchStartPos.x) > 10 || Math.abs(t.clientY - touchStartPos.y) > 10) return;
+                }
+                handleChoiceClick();
+            };
+
+            btn.addEventListener('touchstart', (e) => {
+                touchStartTime = Date.now();
+                const t = e.touches[0];
+                touchStartPos = { x: t.clientX, y: t.clientY };
+            }, { passive: true });
+            btn.addEventListener('touchend', handleInteraction, { passive: false });
+            btn.addEventListener('click', handleInteraction);
+            choicesDiv.appendChild(btn);
+        });
+
+        // Preload assets for scenes the choices might lead to (gives the
+        // player's reading time as a preload window).
+        dialogueEntry.choices.forEach(choice => {
+            if (!choice.action) return;
+            const actionStr = choice.action.toString();
+            Object.keys(SCENES).forEach(sceneId => {
+                if (actionStr.includes(`'${sceneId}'`) || actionStr.includes(`"${sceneId}"`)) {
+                    const targetScene = SCENES[sceneId];
+                    if (targetScene) {
+                        assetLoader.lazyLoadSceneAssets(targetScene);
+                        if (targetScene.background) {
+                            assetLoader.preloadSingleAsset(targetScene.background, { logErrors: false });
+                        }
+                    }
+                }
+            });
+        });
+    },
+
+    /** Called on resize/orientation change for an already-displayed entry.
+     * Repositioning itself is handled by sceneRenderer (layoutDialogue +
+     * clamp) before this runs — this only re-clamps the choices panel (its
+     * budget depends on the container's current size) and re-asserts
+     * overflow. Never re-paginates: jumping the reader to a different page
+     * mid-read would be more jarring than a rare, brief size mismatch.
+     */
+    reflow(dialogueBox) {
+        if (!this.state) return;
+        const choicesDiv = document.getElementById('dialogue-choices');
+        if (choicesDiv && choicesDiv.children.length > 0) {
+            this._clampChoicesPanel(dialogueBox);
+        }
+        this._assertNoOverflow(dialogueBox);
+    },
+};
+
 // ===== SCENE RENDERING =====
 const sceneRenderer = {
     currentScene: null,
@@ -3347,21 +4059,45 @@ const sceneRenderer = {
         'right':   { left: 1080, top: 120, width: 720, height: 420 },
         'right-2': { left: 1040, top: 270, width: 720, height: 420 },
     },
+    // Deterministic stacking order by slot — independent of DOM insertion
+    // order, so composition never depends on which character loaded first.
+    // An explicit char.zIndex always overrides this default.
+    DEFAULT_CHARACTER_Z_INDEX: { left: 3, 'left-2': 2, center: 4, 'right-2': 2, right: 3 },
+    // Populated by normalizeCharacterZones() each scene load; read by the
+    // debug validator (hbValidateLayout) to surface duplicate-slot warnings.
+    _lastCharacterLayoutWarnings: [],
     isTyping: false,
 
-    // Bubble pagination state
-    _bubblePages: null,
-    _bubblePageIndex: 0,
-    _bubblePagingActive: false,
-    _bubbleFullText: '',
-    _bubbleTypingDone: true,
-
-    // Generic dialogue pagination state (covers all layout types)
-    _dialoguePages: null,
-    _dialoguePageIndex: 0,
-    _dialoguePagingActive: false,
-    _dialogueFullText: '',
-    _dialoguePagingMeta: null,
+    /**
+     * THE single place scene-authored character data becomes a resolved
+     * layout. Treats `slot` (new canonical field) / `position` (legacy
+     * field, still fully supported) as authoritative — neither this nor any
+     * caller may remap a slot to avoid a collision; see
+     * normalizeCharacterZones() for how collisions are surfaced instead.
+     * Pure function: no DOM access, safe to call before a background/layer
+     * exists.
+     */
+    resolveCharacterLayout(char) {
+        const rawSlot = char.slot || char.position || 'center';
+        const slot = this.normalizeZoneName(rawSlot);
+        return {
+            ...char,
+            slot,
+            // Keep `.position` in sync so every existing call site that
+            // still reads `.position` (addCharacter, dialogue anchoring,
+            // sprite dataset) continues to work unchanged.
+            position: slot,
+            scale: (typeof char.scale === 'number' && isFinite(char.scale) && char.scale > 0) ? char.scale : 1,
+            offsetX: (typeof char.offsetX === 'number' && isFinite(char.offsetX)) ? char.offsetX : 0,
+            offsetY: (typeof char.offsetY === 'number' && isFinite(char.offsetY)) ? char.offsetY : 0,
+            zIndex: (typeof char.zIndex === 'number' && isFinite(char.zIndex)) ? char.zIndex : (this.DEFAULT_CHARACTER_Z_INDEX[slot] ?? 3),
+            // Fractions (0-1) of the sprite's own rendered box where the
+            // visible head actually is — null means "unknown", callers fall
+            // back to the old top-of-rect assumption for compatibility.
+            headAnchorX: (typeof char.headAnchorX === 'number' && isFinite(char.headAnchorX)) ? char.headAnchorX : null,
+            headAnchorY: (typeof char.headAnchorY === 'number' && isFinite(char.headAnchorY)) ? char.headAnchorY : null,
+        };
+    },
 
     _bindDialogueTapHandlers() {
         const dialogueBox = document.getElementById('dialogue-box');
@@ -3381,18 +4117,10 @@ const sceneRenderer = {
                 return;
             }
 
-            // If generic paging is active, tap delegates to the Continue button
-            if (this._dialoguePagingActive) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (continueBtn && !continueBtn.classList.contains('hidden')) {
-                    continueBtn.click();
-                } else if (this.isTyping) {
-                    this._finishTypewriterInstant();
-                }
-                return;
-            }
-
+            // dialoguePager wires #dialogue-continue's onclick identically for
+            // every page (single or multi) — first tap finishes typing (via
+            // this same isTyping check), the next tap advances. No separate
+            // "paging active" branch needed.
             if (this.isTyping) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -3545,13 +4273,6 @@ const sceneRenderer = {
         if (!el?._typeTextController) return false;
         el._typeTextController.finish();
         return true;
-    },
-
-    _finishTypewriterInstant() {
-        const textEl = document.getElementById('dialogue-text');
-        if (!textEl) return;
-        this.finishTypeText(textEl);
-        this._bubbleTypingDone = true;
     },
 
     cancelTypeText(el) {
@@ -3836,28 +4557,59 @@ const sceneRenderer = {
         return this.validZones.has(zoneName) ? zoneName : 'center';
     },
 
+    /**
+     * Resolves each scene character's authored slot/position through
+     * resolveCharacterLayout() — authoritative, never remapped. If two
+     * characters claim the same slot this does NOT silently move either one
+     * (that was the old behavior); it records a warning (surfaced by the
+     * debug validator as a `duplicate-slot` violation) and leaves both
+     * characters exactly where the scene author put them. addCharacter()
+     * must not run a second, independent remap on top of this one.
+     */
     normalizeCharacterZones(characters) {
-        const sideCounts = { left: 0, right: 0 };
+        this._lastCharacterLayoutWarnings = [];
 
-        return (characters || []).map(char => {
-            const normalized = { ...char };
+        const resolved = (characters || []).map(char => this.resolveCharacterLayout(char));
 
-            normalized.position = this.normalizeZoneName(normalized.position || 'center');
-
-            if (normalized.position === 'left') {
-                sideCounts.left += 1;
-                if (sideCounts.left > 1) normalized.position = 'left-2';
-            } else if (normalized.position === 'right') {
-                sideCounts.right += 1;
-                if (sideCounts.right > 1) normalized.position = 'right-2';
-            }
-
-            return normalized;
+        const bySlot = new Map();
+        resolved.forEach(char => {
+            if (!bySlot.has(char.slot)) bySlot.set(char.slot, []);
+            bySlot.get(char.slot).push(char);
         });
+        bySlot.forEach((group, slot) => {
+            if (group.length <= 1) return;
+            const ids = group.map(c => c.id || c.name || '(unnamed)');
+            const warning = {
+                type: 'duplicate-slot',
+                sceneId: this.currentScene?.id || null,
+                slot,
+                characters: ids,
+            };
+            this._lastCharacterLayoutWarnings.push(warning);
+            console.warn(`[sceneRenderer] Duplicate character slot "${slot}" claimed by: ${ids.join(', ')} — both will render in the same spot (scene "${warning.sceneId}"). Assign distinct slot/position values.`);
+        });
+
+        return resolved;
     },
 
+    /**
+     * Adds one character sprite to the scene. Always resolves the character
+     * through resolveCharacterLayout() itself — the SAME schema resolution
+     * normalizeCharacterZones() uses — so a character added later via a
+     * dialogue onClick/onEnter callback (not part of the scene's initial
+     * `characters` array) gets identical slot/scale/offset/zIndex/head-anchor
+     * handling. There is no second remap here: whatever slot the caller
+     * resolved (or the raw scene data specifies) is authoritative.
+     *
+     * Sequenced in three explicit phases: load the sprite asset, THEN apply
+     * the deterministic position/layout metadata, THEN start the entry
+     * (slide-in) animation — so composition never depends on how far
+     * along the asset fetch happened to be.
+     */
     async addCharacter(char, slideDelay = 100) {
+        const resolvedChar = this.resolveCharacterLayout(char);
         const charLayer = document.getElementById('character-layer');
+        const zoneName = resolvedChar.slot;
 
         const bg = document.getElementById('scene-background');
         if (bg && !bg.complete) {
@@ -3868,38 +4620,12 @@ const sceneRenderer = {
             });
         }
 
-        const existingZones = new Set(
-            Array.from(charLayer.querySelectorAll('.character-sprite')).map(el => el.dataset.zone)
-        );
-        let resolvedZone = char.position || 'center';
-        if (resolvedZone === 'left' && existingZones.has('left')) resolvedZone = 'left-2';
-        if (resolvedZone === 'right' && existingZones.has('right')) resolvedZone = 'right-2';
-
+        // ===== 1. Load sprite asset first (detached — no DOM/positioning
+        // dependency; images load regardless of DOM attachment) =====
         const img = document.createElement('img');
-        const zoneName = this.normalizeZoneName(resolvedZone);
-        img.className = `character-sprite char-${zoneName}`;
-        img.dataset.zone = zoneName;
-        img.dataset.characterId = char.id || '';
-        img.dataset.characterName = (char.name || '').toUpperCase();
-        if (char.id) img.id = `char-${char.id}`;
-        img.style.zIndex = charLayer.querySelectorAll('.character-sprite').length + 1;
-        img.alt = char.name;
+        img.alt = resolvedChar.name || '';
+        const spriteCandidates = this.buildSpriteCandidates(resolvedChar.sprite, zoneName);
 
-        // Position before adding to DOM
-        const pos = positioningSystem.calculateCharacterPosition(zoneName);
-        positioningSystem.applyPosition(img, pos);
-
-        // Add slide direction class (starts offscreen + transparent via CSS)
-        const side = this.getZoneSide(zoneName);
-        if (side === 'left') img.classList.add('slide-in-left');
-        else if (side === 'right') img.classList.add('slide-in-right');
-
-        charLayer.appendChild(img);
-
-        // Start loading sprite via fallback chain
-        const spriteCandidates = this.buildSpriteCandidates(char.sprite, zoneName);
-
-        // Wait for sprite to load + transparency to process
         await new Promise(resolve => {
             let resolved = false;
             const finish = () => {
@@ -3925,7 +4651,37 @@ const sceneRenderer = {
             }, 2500);
         });
 
-        // NOW trigger slide-in — sprite is fully loaded and processed
+        // ===== 2. Apply deterministic position + layout metadata =====
+        img.className = `character-sprite char-${zoneName}`;
+        img.dataset.zone = zoneName;
+        img.dataset.slot = zoneName;
+        img.dataset.characterId = resolvedChar.id || '';
+        img.dataset.characterName = (resolvedChar.name || '').toUpperCase();
+        if (resolvedChar.id) img.id = `char-${resolvedChar.id}`;
+        img.dataset.offsetX = String(resolvedChar.offsetX);
+        img.dataset.offsetY = String(resolvedChar.offsetY);
+        if (resolvedChar.headAnchorX !== null) img.dataset.headAnchorX = String(resolvedChar.headAnchorX);
+        if (resolvedChar.headAnchorY !== null) img.dataset.headAnchorY = String(resolvedChar.headAnchorY);
+        img.style.zIndex = resolvedChar.zIndex;
+        // Scale composes with the slide-in/visible transform via a CSS
+        // custom property (see styles.css) instead of JS setting `transform`
+        // directly, so it never fights the slide animation.
+        img.style.setProperty('--char-scale', String(resolvedChar.scale));
+
+        const pos = positioningSystem.calculateCharacterPosition(zoneName, {
+            offsetX: resolvedChar.offsetX,
+            offsetY: resolvedChar.offsetY,
+        });
+        positioningSystem.applyPosition(img, pos);
+
+        // Add slide direction class (starts offscreen + transparent via CSS)
+        const side = this.getZoneSide(zoneName);
+        if (side === 'left') img.classList.add('slide-in-left');
+        else if (side === 'right') img.classList.add('slide-in-right');
+
+        charLayer.appendChild(img);
+
+        // ===== 3. Start entry animation =====
         setTimeout(() => {
             img.classList.add('visible');
         }, slideDelay);
@@ -4030,18 +4786,11 @@ const sceneRenderer = {
         gameState.sceneTransitioning = true;
 
         try {
-            // Call existing transition start callback
-            if (this.onTransitionStart) {
-                this.onTransitionStart(sceneId);
-            }
-
-            // Perform the actual transition
+            // _executeSceneLoad() fires onTransitionStart/onTransitionComplete
+            // itself (with try/catch protection), scoped to the actual
+            // transition work — do not fire them here too. Doing so
+            // double-invoked every callback once per transition.
             await this._executeSceneLoad(sceneId);
-
-            // Call existing transition complete callback
-            if (this.onTransitionComplete) {
-                this.onTransitionComplete(sceneId);
-            }
 
         } catch (error) {
             // Log detailed error for debugging
@@ -4278,7 +5027,13 @@ const sceneRenderer = {
                 try { this.onTransitionComplete(sceneId); } catch (e) { errorLogger.log('onTransitionComplete', e, { sceneId }); }
             }
 
-            saveSystem.save();
+            // Loading the main menu itself is never a resume point, and
+            // autosaving here would immediately clobber a real in-progress
+            // save with blank defaults every time the game boots or the
+            // player quits to the menu -- breaking CONTINUE entirely.
+            if (sceneId !== 'S0_MAIN_MENU') {
+                saveSystem.save();
+            }
             Dev.tools.applyForCurrentScene();
         } catch (error) {
             errorLogger.log('scene-transition', error, { sceneId });
@@ -4329,6 +5084,13 @@ const sceneRenderer = {
     },
     
     clearScene() {
+        // Clear every scene-owned timer before tearing down the old scene —
+        // otherwise a reanchor/lock-safety timer from the previous scene can
+        // fire mid-transition (or into the new scene) and touch a dialogue
+        // box/lock state that no longer belongs to it.
+        clearTimeout(this._dialogueReanchorTimer);
+        clearTimeout(this._dialogueLockTimeout);
+
         return new Promise(resolve => {
             const characters = document.querySelectorAll('.character-sprite');
             const charCount = characters.length;
@@ -4355,6 +5117,7 @@ const sceneRenderer = {
                 document.getElementById('hotspot-layer').replaceChildren();
                 this.currentHotspots = [];
                 this._cleanupTypewriter(document.getElementById('dialogue-text'));
+                dialoguePager.reset();
                 document.getElementById('dialogue-box').classList.add('hidden');
 
                 // Remove police light effect if present
@@ -4555,56 +5318,78 @@ const sceneRenderer = {
     
     async _ensureSpeakerPresent(dialogueEntry) {
         const speaker = dialogueEntry.speaker;
-        if (!speaker || speaker === 'NARRATION' || speaker === 'SYSTEM' || speaker === 'CHOICE' || speaker === 'FINAL CHOICE') {
+        const characterId = dialogueEntry.characterId;
+        const isSpecialSpeaker = speaker === 'NARRATION' || speaker === 'SYSTEM' || speaker === 'CHOICE' || speaker === 'FINAL CHOICE';
+        if (isSpecialSpeaker || (!speaker && !characterId)) {
             return;
         }
-        const speakerUpper = speaker.toUpperCase();
+        const speakerUpper = (speaker || '').toUpperCase();
+        const characterIdLower = (characterId || '').toLowerCase();
+
+        // characterId first, exact speaker name second — matches the same
+        // priority _resolveDialogueCharacter()/_setSpeakingCharacter() use.
         const existing = Array.from(document.querySelectorAll('#character-layer .character-sprite'))
-            .find(el => (el.dataset.characterName || '').toUpperCase() === speakerUpper);
+            .find(el =>
+                (characterId && (el.dataset.characterId || '').toLowerCase() === characterIdLower) ||
+                (speakerUpper && (el.dataset.characterName || '').toUpperCase() === speakerUpper)
+            );
         if (existing) return;
 
         const chars = this.currentScene?.characters || [];
         const found = chars.find(c =>
-            (c.name || '').toUpperCase() === speakerUpper ||
-            (c.id || '').toLowerCase() === speaker.toLowerCase()
+            (characterId && (c.id || '').toLowerCase() === characterIdLower) ||
+            (speakerUpper && (c.name || '').toUpperCase() === speakerUpper) ||
+            (speakerUpper && (c.id || '').toLowerCase() === speakerUpper.toLowerCase())
         );
         if (found) {
             await this.addCharacter(found, 0);
         } else {
             if (!this._ensureSpeakerWarned) this._ensureSpeakerWarned = new Set();
-            const warnKey = `${this.currentScene?.id}:${speaker}`;
+            const warnKey = `${this.currentScene?.id}:${characterId || speaker}`;
             if (!this._ensureSpeakerWarned.has(warnKey)) {
                 this._ensureSpeakerWarned.add(warnKey);
-                console.warn(`[sceneRenderer] Speaker "${speaker}" not found in scene "${this.currentScene?.id}"`);
+                console.warn(`[sceneRenderer] Speaker "${characterId || speaker}" not found in scene "${this.currentScene?.id}"`);
             }
         }
     },
 
-    _setSpeakingCharacter(speakerName) {
+    /**
+     * Highlights the sprite belonging to the current speaker. Resolution
+     * priority: explicit characterId first, exact id/name match second —
+     * there is no zone fallback here (highlighting the wrong sprite by
+     * zone guesswork is worse than highlighting none).
+     */
+    _setSpeakingCharacter(speakerName, characterId) {
         const sprites = Array.from(document.querySelectorAll('#character-layer .character-sprite'));
         if (!sprites.length) return;
 
-        if (!speakerName) {
+        const normalizedSpeaker = String(speakerName || '').trim().toUpperCase();
+        const normalizedCharacterId = String(characterId || '').trim().toUpperCase();
+        const isSpecialSpeaker = ['NARRATION', 'SYSTEM', 'CHOICE', 'FINAL CHOICE'].includes(normalizedSpeaker);
+
+        if (isSpecialSpeaker || (!normalizedSpeaker && !normalizedCharacterId)) {
             sprites.forEach(sprite => sprite.classList.remove('is-speaking'));
             return;
         }
 
-        const normalizedSpeaker = String(speakerName).trim().toUpperCase();
-        if (!normalizedSpeaker || normalizedSpeaker === 'NARRATION' || normalizedSpeaker === 'SYSTEM' || normalizedSpeaker === 'CHOICE' || normalizedSpeaker === 'FINAL CHOICE') {
-            sprites.forEach(sprite => sprite.classList.remove('is-speaking'));
-            return;
+        // Priority 1: explicit characterId
+        let matchingSprite = normalizedCharacterId
+            ? sprites.find(sprite => (sprite.dataset.characterId || '').toUpperCase() === normalizedCharacterId)
+            : null;
+
+        // Priority 2: exact id/name match via the speaker string
+        if (!matchingSprite && normalizedSpeaker) {
+            matchingSprite = sprites.find(sprite => {
+                const byName = (sprite.dataset.characterName || '').toUpperCase() === normalizedSpeaker;
+                if (byName) return true;
+
+                const spriteCharacterId = (sprite.dataset.characterId || '').toUpperCase();
+                if (spriteCharacterId && spriteCharacterId === normalizedSpeaker) return true;
+
+                const spriteId = (sprite.id || '').replace(/^char-/, '').toUpperCase();
+                return spriteId && spriteId === normalizedSpeaker;
+            });
         }
-
-        const matchingSprite = sprites.find(sprite => {
-            const byName = (sprite.dataset.characterName || '').toUpperCase() === normalizedSpeaker;
-            if (byName) return true;
-
-            const characterId = (sprite.dataset.characterId || '').toUpperCase();
-            if (characterId && characterId === normalizedSpeaker) return true;
-
-            const spriteId = (sprite.id || '').replace(/^char-/, '').toUpperCase();
-            return spriteId && spriteId === normalizedSpeaker;
-        });
 
         sprites.forEach(sprite => {
             sprite.classList.toggle('is-speaking', sprite === matchingSprite);
@@ -4615,7 +5400,11 @@ const sceneRenderer = {
         try {
             this._bindDialogueTapHandlers();
             gameState.currentDialogueEntry = dialogueEntry;
-            this._setSpeakingCharacter(dialogueEntry?.speaker);
+            this._setSpeakingCharacter(dialogueEntry?.speaker, dialogueEntry?.characterId);
+            // Pagination state resets completely for every new entry — see
+            // dialoguePager.reset() (also called from _closeDialogueThen()
+            // and clearScene() for the close/scene-transition cases).
+            dialoguePager.reset();
 
             // Block dialogue during scene transitions
             if (this.isTransitioning) {
@@ -4689,15 +5478,19 @@ const sceneRenderer = {
             dialogueBox.classList.add('dialogue-positioning');
             // Make the box layout-visible (but opacity-hidden) before measurements.
             // .hidden uses display:none !important which makes getBoundingClientRect()
-            // return all-zeros, breaking _fitSpeechBubbleText and positioning logic.
+            // return all-zeros, breaking dialoguePager measurement and positioning logic.
             dialogueBox.classList.remove('hidden');
 
-            // Clear previous position classes and inline overrides from bounds clamping
+            // Clear previous position/size classes and inline overrides from the prior
+            // entry so a mode that doesn't set width/height (character/narrative/
+            // top-center) doesn't inherit a stale authored/zone-slot rectangle.
             dialogueBox.classList.remove('dialogue-left', 'dialogue-right', 'dialogue-center', 'dialogue-offscreen', 'dialogue-anchored');
             dialogueBox.style.left = '';
             dialogueBox.style.right = '';
             dialogueBox.style.top = '';
             dialogueBox.style.bottom = '';
+            dialogueBox.style.width = '';
+            dialogueBox.style.height = '';
             dialogueBox.style.transform = '';
 
             const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
@@ -4708,7 +5501,6 @@ const sceneRenderer = {
                 dialogueBox.dataset.layoutPanel = 'narrative-box';
                 dialogueContainer.classList.add('narrative-mode');
                 dialogueBox.classList.add('dialogue-center');
-                this._positionNarrativeDialogue(dialogueBox);
                 speaker.className = 'narration';
                 text.className = 'narration';
                 speaker.textContent = '';
@@ -4716,7 +5508,6 @@ const sceneRenderer = {
                 dialogueBox.dataset.layoutPanel = 'narrative-box';
                 dialogueContainer.classList.add('narrative-mode');
                 dialogueBox.classList.add('dialogue-center');
-                this._positionNarrativeDialogue(dialogueBox);
                 speaker.className = 'choice-speaker';
                 text.className = 'choice-text';
                 speaker.textContent = dialogueEntry.speaker;
@@ -4742,199 +5533,57 @@ const sceneRenderer = {
                 speaker.className = '';
                 text.className = '';
                 speaker.textContent = dialogueEntry.speaker;
-
-                this._positionDialogueInSlot(dialogueBox, pos, dialogueEntry);
-                dialogueBox.dataset.tail = isLeft ? 'left' : 'right';
                 dialogueBox.dataset.zone = pos;
-                this._applyDialogueBubbleTail(dialogueBox, pos);
-                dialogueBox.classList.add('dialogue-anchored');
             }
-
-            const useBubbleLayout = Boolean(dialogueEntry.bubbleLayout);
-
-            if (useBubbleLayout) {
-                const bl = dialogueEntry.bubbleLayout;
-                const rect = positioningSystem.getBackgroundRect();
-                if (rect) {
-                    // bubbleLayout values are in 1920x1080 native space — scale to current container
-                    const scaled = positioningSystem.calculateHotspotPosition(
-                        bl.left || 0, bl.top || 0, bl.width || 400, bl.height || 300
-                    );
-                    dialogueBox.style.left = scaled.left;
-                    dialogueBox.style.top = scaled.top;
-                    dialogueBox.style.width = scaled.width;
-                    dialogueBox.style.height = scaled.height;
-                } else {
-                    // Fallback: apply as percentages of reference dimensions
-                    if (Number.isFinite(bl.left)) dialogueBox.style.left = `${(bl.left / 1920) * 100}%`;
-                    if (Number.isFinite(bl.top)) dialogueBox.style.top = `${(bl.top / 1080) * 100}%`;
-                    if (Number.isFinite(bl.width)) dialogueBox.style.width = `${(bl.width / 1920) * 100}%`;
-                    if (Number.isFinite(bl.height)) dialogueBox.style.height = `${(bl.height / 1080) * 100}%`;
-                }
-                dialogueBox.style.right = 'auto';
-                dialogueBox.style.bottom = 'auto';
-                dialogueBox.style.transform = 'none';
-            }
-
-            const dialogueText = dialogueEntry.text || '';
 
             this._activeDialogueEntry = dialogueEntry;
 
-            this._bubblePagingActive = false;
-            this._bubblePages = null;
-            this._bubblePageIndex = 0;
-            this._bubbleFullText = '';
-            this._bubbleTypingDone = true;
-            this._setBubblePagingUI?.(dialogueBox, false);
-            this._resetDialoguePaging();
+            // The dialoguePager pipeline (see its own docstring for the full
+            // 8-step breakdown):
+            //   1. resolve layout rect      -> layoutDialogue() (pre-fit pass)
+            //   2. wait for fonts           -> document.fonts.ready + timeout
+            //   3-4. measure available height, speaker, action area, padding
+            //   5. paginate at word/sentence boundaries
+            // prepare() runs 1-5 and returns null only if a newer entry
+            // superseded this call while awaiting fonts.
+            const pagerState = await dialoguePager.prepare(dialogueBox, dialogueEntry, this);
+            if (!pagerState) return;
 
-            // Fit text into stable bubble container (speech-bubble mode only, all screen sizes)
-            this._fitSpeechBubbleText(dialogueBox, dialogueText);
+            this._debugAssertAuthoredLayout(dialogueBox, dialogueEntry, pagerState.layoutMode);
+            this._clampDialogueToViewport(dialogueBox, { preserveCentered: pagerState.layoutMode === 'narrative' });
+            Dev.layout.applySavedLayouts();
 
-            // Re-anchor position now that box size is final
-            if (!isNarration && !isChoice) {
-                const pos = this.normalizeZoneName(dialogueEntry.position || 'left');
-                this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
-
-                clearTimeout(this._dialogueReanchorTimer);
+            // The delayed re-anchor exists so a still-sliding-in character can be
+            // re-measured once its animation settles. Only meaningful for explicit
+            // character-relative mode — authored/zone-slot rects never depend on
+            // character position, so they must never be re-anchored here.
+            clearTimeout(this._dialogueReanchorTimer);
+            if (pagerState.layoutMode === 'character') {
                 this._dialogueReanchorTimer = setTimeout(() => {
                     if (this._activeDialogueEntry !== dialogueEntry || dialogueBox.classList.contains('hidden')) return;
-                    this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
+                    this.layoutDialogue(dialogueBox, dialogueEntry);
                     this._clampDialogueToViewport(dialogueBox);
                 }, 180);
             }
-            this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
 
-            // Generic pagination: check all layout types for overflow before displaying
-            const pages = this._splitIntoDialoguePages(dialogueBox, dialogueText, 6);
-            if (pages.length > 1) {
-                this._dialoguePages = pages;
-                this._dialoguePageIndex = 0;
-                this._dialogueFullText = dialogueText;
-                this._dialoguePagingActive = true;
-                this._dialoguePagingMeta = {
-                    speaker: dialogueEntry.speaker || '',
-                    position: dialogueEntry.position || '',
-                    entryRef: dialogueEntry
-                };
-                // Ensure bubble tap hint is hidden — Continue button drives pagination
-                this._setBubblePagingUI(dialogueBox, false);
-                this._showDialoguePage(pages[0], dialogueEntry);
-                // Reveal after positioning settles
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        dialogueBox.classList.remove('dialogue-positioning');
-                        this._animateDialogueEntry();
-                    });
-                });
-                return;
-            }
+            // 6-8: type the first page, wire tap/advance, render the action
+            // area once typing finishes, and assert no overflow.
+            dialoguePager.renderCurrentPage(dialogueBox, this);
 
-            this.typeText(text, dialogueText, {
-                onFinish: () => this._updateDialogueOverflowIndicator(text)
-            });
-            // Check for text overflow and add indicator
-            requestAnimationFrame(() => {
-                this._updateDialogueOverflowIndicator(text);
-            });
-            this._clampDialogueToViewport(dialogueBox, { preserveCentered: isNarration || isChoice });
-            Dev.layout.applySavedLayouts();
-            this._fitMobileDialogueText(dialogueBox);
-            requestAnimationFrame(() => {
-                this._updateDialogueOverflowIndicator(text);
-            });
-
-            // Reveal after positioning settles (double-rAF ensures layout is applied)
+            // Reveal after positioning settles (double-rAF ensures layout is
+            // applied). Reapply the same resolved mode once more for
+            // late-settling fonts/assets — see layoutDialogue()'s docstring
+            // for why this never changes the mode — then let the pager
+            // re-clamp the choices panel/re-assert against the settled box.
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
+                    const settledMode = this.layoutDialogue(dialogueBox, dialogueEntry);
+                    this._clampDialogueToViewport(dialogueBox, { preserveCentered: settledMode === 'narrative' });
+                    dialoguePager.reflow(dialogueBox);
                     dialogueBox.classList.remove('dialogue-positioning');
                     this._animateDialogueEntry();
                 });
             });
-
-            if (dialogueEntry.choices && dialogueEntry.choices.length > 0) {
-                dialogueEntry.choices.forEach(choice => {
-                    const btn = document.createElement('button');
-                    btn.className = 'dialogue-choice';
-                    btn.textContent = choice.text;
-                    let touchStartTime = 0;
-                    let touchStartPos = null;
-
-                    const handleChoiceClick = () => {
-                        if (gameState.actionLock || this.isTransitioning) return;
-                        gameState.actionLock = true;
-                        gameState.dialogueLock = false;
-                        SFXGenerator.playButtonClick();
-                        if (choice.action) {
-                            choice.action();
-                        }
-                        gameState.actionLock = false;
-                    };
-
-                    const handleInteraction = (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-
-                        // Prevent double-firing on devices that support both touch and click
-                        if (e.type === 'click' && touchStartTime > Date.now() - 500) {
-                            return;
-                        }
-
-                        // For touch events, check if this was a tap (not a scroll)
-                        if (e.type === 'touchend' && touchStartPos) {
-                            const touch = e.changedTouches[0];
-                            const deltaX = Math.abs(touch.clientX - touchStartPos.x);
-                            const deltaY = Math.abs(touch.clientY - touchStartPos.y);
-
-                            // If moved more than 10px, treat as scroll not tap
-                            if (deltaX > 10 || deltaY > 10) {
-                                return;
-                            }
-                        }
-
-                        handleChoiceClick();
-                    };
-
-                    btn.addEventListener('touchstart', (e) => {
-                        touchStartTime = Date.now();
-                        const touch = e.touches[0];
-                        touchStartPos = { x: touch.clientX, y: touch.clientY };
-                    }, { passive: true });
-
-                    btn.addEventListener('touchend', handleInteraction, { passive: false });
-                    btn.addEventListener('click', handleInteraction);
-                    choicesDiv.appendChild(btn);
-                });
-
-                // Preload assets for scenes that choices might lead to
-                // (Gives the player's reading time as preload window)
-                if (dialogueEntry.choices) {
-                    dialogueEntry.choices.forEach(choice => {
-                        // Check if the action function source mentions a scene ID
-                        if (choice.action) {
-                            const actionStr = choice.action.toString();
-                            Object.keys(SCENES).forEach(sceneId => {
-                                if (actionStr.includes(`'${sceneId}'`) || actionStr.includes(`"${sceneId}"`)) {
-                                    const targetScene = SCENES[sceneId];
-                                    if (targetScene) {
-                                        assetLoader.lazyLoadSceneAssets(targetScene);
-                                        if (targetScene.background) {
-                                            assetLoader.preloadSingleAsset(targetScene.background, { logErrors: false });
-                                        }
-                                    }
-                                }
-                            });
-                        }
-                    });
-                }
-            } else if (dialogueEntry.next) {
-                this._setupDialogueContinueButton(continueBtn, text, dialogueEntry);
-            } else {
-                setTimeout(() => {
-                    gameState.dialogueLock = false;
-                    this._closeDialogueThen(() => this.nextDialogue());
-                }, 3000);
-            }
         } catch (error) {
             errorLogger.log('dialogue-render', error, { sceneId: gameState.currentSceneId, dialogueEntry });
             const dialogueBox = document.getElementById('dialogue-box');
@@ -4947,80 +5596,22 @@ const sceneRenderer = {
         }
     },
 
-    _setupDialogueContinueButton(continueBtn, textEl, dialogueEntry) {
-        continueBtn.classList.remove('hidden');
-        continueBtn.textContent = 'continue';
-        continueBtn.setAttribute('aria-label', 'Continue dialogue');
-        continueBtn.onclick = () => {
-            if (this.isTyping) {
-                this.finishTypeText(textEl);
-                return;
-            }
-            if (gameState.actionLock || this.isTransitioning) return;
-            gameState.actionLock = true;
-            gameState.dialogueLock = false;
-            SFXGenerator.playContinueButton();
-            this._closeDialogueThen(() => {
-                if (dialogueEntry.next === 'NEXT_DIALOGUE') {
-                    this.nextDialogue();
-                } else if (typeof dialogueEntry.next === 'function') {
-                    dialogueEntry.next();
-                } else {
-                    this.loadScene(dialogueEntry.next);
-                }
-                gameState.actionLock = false;
-            });
-        };
-    },
-
-    _showBubblePage(dialogueBox, pos, dialogueEntry) {
-        const textEl = document.getElementById('dialogue-text');
-        const continueBtn = document.getElementById('dialogue-continue');
-        if (!dialogueBox || !textEl || !continueBtn || !this._bubblePages?.length) return;
-
-        const pageText = this._bubblePages[this._bubblePageIndex] || '';
-        this._bubbleTypingDone = false;
-        continueBtn.classList.add('hidden');
-
-        this._fitSpeechBubbleText(dialogueBox, pageText);
-        this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
-        this._applyDialogueBubbleTail(dialogueBox, pos);
-        this._clampDialogueToViewport(dialogueBox);
-
-        this.typeText(textEl, pageText, {
-            onFinish: () => {
-                this._bubbleTypingDone = true;
-                this._updateDialogueOverflowIndicator(textEl);
-                if (this._bubblePageIndex === this._bubblePages.length - 1) {
-                    // Last page: disable paging and show the normal continue button
-                    this._bubblePagingActive = false;
-                    this._setBubblePagingUI(dialogueBox, false);
-                    if (dialogueEntry?.next) {
-                        this._setupDialogueContinueButton(continueBtn, textEl, dialogueEntry);
-                    } else {
-                        setTimeout(() => {
-                            gameState.dialogueLock = false;
-                            this._closeDialogueThen(() => this.nextDialogue());
-                        }, 3000);
-                    }
-                } else {
-                    // Intermediate page: show a visible "more..." button so the player
-                    // can advance without having to know to tap the bubble.
-                    continueBtn.textContent = 'more...';
-                    continueBtn.setAttribute('aria-label', 'Show more dialogue');
-                    continueBtn.classList.remove('hidden');
-                    continueBtn.onclick = () => {
-                        if (gameState.actionLock || this.isTransitioning) return;
-                        SFXGenerator.playContinueButton();
-                        this._bubblePageIndex++;
-                        this._updateBubblePageIndicator();
-                        const activeEntry = gameState.currentDialogueEntry || null;
-                        const p = this.normalizeZoneName((activeEntry?.position) || 'left');
-                        this._showBubblePage(dialogueBox, p, activeEntry || {});
-                    };
-                }
-            }
-        });
+    /**
+     * Resolves a dialogue entry's `next` field — 'NEXT_DIALOGUE' advances
+     * within the current scene, a function runs arbitrary logic (scene
+     * change, flag updates, etc.), and a string loads that scene directly.
+     * Single implementation used by dialoguePager's continue-button handler
+     * (previously duplicated inline for the single-page and per-page-
+     * pagination code paths).
+     */
+    _advanceDialogueEntry(dialogueEntry) {
+        if (dialogueEntry.next === 'NEXT_DIALOGUE') {
+            this.nextDialogue();
+        } else if (typeof dialogueEntry.next === 'function') {
+            dialogueEntry.next();
+        } else if (dialogueEntry.next) {
+            this.loadScene(dialogueEntry.next);
+        }
     },
 
     _clampDialogueToViewport(dialogueBox, options = {}) {
@@ -5030,9 +5621,9 @@ const sceneRenderer = {
         if (!container) return;
         const containerRect = container.getBoundingClientRect();
         const boxRect = dialogueBox.getBoundingClientRect();
-        const isMobile = window.matchMedia('(max-width: 1024px)').matches;
-
-        const safe = positioningSystem.getDialogueSafeRect(isMobile ? 10 : 12);
+        // Pad/HUD reservation now comes from live CSS (--dlg-safe-pad,
+        // #hud::before) via getDialogueSafeRect() itself — no isMobile heuristic needed.
+        const safe = positioningSystem.getDialogueSafeRect();
         if (!safe) return;
 
         const minLeft = safe.left;
@@ -5074,7 +5665,18 @@ const sceneRenderer = {
         }
     },
 
+    /**
+     * Speaker -> sprite resolution priority: explicit dialogueEntry.characterId
+     * first (exact, unambiguous), then exact character id/name match, then
+     * fuzzy name matching, then zone fallback last.
+     */
     _resolveDialogueCharacter(zoneName, dialogueEntry) {
+        const characterId = (dialogueEntry?.characterId || '').trim();
+        if (characterId) {
+            const byCharacterId = document.querySelector(`#character-layer .character-sprite[data-character-id="${characterId}"]`);
+            if (byCharacterId) return byCharacterId;
+        }
+
         const speakerName = (dialogueEntry?.speaker || '').toUpperCase().trim();
         const normalizeSpeakerToken = (value) => (value || '')
             .toUpperCase()
@@ -5145,21 +5747,33 @@ const sceneRenderer = {
         const isMobile = window.matchMedia('(max-width: 1024px)').matches;
         const gap = isMobile ? 2 : 8;
 
-        // Safe placement area (inside rendered background & below HUD)
-        const safe = positioningSystem.getDialogueSafeRect(isMobile ? 10 : 12);
+        // Safe placement area (inside rendered background & below HUD).
+        // Pad/HUD reservation comes from live CSS via getDialogueSafeRect() itself.
+        const safe = positioningSystem.getDialogueSafeRect();
         if (!safe) return;
 
         const isLeftZone = zoneName.startsWith('left');
         const isRightZone = zoneName.startsWith('right');
         const isSecondaryZone = zoneName.endsWith('-2');
 
-        // Anchor point: above character head (scene-container local coords)
-        // Secondary speakers get a slight inward bias so the bubble reads like the examples.
+        // Anchor point: above character head (scene-container local coords).
+        // headAnchorX/headAnchorY (fractions 0-1 of the sprite's OWN box)
+        // are authored per-character metadata for where the visible head
+        // actually sits — most sprite PNGs have transparent padding above
+        // the head, so charRect.top alone is not the head. When a character
+        // doesn't carry that metadata, fall back to the previous zone-based
+        // heuristic (secondary speakers get a slight inward bias) so
+        // existing scenes render identically.
         const innerAnchorRatio = isLeftZone ? 0.58 : 0.42;
         const defaultAnchorRatio = 0.5;
-        const anchorRatio = isSecondaryZone ? innerAnchorRatio : defaultAnchorRatio;
+        const headAnchorXFrac = parseFloat(characterEl.dataset.headAnchorX);
+        const headAnchorYFrac = parseFloat(characterEl.dataset.headAnchorY);
+        const anchorRatio = Number.isFinite(headAnchorXFrac)
+            ? headAnchorXFrac
+            : (isSecondaryZone ? innerAnchorRatio : defaultAnchorRatio);
         const anchorX = charRect.left - containerRect.left + (charRect.width * anchorRatio);
-        const headY = (charRect.top - containerRect.top);
+        const headY = (charRect.top - containerRect.top)
+            + (Number.isFinite(headAnchorYFrac) ? charRect.height * headAnchorYFrac : 0);
         const extraLift = isSecondaryZone ? (isMobile ? 8 : 14) : 0;
         let topPx = headY - boxRect.height - gap - extraLift;
 
@@ -5219,15 +5833,118 @@ const sceneRenderer = {
         dialogueBubble.src = TAIL_IMAGE_BY_SIDE[tailSide] || TAIL_IMAGE_BY_SIDE.left;
     },
 
+    /**
+     * True on phone/tablet landscape viewports where vertical space is scarce
+     * enough that an authored/zone bubble height must be treated as a cap
+     * rather than a fixed value. Mirrors the CSS compact-landscape queries.
+     */
+    _isCompactLandscape() {
+        return window.matchMedia('(max-width: 1024px) and (orientation: landscape)').matches
+            || window.matchMedia('(max-height: 500px)').matches;
+    },
+
+    /**
+     * THE canonical dialogue layout entry point — the only method allowed to set
+     * dialogueBox position/size. Resolves exactly one placement mode per call,
+     * in strict precedence order, and applies it:
+     *
+     *   1. narration/choice        -> centered narrative layout
+     *   2. speech w/ bubbleLayout  -> authored native-coordinate rectangle
+     *   3. speech w/ a valid zone  -> DEFAULT_SPEECH_BUBBLE_SLOTS rectangle
+     *   4. layoutMode: 'character' -> character-relative placement (explicit opt-in)
+     *   5. (fallback)              -> top-center safe placement
+     *
+     * An authored bubbleLayout (tier 2) always wins over character-relative
+     * positioning — it is never re-anchored near a character. layoutDialogue()
+     * is a pure function of (dialogueEntry, current DOM/character state), so it
+     * is safe to call repeatedly (initial render, post-fit reflow, settle
+     * reflow, resize/orientation) without ever changing the resolved mode for
+     * a given entry. The resolved mode is recorded on dialogueBox.dataset.layoutMode.
+     */
+    layoutDialogue(dialogueBox, dialogueEntry, options = {}) {
+        if (!dialogueBox || !dialogueEntry) return null;
+
+        // Clear any compact-landscape height cap left by a previous call/entry —
+        // the branches below re-derive it fresh for whichever mode resolves.
+        const containerEl = document.getElementById('dialogue-container');
+        if (containerEl) containerEl.style.maxHeight = '';
+
+        const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
+        const isChoice = dialogueEntry.speaker === 'CHOICE' || dialogueEntry.speaker === 'FINAL CHOICE';
+        const zone = this.normalizeZoneName(dialogueEntry.position || 'left');
+
+        let mode;
+        if (isNarration || isChoice) {
+            mode = 'narrative';
+            dialogueBox.classList.remove('dialogue-anchored');
+            this._positionNarrativeDialogue(dialogueBox);
+        } else if (dialogueEntry.bubbleLayout) {
+            mode = 'authored';
+            this._positionDialogueInSlot(dialogueBox, zone, dialogueEntry);
+            dialogueBox.classList.add('dialogue-anchored');
+        } else if (dialogueEntry.layoutMode === 'character') {
+            mode = 'character';
+            this._positionDialogueNearCharacter(dialogueBox, zone, dialogueEntry);
+            dialogueBox.classList.add('dialogue-anchored');
+        } else if (positioningSystem.getBackgroundRect()) {
+            mode = 'zone-slot';
+            this._positionDialogueInSlot(dialogueBox, zone, dialogueEntry);
+            dialogueBox.classList.add('dialogue-anchored');
+        } else {
+            mode = 'top-center';
+            this._positionDialogueTopCenter(dialogueBox);
+            this._applyDialogueBubbleTail(dialogueBox, zone);
+            dialogueBox.classList.add('dialogue-anchored');
+        }
+
+        dialogueBox.dataset.layoutMode = mode;
+        return mode;
+    },
+
+    /**
+     * Debug-only invariant check (no-ops outside DEBUG, never throws): confirms
+     * an authored bubbleLayout entry's applied rect still matches its scaled
+     * expected position, within tolerance, at the point right before viewport
+     * clamping runs. Exists to catch any regression that re-introduces an
+     * unconditional character-relative re-anchor after layoutDialogue().
+     */
+    _debugAssertAuthoredLayout(dialogueBox, dialogueEntry, mode, tolerancePx = 2) {
+        if (!DEBUG || !dialogueBox || mode !== 'authored' || !dialogueEntry?.bubbleLayout) return;
+        try {
+            const bl = dialogueEntry.bubbleLayout;
+            const expected = positioningSystem.calculateHotspotPosition(
+                bl.left || 0, bl.top || 0, bl.width || 400, bl.height || 300
+            );
+            const expectedLeft = parseFloat(expected.left);
+            const expectedTop = parseFloat(expected.top);
+            const actualLeft = parseFloat(dialogueBox.style.left);
+            const actualTop = parseFloat(dialogueBox.style.top);
+            const deltaLeft = Math.abs(actualLeft - expectedLeft);
+            const deltaTop = Math.abs(actualTop - expectedTop);
+            const withinTolerance = deltaLeft <= tolerancePx && deltaTop <= tolerancePx;
+            console.assert(
+                withinTolerance,
+                `[layoutDialogue] authored rect drifted before clamp — speaker=${dialogueEntry.speaker} ` +
+                `deltaLeft=${deltaLeft.toFixed(1)}px deltaTop=${deltaTop.toFixed(1)}px (tolerance ${tolerancePx}px)`,
+                { bubbleLayout: bl, expected: { left: expectedLeft, top: expectedTop }, actual: { left: actualLeft, top: actualTop } }
+            );
+        } catch (_) {
+            // Debug-only guard: an assertion must never break gameplay.
+        }
+    },
+
     _positionDialogueInSlot(dialogueBox, zoneName, dialogueEntry) {
         if (!dialogueBox || !dialogueEntry) return;
 
         // 1. Normalize zone, falling back through available values to ensure a valid string
         const zone = this.normalizeZoneName(zoneName || dialogueEntry.position || 'left');
 
-        // If positioningSystem cannot report a background rect, use the legacy character-relative method
+        // If positioningSystem cannot report a background rect yet, fall back to the
+        // final tier (top-center) rather than character-relative positioning — an
+        // authored/zone-slot entry must never be re-anchored near a character.
         if (!positioningSystem.getBackgroundRect()) {
-            this._positionDialogueNearCharacter(dialogueBox, zone, dialogueEntry);
+            this._positionDialogueTopCenter(dialogueBox);
+            this._applyDialogueBubbleTail(dialogueBox, zone);
             return;
         }
 
@@ -5246,10 +5963,27 @@ const sceneRenderer = {
         dialogueBox.style.left      = pos.left;
         dialogueBox.style.top       = pos.top;
         dialogueBox.style.width     = pos.width;
-        dialogueBox.style.height    = pos.height;
         dialogueBox.style.right     = 'auto';
         dialogueBox.style.bottom    = 'auto';
         dialogueBox.style.transform = 'none';
+
+        // #dialogue-container (the element that actually renders the bubble
+        // art/text) does not inherit #dialogue-box's height — it sizes itself
+        // via CSS min/max-height. On desktop/portrait those CSS ranges were
+        // tuned to match the scaled rect, so setting a fixed height here is
+        // safe. In compact landscape, a scaled authored/zone height can fall
+        // below the CSS min-height floor, so treat it as a MAX instead: the
+        // box auto-sizes to content (never forced taller than needed) but is
+        // capped at the authored footprint (never taller than intended,
+        // overflow handled by the existing pagination system).
+        const containerEl = document.getElementById('dialogue-container');
+        if (this._isCompactLandscape()) {
+            dialogueBox.style.height = 'auto';
+            if (containerEl) containerEl.style.maxHeight = pos.height;
+        } else {
+            dialogueBox.style.height = pos.height;
+            if (containerEl) containerEl.style.maxHeight = '';
+        }
 
         // 6. Tail side: left-side zones get a left tail, right-side zones get a right tail
         const tailSide = zone.startsWith('right') ? 'right' : 'left';
@@ -5296,519 +6030,25 @@ const sceneRenderer = {
         }
     },
 
-    _updateDialogueOverflowIndicator(textEl = document.getElementById('dialogue-text')) {
-        if (!textEl) return;
-
-        if (textEl.scrollHeight > textEl.clientHeight) {
-            textEl.classList.add('has-overflow');
-        } else {
-            textEl.classList.remove('has-overflow');
-        }
-    },
-
-    _isSpeechBubble(dialogueBox) {
-        return !!dialogueBox && dialogueBox.dataset?.layoutPanel === 'speech-bubble';
-    },
-
-    _setBubblePagingUI(dialogueBox, enabled) {
-        const hint = document.getElementById('bubble-continue-hint');
-        const ind = document.getElementById('bubble-page-indicator');
-        if (!dialogueBox) return;
-        if (enabled) {
-            dialogueBox.classList.add('is-paginated');
-            if (hint) hint.style.display = 'block';
-        } else {
-            dialogueBox.classList.remove('is-paginated');
-            if (hint) hint.style.display = 'none';
-            if (ind) ind.textContent = '';
-        }
-    },
-
-    _updateBubblePageIndicator() {
-        const ind = document.getElementById('bubble-page-indicator');
-        if (!ind) return;
-        if (!this._bubblePagingActive || !this._bubblePages?.length) {
-            ind.textContent = '';
-            return;
-        }
-        ind.textContent = `${this._bubblePageIndex + 1}/${this._bubblePages.length}`;
-    },
-
-    _fitMobileDialogueText(dialogueBox) {
-        // Run on any screen under 1024px, not just 768px
-        if (!window.matchMedia('(max-width: 1024px)').matches || !dialogueBox) return;
-        // Speech-bubble mode is handled by _fitSpeechBubbleText
-        if (dialogueBox.dataset.layoutPanel === 'speech-bubble') return;
-
-        const textEl = document.getElementById('dialogue-text');
-        const speakerEl = document.getElementById('dialogue-speaker');
-        const contentEl = document.getElementById('dialogue-content');
-        if (!textEl || !contentEl) return;
-
-        const isSmallPhone = window.matchMedia('(max-width: 640px)').matches;
-        const isVerySmall = window.matchMedia('(max-width: 480px)').matches;
-        const isLandscape = window.matchMedia('(orientation: landscape)').matches;
-
-        // Reset inline styles so we read the CSS-computed value as the starting point.
-        // This lets CSS do the sizing work; we only shrink as a last resort if a
-        // single page still overflows after pagination has already been applied.
-        textEl.style.fontSize = '';
-        if (speakerEl) speakerEl.style.fontSize = '';
-
-        let textSize = parseFloat(getComputedStyle(textEl).fontSize) || 14;
-        let speakerSize = speakerEl ? (parseFloat(getComputedStyle(speakerEl).fontSize) || 14) : 0;
-
-        textEl.style.fontSize = `${textSize}px`;
-        textEl.style.lineHeight = isSmallPhone ? '1.15' : '1.2';
-        if (speakerEl) {
-            speakerEl.style.fontSize = `${speakerSize}px`;
-            speakerEl.style.lineHeight = '1.1';
-        }
-
-        // Higher floors: prefer readable text over extreme shrinking.
-        const minTextSize = isVerySmall ? 13 : 15;
-        const minSpeakerSize = isVerySmall ? 14 : 16;
-
-        let guard = 0;
-
-        while (guard < 6 && (contentEl.scrollHeight > contentEl.clientHeight || textEl.scrollHeight > textEl.clientHeight)) {
-            guard += 1;
-
-            if (textSize > minTextSize) {
-                textSize -= 0.5;
-                textEl.style.fontSize = `${textSize}px`;
-            }
-
-            if (speakerEl && speakerSize > minSpeakerSize && contentEl.scrollHeight > contentEl.clientHeight) {
-                speakerSize -= 0.5;
-                speakerEl.style.fontSize = `${speakerSize}px`;
-            }
-
-            if (textSize <= minTextSize && (!speakerEl || speakerSize <= minSpeakerSize)) {
-                break;
-            }
-        }
-    },
-
-    _fitSpeechBubbleText(dialogueBox, fullText) {
-        if (!dialogueBox) return;
-        if (dialogueBox.dataset.layoutPanel !== 'speech-bubble') return;
-
-        const textEl = document.getElementById('dialogue-text');
-        const speakerEl = document.getElementById('dialogue-speaker');
-        const contentEl = document.getElementById('dialogue-content');
-        if (!textEl || !contentEl) return;
-
-        // Set full text temporarily for measurement (typewriter will reuse computed sizes)
-        const prev = textEl.textContent;
-        textEl.textContent = fullText || '';
-
-        // Reset to CSS defaults so repeated calls don't keep shrinking
-        textEl.style.fontSize = '';
-        if (speakerEl) speakerEl.style.fontSize = '';
-
-        const minText = 14;     // floor: readable on desktop + Android
-        const minSpeaker = 15;
-
-        let guard = 0;
-        while (guard < 20 && (textEl.scrollHeight > textEl.clientHeight || contentEl.scrollHeight > contentEl.clientHeight)) {
-            guard++;
-            const csT = parseFloat(getComputedStyle(textEl).fontSize) || 16;
-            const csS = speakerEl ? (parseFloat(getComputedStyle(speakerEl).fontSize) || 16) : 0;
-
-            if (csT > minText) textEl.style.fontSize = (csT - 0.5) + 'px';
-            if (speakerEl && csS > minSpeaker && contentEl.scrollHeight > contentEl.clientHeight) {
-                speakerEl.style.fontSize = (csS - 0.5) + 'px';
-            }
-
-            if ((parseFloat(getComputedStyle(textEl).fontSize) <= minText) &&
-                (!speakerEl || parseFloat(getComputedStyle(speakerEl).fontSize) <= minSpeaker)) {
-                break;
-            }
-        }
-
-        // Restore for typewriter (computed sizes stay in place via inline style)
-        textEl.textContent = prev;
-    },
-
-    _measureSpeechBubbleFit(dialogueBox, candidateText) {
-        const textEl = document.getElementById('dialogue-text');
-        const contentEl = document.getElementById('dialogue-content');
-        if (!textEl || !contentEl) return { fits: true };
-
-        const prev = textEl.textContent;
-        textEl.textContent = candidateText || '';
-
-        const fitsNow = !(textEl.scrollHeight > textEl.clientHeight || contentEl.scrollHeight > contentEl.clientHeight);
-
-        textEl.textContent = prev;
-        return { fits: fitsNow };
-    },
-
-    _splitChunkToFitBubble(dialogueBox, chunkText) {
-        const normalized = String(chunkText || '').replace(/\s+/g, ' ').trim();
-        if (!normalized) return [''];
-
-        if (this._measureSpeechBubbleFit(dialogueBox, normalized).fits) {
-            return [normalized];
-        }
-
-        const words = normalized.split(' ');
-        if (words.length <= 1) return [normalized];
-
-        const pages = [];
-        let index = 0;
-
-        while (index < words.length) {
-            let candidate = words[index];
-            let lastFit = this._measureSpeechBubbleFit(dialogueBox, candidate).fits ? candidate : '';
-            let lastFitIndex = lastFit ? index : index - 1;
-
-            for (let i = index + 1; i < words.length; i++) {
-                const next = `${candidate} ${words[i]}`;
-                if (this._measureSpeechBubbleFit(dialogueBox, next).fits) {
-                    candidate = next;
-                    lastFit = next;
-                    lastFitIndex = i;
-                    continue;
-                }
-                break;
-            }
-
-            if (!lastFit) {
-                // If even a single token doesn't fit (extremely unlikely), emit it to avoid loops.
-                pages.push(words[index]);
-                index += 1;
-            } else {
-                pages.push(lastFit);
-                index = lastFitIndex + 1;
-            }
-        }
-
-        return pages.filter(Boolean);
-    },
-
-    _splitIntoBubblePages(dialogueBox, fullText, maxPages = 6) {
-        const txt = String(fullText || '').replace(/\s+/g, ' ').trim();
-        if (!txt) return [''];
-
-        // Prefer sentence-ish splits
-        let chunks = txt.split(/(?<=[.!?])\s+/);
-
-        // fallback: word chunking
-        if (chunks.length === 1) {
-            const words = txt.split(' ');
-            chunks = [];
-            for (let i = 0; i < words.length; i += 12) {
-                chunks.push(words.slice(i, i + 12).join(' '));
-            }
-        }
-
-        const pages = [];
-        let cur = '';
-
-        const ok = (s) => this._measureSpeechBubbleFit(dialogueBox, s).fits;
-
-        for (let i = 0; i < chunks.length; i++) {
-            const next = cur ? (cur + ' ' + chunks[i]) : chunks[i];
-
-            if (ok(next)) {
-                cur = next;
-                continue;
-            }
-
-            if (cur) pages.push(cur);
-            cur = chunks[i];
-
-            if (!ok(cur)) {
-                const forcedPages = this._splitChunkToFitBubble(dialogueBox, cur);
-                if (forcedPages.length > 1) {
-                    pages.push(...forcedPages.slice(0, -1));
-                    cur = forcedPages[forcedPages.length - 1] || '';
-                }
-            }
-
-            if (pages.length >= maxPages - 1) {
-                const rest = [cur].concat(chunks.slice(i + 1)).join(' ').trim();
-                const remainderPages = this._splitChunkToFitBubble(dialogueBox, rest);
-                pages.push(...remainderPages);
-                return pages.filter(Boolean);
-            }
-        }
-
-        if (cur) {
-            const tailPages = this._splitChunkToFitBubble(dialogueBox, cur);
-            pages.push(...tailPages);
-        }
-        return pages.filter(Boolean);
-    },
-
-    // ===== GENERIC DIALOGUE PAGINATION HELPERS =====
-
-    _resetDialoguePaging() {
-        this._dialoguePagingActive = false;
-        this._dialoguePages = null;
-        this._dialoguePageIndex = 0;
-        this._dialogueFullText = '';
-        this._dialoguePagingMeta = null;
-    },
-
-    _isDialoguePagingActive() {
-        return this._dialoguePagingActive === true;
-    },
-
-    /** Measure fit for non-bubble layouts using scrollHeight checks. */
-    _measureDialogueContainerFit(dialogueBox, candidateText) {
-        const textEl = document.getElementById('dialogue-text');
-        const contentEl = document.getElementById('dialogue-content');
-        if (!textEl || !contentEl) return { fits: true };
-        const prev = textEl.textContent;
-        textEl.textContent = candidateText || '';
-        const fits = !(textEl.scrollHeight > textEl.clientHeight || contentEl.scrollHeight > contentEl.clientHeight);
-        textEl.textContent = prev;
-        return { fits };
-    },
-
-    /**
-     * Split fullText into pages that each fit inside dialogueBox.
-     * Works for both speech-bubble and non-bubble layouts.
-     */
-    _splitIntoDialoguePages(dialogueBox, fullText, maxPages = 10) {
-        const isBubble = this._isSpeechBubble(dialogueBox);
-        const measureFit = (text) => isBubble
-            ? this._measureSpeechBubbleFit(dialogueBox, text).fits
-            : this._measureDialogueContainerFit(dialogueBox, text).fits;
-
-        const txt = String(fullText || '').replace(/\s+/g, ' ').trim();
-        if (!txt) return [''];
-
-        const sentenceChunksRaw = txt.split(/(?<=[.!?])\s+/).filter(Boolean);
-        const shouldForceSentencePaging = sentenceChunksRaw.length > 2 && txt.length > 170;
-
-        if (measureFit(txt) && !shouldForceSentencePaging) return [txt];
-
-        // Prefer sentence-boundary splits
-        let chunks = sentenceChunksRaw;
-        if (chunks.length === 1) {
-            const words = txt.split(' ');
-            chunks = [];
-            for (let i = 0; i < words.length; i += 10) {
-                chunks.push(words.slice(i, i + 10).join(' '));
-            }
-        }
-
-        // Force word-by-word split when a chunk doesn't fit by itself
-        const forceWordSplit = (text) => {
-            const words = text.split(' ');
-            const result = [];
-            let buf = '';
-            for (const w of words) {
-                const trial = buf ? buf + ' ' + w : w;
-                if (measureFit(trial)) {
-                    buf = trial;
-                } else {
-                    if (buf) result.push(buf);
-                    buf = w;
-                }
-            }
-            if (buf) result.push(buf);
-            return result.length ? result : [text];
-        };
-
-        const pages = [];
-        let cur = '';
-        let curSentenceCount = 0;
-
-        for (let i = 0; i < chunks.length; i++) {
-            const next = cur ? cur + ' ' + chunks[i] : chunks[i];
-            const currentChunkIsSentence = /[.!?]["')\]]*$/.test(chunks[i]);
-            const nextSentenceCount = curSentenceCount + (currentChunkIsSentence ? 1 : 0);
-            const exceedsSentenceLimit = shouldForceSentencePaging && cur && nextSentenceCount > 2;
-
-            if (!exceedsSentenceLimit && measureFit(next)) {
-                cur = next;
-                curSentenceCount = nextSentenceCount;
-                continue;
-            }
-            if (cur) pages.push(cur);
-            cur = chunks[i];
-            curSentenceCount = currentChunkIsSentence ? 1 : 0;
-            if (!measureFit(cur)) {
-                const forced = forceWordSplit(cur);
-                pages.push(...forced.slice(0, -1));
-                cur = forced[forced.length - 1] || '';
-                curSentenceCount = /[.!?]["')\]]*$/.test(cur) ? 1 : 0;
-            }
-            if (pages.length >= maxPages - 1) {
-                const rest = ([cur]).concat(chunks.slice(i + 1)).join(' ').trim();
-                pages.push(...forceWordSplit(rest));
-                return pages.filter(Boolean);
-            }
-        }
-
-        if (cur) pages.push(...forceWordSplit(cur));
-        return pages.filter(Boolean);
-    },
-
-    /**
-     * Render one page of paginated dialogue via typeText.
-     * Manages the Continue button for skip-typing / advance / finish.
-     */
-    _showDialoguePage(pageText, dialogueEntry) {
-        const textEl = document.getElementById('dialogue-text');
-        const continueBtn = document.getElementById('dialogue-continue');
-        const dialogueBox = document.getElementById('dialogue-box');
-        const choicesDiv = document.getElementById('dialogue-choices');
-        if (!textEl || !continueBtn || !dialogueBox) return;
-
-        this._setSpeakingCharacter(dialogueEntry?.speaker);
-
-        // Wipe previous text and cancel any in-progress typewriter
-        this._cleanupTypewriter(textEl);
-        textEl.textContent = '';
-        if (choicesDiv) choicesDiv.innerHTML = '';
-
-        const isLastPage = this._dialoguePageIndex === this._dialoguePages.length - 1;
-
-        // For speech-bubble: re-fit bubble geometry to page text
-        if (this._isSpeechBubble(dialogueBox)) {
-            this._fitSpeechBubbleText(dialogueBox, pageText);
-            const pos = this.normalizeZoneName((dialogueEntry?.position) || 'left');
-            this._positionDialogueNearCharacter(dialogueBox, pos, dialogueEntry);
-            this._applyDialogueBubbleTail(dialogueBox, pos);
-            this._clampDialogueToViewport(dialogueBox);
-        }
-
-        // Always hide the bubble tap hint — Continue button is the advance mechanism
-        this._setBubblePagingUI(dialogueBox, false);
-
-        // Show Continue button immediately (click = skip typing or advance page)
-        continueBtn.classList.remove('hidden');
-        continueBtn.textContent = isLastPage ? 'continue' : 'more...';
-        continueBtn.setAttribute('aria-label', isLastPage ? 'Continue dialogue' : 'Show more dialogue');
-
-        continueBtn.onclick = () => {
-            // First click while typing: finish instantly
-            if (this.isTyping) {
-                this.finishTypeText(textEl);
-                return;
-            }
-            if (gameState.actionLock || this.isTransitioning) return;
-            SFXGenerator.playContinueButton();
-
-            if (!isLastPage) {
-                // Advance to next page
-                this._dialoguePageIndex++;
-                this._showDialoguePage(this._dialoguePages[this._dialoguePageIndex], dialogueEntry);
-            }
-            // If last page, onclick is replaced in the typeText onFinish below
-        };
-
-        // Type the page text
-        this.typeText(textEl, pageText, {
-            onFinish: () => {
-                this._updateDialogueOverflowIndicator(textEl);
-                if (!isLastPage) return;
-
-                // Last page finished — disable paging and resume normal entry flow
-                this._dialoguePagingActive = false;
-
-                if (dialogueEntry?.choices?.length) {
-                    // Render choices now that all text has been shown
-                    continueBtn.classList.add('hidden');
-                    continueBtn.onclick = null;
-                    dialogueEntry.choices.forEach(choice => {
-                        const btn = document.createElement('button');
-                        btn.className = 'dialogue-choice';
-                        btn.textContent = choice.text;
-                        let tStart = 0;
-                        let tPos = null;
-                        const handleChoiceClick = () => {
-                            if (gameState.actionLock || this.isTransitioning) return;
-                            gameState.actionLock = true;
-                            gameState.dialogueLock = false;
-                            SFXGenerator.playButtonClick();
-                            if (choice.action) choice.action();
-                            gameState.actionLock = false;
-                        };
-                        const handleInteraction = (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (e.type === 'click' && tStart > Date.now() - 500) return;
-                            if (e.type === 'touchend' && tPos) {
-                                const t = e.changedTouches[0];
-                                if (Math.abs(t.clientX - tPos.x) > 10 || Math.abs(t.clientY - tPos.y) > 10) return;
-                            }
-                            handleChoiceClick();
-                        };
-                        btn.addEventListener('touchstart', (e) => {
-                            tStart = Date.now();
-                            const t = e.touches[0];
-                            tPos = { x: t.clientX, y: t.clientY };
-                        }, { passive: true });
-                        btn.addEventListener('touchend', handleInteraction, { passive: false });
-                        btn.addEventListener('click', handleInteraction);
-                        choicesDiv.appendChild(btn);
-                    });
-                } else if (dialogueEntry?.next) {
-                    this._setupDialogueContinueButton(continueBtn, textEl, dialogueEntry);
-                } else {
-                    continueBtn.classList.add('hidden');
-                    setTimeout(() => {
-                        gameState.dialogueLock = false;
-                        this._closeDialogueThen(() => this.nextDialogue());
-                    }, 3000);
-                }
-            }
-        });
-    },
-
     repositionActiveDialogue() {
         const dialogueBox = document.getElementById('dialogue-box');
         if (!dialogueBox || dialogueBox.classList.contains('hidden')) return;
 
-        const scene = this.currentScene;
-        const dialogueEntry = scene?.dialogue?.[gameState.currentDialogueIndex];
+        // Use the entry actually on screen, not scene.dialogue[currentDialogueIndex] —
+        // that index can be stale (e.g. dialogue shown ad hoc via onClick handlers,
+        // or via the debug API) and previously caused resize to follow different
+        // rules than the initial render.
+        const dialogueEntry = this._activeDialogueEntry
+            || gameState.currentDialogueEntry
+            || this.currentScene?.dialogue?.[gameState.currentDialogueIndex];
         if (!dialogueEntry) return;
 
-        const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
-        const isChoice = dialogueEntry.speaker === 'CHOICE' || dialogueEntry.speaker === 'FINAL CHOICE';
-
-        if (isNarration || isChoice) {
-            dialogueBox.classList.remove('dialogue-anchored');
-            this._positionNarrativeDialogue(dialogueBox);
-            this._clampDialogueToViewport(dialogueBox, { preserveCentered: true });
-            return;
-        }
-
-        const useBubbleLayout = Boolean(dialogueEntry.bubbleLayout);
-
-        if (useBubbleLayout) {
-            const bl = dialogueEntry.bubbleLayout;
-            const rect = positioningSystem.getBackgroundRect();
-            if (rect) {
-                const scaled = positioningSystem.calculateHotspotPosition(
-                    bl.left || 0, bl.top || 0, bl.width || 400, bl.height || 300
-                );
-                dialogueBox.style.left = scaled.left;
-                dialogueBox.style.top = scaled.top;
-                dialogueBox.style.width = scaled.width;
-                dialogueBox.style.height = scaled.height;
-                dialogueBox.style.right = 'auto';
-                dialogueBox.style.bottom = 'auto';
-                dialogueBox.style.transform = 'none';
-            }
-            this._clampDialogueToViewport(dialogueBox);
-            return;
-        }
-
-        const zoneName = this.normalizeZoneName(dialogueEntry.position || 'left');
-        // Re-fit text first so box height is stable before positioning
-        this._fitSpeechBubbleText(dialogueBox, dialogueEntry.text || '');
-        this._positionDialogueNearCharacter(dialogueBox, zoneName, dialogueEntry);
-        this._applyDialogueBubbleTail(dialogueBox, zoneName);
-        dialogueBox.classList.add('dialogue-anchored');
-        this._clampDialogueToViewport(dialogueBox);
+        // No re-pagination here — dialoguePager.reflow() only re-clamps the
+        // choices panel and re-asserts overflow against the settled geometry.
+        const layoutMode = this.layoutDialogue(dialogueBox, dialogueEntry);
+        this._debugAssertAuthoredLayout(dialogueBox, dialogueEntry, layoutMode);
+        this._clampDialogueToViewport(dialogueBox, { preserveCentered: layoutMode === 'narrative' });
+        dialoguePager.reflow(dialogueBox);
     },
 
     nextDialogue() {
@@ -5850,6 +6090,7 @@ const sceneRenderer = {
         const dialogueBox = document.getElementById('dialogue-box');
         const textEl = document.getElementById('dialogue-text');
         this._cleanupTypewriter(textEl);
+        dialoguePager.reset();
         if (!dialogueBox || dialogueBox.classList.contains('hidden')) {
             gameState.dialogueLock = false; // Safety release
             if (typeof nextAction === 'function') nextAction();
@@ -6059,9 +6300,6 @@ const SCENES = {
                             "*click* There we go. Peak entertainment: the news yelling about cartels." :
                             "*click* And... off it goes. Back to existential silence.",
                         position: 'right',
-                        bubbleLayout: gameState.lighting.tvOn
-                            ? { left: 1085, top: 380, width: 704, height: 438 }
-                            : undefined,
                         next: 'NEXT_DIALOGUE'
                     });
 
@@ -6111,13 +6349,11 @@ const SCENES = {
                             speaker: 'JONAH',
                             text: "Uh. Hank? There's like... a lot of lights outside.",
                             position: 'right',
-                            bubbleLayout: { left: 1016, top: 348, width: 836, height: 429 },
                             next: () => {
                                 sceneRenderer.showDialogue({
                                     speaker: 'HANK',
                                     text: "Relax, it's probably just your DoorDash finally escaping ICE detention.",
                                     position: 'left',
-                                    bubbleLayout: { left: 820, top: 412, width: 704, height: 438 },
                                     next: () => {
                                         sceneRenderer.loadScene('S2_ICE_RAID_WINDOW');
                                     }
@@ -6151,9 +6387,6 @@ const SCENES = {
                             "*click* There. Mood lighting for the collapse of the republic." :
                             "*click* Lights off. Very noir. Very ominous.",
                         position: 'left',
-                        bubbleLayout: gameState.lighting.lampOn
-                            ? { left: 806, top: 378, width: 704, height: 438 }
-                            : undefined,
                         next: 'NEXT_DIALOGUE'
                     });
 
@@ -6196,21 +6429,21 @@ const SCENES = {
                 speaker: 'HANK',
                 text: "I'm telling you, Jonah, everything connects. Private prisons, avocado prices, and your For You Page.",
                 position: 'left',
-                bubbleLayout: { left: 857, top: 329, width: 704, height: 438 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'JONAH',
                 text: "You say this every time we run out of chips, dude.",
                 position: 'right',
-                bubbleLayout: { left: 1099, top: 311, width: 704, height: 438 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'MOM',
+                // Matches her actual spawn slot below (onShow adds her at
+                // 'right-2', not 'right') so the default zone-slot bubble
+                // anchors next to where she actually renders.
+                position: 'right-2',
                 text: "If either of you used this much energy on school, we'd be rich by now!",
-                position: 'right',
-                bubbleLayout: { left: 700, top: 286, width: 704, height: 438 },
                 // Wait for Mom's slide-in animation to finish before the speech bubble pops in.
                 bubbleDelay: 900,
                 next: () => {
@@ -6445,7 +6678,6 @@ const SCENES = {
                         sceneRenderer.showDialogue({
                         speaker: 'CHOICE',
                         text: 'What do you do?',
-                        bubbleLayout: { left: 821, top: 221, width: 898, height: 518 },
                         choices: [
                             {
                                 text: 'Listen to Mom - stay inside and watch',
@@ -7159,7 +7391,16 @@ const SCENES = {
                         position: 'left',
                         next: () => {
                             sceneRenderer.showDialogue({
-                                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                                // Shortened speaker label (full name is
+                                // 'ANDREAS "THE BUTCHER" MENDOZA', see
+                                // scene.characters below) — the full name
+                                // wraps to 3 lines in the compact-landscape
+                                // dialogue header, overflowing the bubble.
+                                // characterId keeps sprite/speaker-highlight
+                                // resolution correct despite the shortened
+                                // label (see _ensureSpeakerPresent()).
+                                speaker: 'MENDOZA',
+                                characterId: 'cartel_boss',
                                 text: "(long pause, then laughs) FBI. In my safehouse. Handing me a badge. Either you're very brave or completely insane.",
                                 position: 'right',
                                 next: () => {
@@ -7171,7 +7412,8 @@ const SCENES = {
                                             addJournalOnce('badge_bluff_result', 'BLUFF RESULT — Mendoza Is Watching', 'The badge bluff didn\'t scare him, but it changed the dynamic. Mendoza is now treating you as more of a wildcard than a pawn. This might affect his final offer.');
                                             gameState.flags.DOUBLE_CROSSED_SOMEONE = true;
                                             sceneRenderer.showDialogue({
-                                                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                                                speaker: 'MENDOZA',
+                                                characterId: 'cartel_boss',
                                                 text: "Sit down. Let's talk like people who might both survive tonight.",
                                                 position: 'right',
                                                 next: 'NEXT_DIALOGUE'
@@ -7188,7 +7430,8 @@ const SCENES = {
 
         dialogue: [
             {
-                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                speaker: 'MENDOZA',
+                characterId: 'cartel_boss',
                 text: "So. Two suburban boys with the one USB everyone wants.",
                 position: 'right',
                 next: 'NEXT_DIALOGUE'
@@ -7212,7 +7455,8 @@ const SCENES = {
                 next: 'NEXT_DIALOGUE'
             },
             {
-                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                speaker: 'MENDOZA',
+                characterId: 'cartel_boss',
                 text: "One shipment. Domestic delivery address that won't raise flags. In return, the Rivera family is untouched. Permanently.",
                 position: 'right',
                 next: 'NEXT_DIALOGUE'
@@ -7430,7 +7674,11 @@ const SCENES = {
                                     sceneRenderer.showDialogue({
                                         speaker: 'JONAH',
                                         text: "Did she say three minutes? What happens at three minutes?",
-                                        position: 'right',
+                                        // Jonah's actual scene slot is left-2 (see
+                                        // scene.characters below) — 'right' put his
+                                        // bubble on the opposite side of the screen
+                                        // from his sprite.
+                                        position: 'left-2',
                                         next: 'NEXT_DIALOGUE'
                                     });
                                 }
@@ -7445,26 +7693,20 @@ const SCENES = {
             addJournalOnce('status_s7b', 'STATUS — Under Surveillance', 'The cartel knows. There\'s an unmarked car outside that\'s been there for an hour. You\'re being watched. If you have the BURNER PHONE, this is the time to USE it — call Ms. Gray for backup before things escalate.');
             addJournalOnce('clue_s7b_burner', 'ACTION AVAILABLE — Call for Backup', 'Open your INVENTORY and USE the BURNER PHONE to contact Ms. Gray while the surveillance car is still watching. Letting her know about the cartel\'s presence gives the CIA a heads-up before the airport meeting and may give you better support later.');
 
-            // Surveillance operative slides in from right as soon as scene loads
+            // Surveillance operative slides in from right as soon as scene loads,
+            // slightly larger than the default character cap (35%/55% of the
+            // background) — scale: 1.257 reproduces the same rendered size as
+            // the previous post-hoc maxWidth/maxHeight override (0.44/0.35 =
+            // 0.68/0.55 ~= 1.257), but through the character layout schema's
+            // own reference-space-relative `scale` field instead of a
+            // pixel-computing .then() callback.
             sceneRenderer.addCharacter({
                 id: 'cartel_surveillance',
                 name: 'CARTEL SURVEILLANCE',
                 sprite: 'char_cartel-surveillance.png',
-                position: 'right'
-            }, 400).then(() => {
-                // Make the surveillance character slightly larger than the default cap
-                const el = document.getElementById('char-cartel_surveillance');
-                if (el) {
-                    const rect = positioningSystem.getBackgroundRect();
-                    if (rect) {
-                        el.style.maxWidth  = (rect.renderedW * 0.44) + 'px';
-                        el.style.maxHeight = (rect.renderedH * 0.68) + 'px';
-                    } else {
-                        el.style.maxWidth  = '44%';
-                        el.style.maxHeight = '68%';
-                    }
-                }
-            });
+                position: 'right',
+                scale: 1.257
+            }, 400);
         },
 
         dialogue: [
@@ -7798,7 +8040,10 @@ const SCENES = {
                         position: 'left',
                         next: () => {
                             sceneRenderer.showDialogue({
-                                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                                // Shortened speaker label — see the S7A note
+                                // on the first MENDOZA line for why.
+                                speaker: 'MENDOZA',
+                                characterId: 'cartel_boss',
                                 text: "Smart boy. Now — choose.",
                                 position: 'right-2',
                                 next: () => {
@@ -7855,7 +8100,8 @@ const SCENES = {
                         position: 'left',
                         next: () => {
                             sceneRenderer.showDialogue({
-                                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                                speaker: 'MENDOZA',
+                                characterId: 'cartel_boss',
                                 text: "(very quietly) Where did you get that.",
                                 position: 'right-2',
                                 next: () => {
@@ -7898,7 +8144,8 @@ const SCENES = {
                 next: 'NEXT_DIALOGUE'
             },
             {
-                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                speaker: 'MENDOZA',
+                characterId: 'cartel_boss',
                 text: "I admire the audacity. Walking in here like you have leverage.",
                 position: 'right-2',
                 next: 'NEXT_DIALOGUE'
@@ -7916,7 +8163,8 @@ const SCENES = {
                 next: 'NEXT_DIALOGUE'
             },
             {
-                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                speaker: 'MENDOZA',
+                characterId: 'cartel_boss',
                 text: "So who gets the USB, boys? Choose before someone chooses for you.",
                 position: 'right-2',
                 next: 'NEXT_DIALOGUE'
@@ -8283,6 +8531,774 @@ const sceneIntegrity = {
     }
 };
 
+// ===== DEMO READINESS VALIDATOR =====
+// Read-only static analysis of SCENES plus best-effort live asset probing.
+// Never mutates SCENES, save data, or live game/scene state: every check
+// either reads existing data directly, or (for character layout) goes
+// through sceneRenderer.resolveCharacterLayout(), which is itself a pure
+// function returning a new object rather than mutating its input. Duplicate
+// slot detection here is computed independently of
+// sceneRenderer._lastCharacterLayoutWarnings so this validator never
+// clobbers that shared field for whatever scene is actually loaded.
+//
+// Two entry points call demoValidator.validateAll():
+//   - Dev Hub "Validate All Scenes" button (see Dev.runDemoValidationAll)
+//   - window.__HB_DEBUG__.validateAllScenes() for automated tests
+//
+// Both resolve to:
+//   { ok, generatedAt, durationMs, sceneCount, totals: {error,warning,info}, findings[], markdown }
+// where every finding is { sceneId, category, severity, message, fix }.
+const demoValidator = {
+    SEVERITY: { ERROR: 'error', WARNING: 'warning', INFO: 'info' },
+    ASSET_TIMEOUT_MS: 6000,
+    ASSET_CONCURRENCY: 8,
+    SYSTEM_SPEAKERS: new Set(['NARRATION', 'SYSTEM', 'CHOICE', 'FINAL CHOICE']),
+    GLOBAL_SCENE_LABEL: '(global)',
+
+    _imageProbeCache: new Map(),
+    _audioProbeCache: new Map(),
+    lastReport: null,
+
+    // ===== asset probing (pure network reads, memoized per session) =====
+    probeImage(src) {
+        if (!src) return Promise.resolve(false);
+        if (this._imageProbeCache.has(src)) return this._imageProbeCache.get(src);
+        const p = new Promise(resolve => {
+            const img = new Image();
+            let settled = false;
+            const finish = (ok) => { if (settled) return; settled = true; resolve(ok); };
+            img.onload = () => finish(true);
+            img.onerror = () => finish(false);
+            img.src = src;
+            setTimeout(() => finish(false), this.ASSET_TIMEOUT_MS);
+        });
+        this._imageProbeCache.set(src, p);
+        return p;
+    },
+
+    probeAudio(src) {
+        if (!src) return Promise.resolve(false);
+        if (this._audioProbeCache.has(src)) return this._audioProbeCache.get(src);
+        const p = new Promise(resolve => {
+            const audio = new Audio();
+            let settled = false;
+            const finish = (ok) => { if (settled) return; settled = true; resolve(ok); };
+            audio.addEventListener('loadedmetadata', () => finish(true), { once: true });
+            audio.addEventListener('error', () => finish(false), { once: true });
+            audio.preload = 'metadata';
+            audio.src = src;
+            setTimeout(() => finish(false), this.ASSET_TIMEOUT_MS);
+        });
+        this._audioProbeCache.set(src, p);
+        return p;
+    },
+
+    async probeMany(paths, prober) {
+        const unique = [...new Set((paths || []).filter(Boolean))];
+        const results = new Map();
+        for (let i = 0; i < unique.length; i += this.ASSET_CONCURRENCY) {
+            const chunk = unique.slice(i, i + this.ASSET_CONCURRENCY);
+            await Promise.all(chunk.map(async src => {
+                results.set(src, await prober.call(this, src));
+            }));
+        }
+        return results;
+    },
+
+    // ===== read-only source-text introspection =====
+    // Function#toString() returns a function's original source text without
+    // executing it — used for best-effort discovery of characters spawned,
+    // flags set, and inventory ids touched inside onClick/onEnter/next/action
+    // callbacks, which the validator otherwise can't see without actually
+    // playing the scene (out of scope — see acceptance criterion 1).
+    _collectSceneFunctionSources(scene) {
+        const sources = [];
+        const addFn = (fn) => {
+            if (typeof fn === 'function') {
+                try { sources.push(fn.toString()); } catch (_) { /* ignore */ }
+            }
+        };
+
+        addFn(scene.onEnter);
+        addFn(scene.checkProgression);
+        (scene.hotspots || []).forEach(h => addFn(h?.onClick));
+        (scene.items || []).forEach(it => addFn(it?.onClick));
+        Object.values(scene.itemUses || {}).forEach(use => addFn(use?.action));
+        (scene.dialogue || []).forEach(entry => {
+            if (!entry) return;
+            addFn(entry.next);
+            addFn(entry.onShow);
+            (entry.choices || []).forEach(choice => {
+                addFn(choice?.action);
+                addFn(choice?.next);
+            });
+        });
+        return sources.join('\n');
+    },
+
+    _harvestDynamicCharacterIds(sceneSource) {
+        const ids = new Set();
+        const re = /addCharacter\(\s*\{[^}]*?\bid\s*:\s*['"]([\w.-]+)['"]/g;
+        let m;
+        while ((m = re.exec(sceneSource))) ids.add(m[1]);
+        return ids;
+    },
+
+    _harvestFlagsAndItems(sceneSource) {
+        const flagsRead = new Set();
+        const flagsWritten = new Set();
+        const itemsGranted = new Set();
+        const itemsChecked = new Set();
+        let m;
+
+        const flagWriteRe = /gameState\.flags\.(\w+)\s*=(?!=)/g;
+        while ((m = flagWriteRe.exec(sceneSource))) flagsWritten.add(m[1]);
+        const flagReadRe = /gameState\.flags\.(\w+)/g;
+        while ((m = flagReadRe.exec(sceneSource))) flagsRead.add(m[1]);
+
+        const grantRe = /inventory\.add\(\s*['"]([\w.-]+)['"]/g;
+        while ((m = grantRe.exec(sceneSource))) itemsGranted.add(m[1]);
+        const checkRe = /inventory\.(?:has|remove)\(\s*['"]([\w.-]+)['"]/g;
+        while ((m = checkRe.exec(sceneSource))) itemsChecked.add(m[1]);
+
+        return { flagsRead, flagsWritten, itemsGranted, itemsChecked };
+    },
+
+    // ===== per-scene checks =====
+    checkSceneStructure(findings, key, scene, ctx) {
+        const sceneId = scene.id || key;
+
+        // scene key matches scene.id
+        if (scene.id !== key) {
+            findings.push({
+                sceneId, category: 'structure', severity: this.SEVERITY.ERROR,
+                message: `SCENES key "${key}" does not match scene.id "${scene.id}".`,
+                fix: `Set scene.id to "${key}" (or rename the SCENES key to "${scene.id}").`,
+            });
+        }
+
+        // unique scene IDs
+        const idValue = scene.id || key;
+        const keysWithSameId = ctx.idToKeys.get(idValue) || [];
+        if (keysWithSameId.length > 1) {
+            findings.push({
+                sceneId, category: 'structure', severity: this.SEVERITY.ERROR,
+                message: `scene.id "${idValue}" is shared by SCENES keys: ${keysWithSameId.join(', ')}.`,
+                fix: 'Give each scene a unique id — duplicate ids make loadScene()/next references ambiguous.',
+            });
+        }
+
+        // background path
+        if (!scene.background) {
+            findings.push({
+                sceneId, category: 'structure', severity: this.SEVERITY.ERROR,
+                message: 'Scene has no background image path.',
+                fix: 'Add a background path — the scene cannot render without one.',
+            });
+        } else {
+            ctx.backgroundChecks.push({ sceneId, path: scene.background });
+        }
+
+        // music path (optional)
+        if (scene.music) {
+            ctx.musicChecks.push({ sceneId, path: `./audio/${scene.music}` });
+        }
+
+        // next/target references
+        const checkNext = (value, where) => {
+            if (typeof value !== 'string' || value === 'NEXT_DIALOGUE') return;
+            if (!ctx.sceneKeysSet.has(value)) {
+                findings.push({
+                    sceneId, category: 'flow', severity: this.SEVERITY.ERROR,
+                    message: `${where} references unknown scene "${value}".`,
+                    fix: `Point to an existing SCENES key or add the "${value}" scene.`,
+                });
+            }
+        };
+        (scene.dialogue || []).forEach((entry, idx) => {
+            if (!entry) return;
+            checkNext(entry.next, `dialogue[${idx}].next`);
+            (entry.choices || []).forEach((choice, ci) => {
+                checkNext(choice?.next, `dialogue[${idx}].choices[${ci}].next`);
+            });
+        });
+        (scene.hotspots || []).forEach((h, idx) => {
+            if (h?.target) checkNext(h.target, `hotspots[${idx}] (${h.id || idx}).target`);
+        });
+
+        // unique hotspot ids
+        const hotspotIds = new Map();
+        (scene.hotspots || []).forEach((h, idx) => {
+            const id = h?.id || `(hotspot ${idx})`;
+            if (!hotspotIds.has(id)) hotspotIds.set(id, []);
+            hotspotIds.get(id).push(idx);
+        });
+        hotspotIds.forEach((idxs, id) => {
+            if (idxs.length > 1) {
+                findings.push({
+                    sceneId, category: 'structure', severity: this.SEVERITY.ERROR,
+                    message: `Duplicate hotspot id "${id}" (${idxs.length} occurrences).`,
+                    fix: 'Give each hotspot a unique id — duplicates break click-trace/debug tooling and undo.',
+                });
+            }
+        });
+
+        // unique item ids
+        const itemIds = new Map();
+        (scene.items || []).forEach((it, idx) => {
+            const id = it?.id || `(item ${idx})`;
+            if (!itemIds.has(id)) itemIds.set(id, []);
+            itemIds.get(id).push(idx);
+        });
+        itemIds.forEach((idxs, id) => {
+            if (idxs.length > 1) {
+                findings.push({
+                    sceneId, category: 'structure', severity: this.SEVERITY.ERROR,
+                    message: `Duplicate item id "${id}" (${idxs.length} occurrences).`,
+                    fix: 'Give each item a unique id — duplicates confuse inventory.has()/collection state.',
+                });
+            }
+        });
+
+        // hotspot bounds and positive dimensions
+        (scene.hotspots || []).forEach((h, idx) => {
+            if (!h) return;
+            const label = h.id || `hotspots[${idx}]`;
+            const x = Number(h.x), y = Number(h.y), w = Number(h.width), ht = Number(h.height);
+            const allFinite = [x, y, w, ht].every(n => Number.isFinite(n));
+            if (!allFinite) {
+                findings.push({
+                    sceneId, category: 'structure', severity: this.SEVERITY.ERROR,
+                    message: `Hotspot "${label}" has non-finite x/y/width/height.`,
+                    fix: 'Ensure x, y, width, and height are all numbers.',
+                });
+                return;
+            }
+            if (!(w > 0) || !(ht > 0)) {
+                findings.push({
+                    sceneId, category: 'structure', severity: this.SEVERITY.ERROR,
+                    message: `Hotspot "${label}" has non-positive dimensions (width=${h.width}, height=${h.height}).`,
+                    fix: 'Set width/height to positive numbers so the hotspot is clickable.',
+                });
+            }
+            const isNative = h.coordSystem === 'native';
+            const maxX = isNative ? positioningSystem.REF_WIDTH : 100;
+            const maxY = isNative ? positioningSystem.REF_HEIGHT : 100;
+            if (x < 0 || y < 0 || x + w > maxX || y + ht > maxY) {
+                findings.push({
+                    sceneId, category: 'structure', severity: this.SEVERITY.WARNING,
+                    message: `Hotspot "${label}" bounds extend outside the ${isNative ? '1920×1080 native' : '0-100%'} reference space.`,
+                    fix: 'Adjust x/y/width/height to stay inside the reference frame.',
+                });
+            }
+        });
+    },
+
+    checkSceneCharacters(findings, key, scene, ctx) {
+        const sceneId = scene.id || key;
+        const characters = scene.characters || [];
+
+        // unique character ids
+        const idMap = new Map();
+        characters.forEach((c, idx) => {
+            const id = c?.id || `(character ${idx})`;
+            if (!idMap.has(id)) idMap.set(id, []);
+            idMap.get(id).push(idx);
+        });
+        idMap.forEach((idxs, id) => {
+            if (idxs.length > 1) {
+                findings.push({
+                    sceneId, category: 'characters', severity: this.SEVERITY.ERROR,
+                    message: `Duplicate character id "${id}" (${idxs.length} occurrences).`,
+                    fix: 'Give each character a unique id — duplicates break speaker/highlight resolution.',
+                });
+            }
+        });
+
+        // resolveCharacterLayout is pure — returns a new object, never
+        // mutates the scene's characters array.
+        const resolved = characters.map(c => sceneRenderer.resolveCharacterLayout(c || {}));
+
+        // duplicate-slot detection, computed independently of
+        // sceneRenderer._lastCharacterLayoutWarnings (see file header note).
+        const bySlot = new Map();
+        resolved.forEach(c => {
+            if (!bySlot.has(c.slot)) bySlot.set(c.slot, []);
+            bySlot.get(c.slot).push(c.id || c.name || '(unnamed)');
+        });
+        bySlot.forEach((names, slot) => {
+            if (names.length > 1) {
+                findings.push({
+                    sceneId, category: 'characters', severity: this.SEVERITY.WARNING,
+                    message: `Duplicate slot "${slot}" claimed by: ${names.join(', ')}.`,
+                    fix: 'Assign distinct slot/position values — characters sharing a slot render on top of each other.',
+                });
+            }
+        });
+
+        characters.forEach((raw, idx) => {
+            const c = resolved[idx];
+            const label = raw?.id || raw?.name || `characters[${idx}]`;
+
+            const rawSlot = raw?.slot || raw?.position;
+            if (rawSlot && !sceneRenderer.validZones.has(rawSlot)) {
+                findings.push({
+                    sceneId, category: 'characters', severity: this.SEVERITY.WARNING,
+                    message: `Character "${label}" has invalid slot/position "${rawSlot}" — falls back to "center".`,
+                    fix: `Use one of: ${[...sceneRenderer.validZones].join(', ')}.`,
+                });
+            }
+
+            if (raw?.scale !== undefined && (typeof raw.scale !== 'number' || !isFinite(raw.scale) || raw.scale <= 0)) {
+                findings.push({
+                    sceneId, category: 'characters', severity: this.SEVERITY.WARNING,
+                    message: `Character "${label}" has invalid scale "${raw.scale}" — falls back to 1.`,
+                    fix: 'scale must be a positive finite number.',
+                });
+            }
+
+            ['offsetX', 'offsetY'].forEach(field => {
+                const v = raw?.[field];
+                if (v === undefined) return;
+                if (typeof v !== 'number' || !isFinite(v)) {
+                    findings.push({
+                        sceneId, category: 'characters', severity: this.SEVERITY.WARNING,
+                        message: `Character "${label}" has invalid ${field} "${v}" — falls back to 0.`,
+                        fix: `${field} must be a finite number (pixels).`,
+                    });
+                } else if (Math.abs(v) > 800) {
+                    findings.push({
+                        sceneId, category: 'characters', severity: this.SEVERITY.WARNING,
+                        message: `Character "${label}" has a large ${field} (${v}px) — may push the sprite off-screen.`,
+                        fix: 'Verify this offset visually; consider reducing its magnitude.',
+                    });
+                }
+            });
+
+            ['headAnchorX', 'headAnchorY'].forEach(field => {
+                const v = raw?.[field];
+                if (v === undefined) return;
+                if (typeof v !== 'number' || !isFinite(v) || v < 0 || v > 1) {
+                    findings.push({
+                        sceneId, category: 'characters', severity: this.SEVERITY.WARNING,
+                        message: `Character "${label}" has invalid ${field} "${v}" — must be 0-1, metadata ignored.`,
+                        fix: `${field} should be a fraction between 0 and 1.`,
+                    });
+                }
+            });
+
+            if (raw?.zIndex !== undefined && (typeof raw.zIndex !== 'number' || !isFinite(raw.zIndex))) {
+                findings.push({
+                    sceneId, category: 'characters', severity: this.SEVERITY.WARNING,
+                    message: `Character "${label}" has invalid zIndex "${raw.zIndex}" — falls back to the slot default.`,
+                    fix: 'zIndex must be a finite number.',
+                });
+            }
+
+            if (raw?.sprite) {
+                ctx.spriteChecks.push({ sceneId, label, sprite: raw.sprite, zone: c.slot });
+            } else {
+                findings.push({
+                    sceneId, category: 'characters', severity: this.SEVERITY.ERROR,
+                    message: `Character "${label}" has no sprite specified.`,
+                    fix: 'Add a sprite filename.',
+                });
+            }
+        });
+    },
+
+    checkSceneDialogue(findings, key, scene, ctx) {
+        const sceneId = scene.id || key;
+        const dialogue = scene.dialogue || [];
+        const characters = scene.characters || [];
+
+        const charById = new Map(characters.filter(c => c?.id).map(c => [String(c.id).toLowerCase(), c]));
+        const normalizeToken = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+        const charNameTokens = characters.filter(c => c?.name).map(c => normalizeToken(c.name));
+
+        const sceneSource = this._collectSceneFunctionSources(scene);
+        const dynamicIds = this._harvestDynamicCharacterIds(sceneSource);
+        const dynamicTokens = [...dynamicIds].map(id => normalizeToken(id));
+
+        const resolvesToCharacter = (speaker, characterId) => {
+            if (characterId) {
+                return charById.has(String(characterId).toLowerCase()) || dynamicIds.has(characterId);
+            }
+            if (!speaker) return true;
+            const token = normalizeToken(speaker);
+            const byId = charById.has(String(speaker).toLowerCase());
+            const byName = charNameTokens.some(ct => ct === token || ct.includes(token) || token.includes(ct));
+            const byDynamic = dynamicTokens.some(dt => dt === token);
+            return byId || byName || byDynamic;
+        };
+
+        dialogue.forEach((entry, idx) => {
+            if (!entry || typeof entry !== 'object') {
+                findings.push({
+                    sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                    message: `dialogue[${idx}] is not a valid object.`,
+                    fix: 'Remove or fix this entry.',
+                });
+                return;
+            }
+            const prefix = `dialogue[${idx}]`;
+            const speaker = entry.speaker;
+            const isSystemSpeaker = this.SYSTEM_SPEAKERS.has(speaker) || !speaker;
+            const isChoiceEntry = speaker === 'CHOICE' || speaker === 'FINAL CHOICE';
+
+            if (!isSystemSpeaker && !resolvesToCharacter(speaker, entry.characterId)) {
+                findings.push({
+                    sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                    message: `${prefix}: speaker "${speaker}" does not resolve to a character in scene.characters, an explicit addCharacter() spawn, or an allowed system speaker.`,
+                    fix: 'Add this character to scene.characters, spawn it via addCharacter() before this line, or fix the speaker name/characterId.',
+                });
+            }
+
+            if (entry.characterId) {
+                const idLower = String(entry.characterId).toLowerCase();
+                if (!charById.has(idLower) && !dynamicIds.has(entry.characterId)) {
+                    findings.push({
+                        sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                        message: `${prefix}: characterId "${entry.characterId}" not found in scene.characters or any addCharacter() spawn in this scene.`,
+                        fix: 'Correct the characterId or add/spawn that character.',
+                    });
+                }
+            }
+
+            if (!isSystemSpeaker && (!entry.position || !sceneRenderer.validZones.has(entry.position))) {
+                findings.push({
+                    sceneId, category: 'dialogue', severity: this.SEVERITY.WARNING,
+                    message: `${prefix} (${speaker}): missing or invalid position ("${entry.position}").`,
+                    fix: `Set position to one of: ${[...sceneRenderer.validZones].join(', ')}.`,
+                });
+            }
+
+            if (entry.bubbleLayout) {
+                const bl = entry.bubbleLayout;
+                const nums = ['left', 'top', 'width', 'height'].map(k => Number(bl[k]));
+                const allFinite = nums.every(n => Number.isFinite(n));
+                const [left, top, width, height] = nums;
+                if (!allFinite || !(width > 0) || !(height > 0)) {
+                    findings.push({
+                        sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                        message: `${prefix}: bubbleLayout has non-finite or non-positive values (${JSON.stringify(bl)}).`,
+                        fix: 'left/top/width/height must all be finite numbers, width and height > 0.',
+                    });
+                } else if (left < 0 || top < 0 || left + width > 1920 || top + height > 1080) {
+                    findings.push({
+                        sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                        message: `${prefix}: bubbleLayout rect extends outside the 1920×1080 reference space (${JSON.stringify(bl)}).`,
+                        fix: 'Adjust left/top/width/height so the rect stays fully inside 0-1920 x 0-1080.',
+                    });
+                }
+            }
+
+            if (isChoiceEntry) {
+                if (!Array.isArray(entry.choices) || entry.choices.length === 0) {
+                    findings.push({
+                        sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                        message: `${prefix} (${speaker}): no choices array or it is empty.`,
+                        fix: 'Add at least one choice with text and an action/next.',
+                    });
+                } else {
+                    entry.choices.forEach((choice, ci) => {
+                        const cprefix = `${prefix}.choices[${ci}]`;
+                        if (!choice || !choice.text) {
+                            findings.push({
+                                sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                                message: `${cprefix}: missing or empty text.`,
+                                fix: 'Add player-facing choice text.',
+                            });
+                        }
+                        if (choice && choice.action !== undefined && typeof choice.action !== 'function') {
+                            findings.push({
+                                sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                                message: `${cprefix}: action is present but not callable (${typeof choice.action}).`,
+                                fix: 'action must be a function.',
+                            });
+                        }
+                        if (choice && !choice.action && !choice.next) {
+                            findings.push({
+                                sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                                message: `${cprefix}: has neither action nor next — selecting it does nothing.`,
+                                fix: 'Add an action function or a next scene id.',
+                            });
+                        }
+                    });
+                }
+            }
+
+            if (!entry.text && entry.text !== 0) {
+                findings.push({
+                    sceneId, category: 'dialogue', severity: this.SEVERITY.ERROR,
+                    message: `${prefix}: missing or empty text.`,
+                    fix: 'Add dialogue text.',
+                });
+            }
+
+            const isLast = idx === dialogue.length - 1;
+            const hasChoices = Array.isArray(entry.choices) && entry.choices.length > 0;
+            if (!isLast && !hasChoices && !entry.next) {
+                findings.push({
+                    sceneId, category: 'flow', severity: this.SEVERITY.ERROR,
+                    message: `${prefix}: no next/choices, but ${dialogue.length - idx - 1} more entries follow — they are unreachable.`,
+                    fix: `Add next: 'NEXT_DIALOGUE' (or a target) so dialogue[${idx + 1}] onward remains reachable.`,
+                });
+            } else if (isLast && !hasChoices && !entry.next) {
+                findings.push({
+                    sceneId, category: 'flow', severity: this.SEVERITY.INFO,
+                    message: `${prefix}: last dialogue entry has no next — assumed intentional (scene waits for hotspot/item interaction).`,
+                    fix: 'No action needed if this is intentional.',
+                });
+            }
+        });
+
+        const { flagsRead, itemsChecked } = this._harvestFlagsAndItems(sceneSource);
+        flagsRead.forEach(flag => {
+            if (!ctx.globalFlagsWritten.has(flag)) {
+                findings.push({
+                    sceneId, category: 'dialogue', severity: this.SEVERITY.INFO,
+                    message: `Flag "gameState.flags.${flag}" is referenced here but never appears to be assigned anywhere in SCENES.`,
+                    fix: 'Verify this is intentional (defaults to falsy) or check for a typo elsewhere.',
+                });
+            }
+        });
+        itemsChecked.forEach(itemId => {
+            if (!ctx.knownItemIds.has(itemId)) {
+                findings.push({
+                    sceneId, category: 'dialogue', severity: this.SEVERITY.INFO,
+                    message: `Item id "${itemId}" is checked/removed here but never appears as a scene item or inventory.add() target anywhere.`,
+                    fix: 'Verify the item id is spelled correctly and is actually granted somewhere.',
+                });
+            }
+        });
+    },
+
+    buildMarkdownReport(report) {
+        const lines = [];
+        lines.push('# Demo Validation Report');
+        lines.push('');
+        lines.push(`Generated: ${report.generatedAt}`);
+        lines.push(`Scenes scanned: ${report.sceneCount}`);
+        lines.push(`Duration: ${report.durationMs}ms`);
+        lines.push('');
+        lines.push('## Totals');
+        lines.push('');
+        lines.push('| Severity | Count |');
+        lines.push('|---|---|');
+        lines.push(`| Error | ${report.totals.error} |`);
+        lines.push(`| Warning | ${report.totals.warning} |`);
+        lines.push(`| Info | ${report.totals.info} |`);
+        lines.push('');
+        lines.push(report.ok
+            ? '**Result: PASS — zero errors.**'
+            : `**Result: FAIL — ${report.totals.error} error(s) must be fixed before demo.**`);
+        lines.push('');
+
+        const bySceneId = new Map();
+        report.findings.forEach(f => {
+            if (!bySceneId.has(f.sceneId)) bySceneId.set(f.sceneId, []);
+            bySceneId.get(f.sceneId).push(f);
+        });
+
+        const severityOrder = { error: 0, warning: 1, info: 2 };
+        const sortedSceneIds = [...bySceneId.keys()].sort((a, b) => {
+            if (a === this.GLOBAL_SCENE_LABEL) return -1;
+            if (b === this.GLOBAL_SCENE_LABEL) return 1;
+            return a.localeCompare(b);
+        });
+
+        lines.push('## Findings by scene');
+        lines.push('');
+        if (sortedSceneIds.length === 0) {
+            lines.push('No findings.');
+        }
+        sortedSceneIds.forEach(sceneId => {
+            const items = bySceneId.get(sceneId).slice().sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+            const counts = { error: 0, warning: 0, info: 0 };
+            items.forEach(f => counts[f.severity]++);
+            lines.push(`### ${sceneId} — ${counts.error} error, ${counts.warning} warning, ${counts.info} info`);
+            lines.push('');
+            items.forEach(f => {
+                const badge = f.severity === 'error' ? '[ERROR]' : f.severity === 'warning' ? '[WARNING]' : '[INFO]';
+                lines.push(`- ${badge} \`${f.category}\` ${f.message}`);
+                lines.push(`  - Fix: ${f.fix}`);
+            });
+            lines.push('');
+        });
+
+        lines.push('## Methodology / known limitations');
+        lines.push('');
+        lines.push('- Dialogue shown dynamically from inside onClick/onEnter/next/action callbacks (not the top-level `scene.dialogue` array) is validated only insofar as `addCharacter()` calls, `gameState.flags.*`, and `inventory.*` references can be discovered via read-only `Function#toString()` source inspection. This is best-effort, not exhaustive — see acceptance criterion 1 (the validator does not enter scenes or execute callbacks).');
+        lines.push('- Flag/item reference findings are info-level because the detection is heuristic (regex over function source) and can both under- and over-report.');
+        lines.push('- Asset checks are live network probes (Image/Audio) against the paths scene data references; a slow or offline asset host will show assets as missing.');
+        lines.push('- Missing directional sprite-fallback candidates are not counted as errors when the primary sprite resolves; they are only surfaced (as a warning) when the primary sprite is itself missing and a fallback candidate is what actually renders.');
+        lines.push('- This validator never mutates SCENES, save data, or live game state.');
+        lines.push('');
+
+        return lines.join('\n');
+    },
+
+    // ===== orchestrator =====
+    async validateAll() {
+        const startedAt = Date.now();
+        const findings = [];
+        const sceneEntries = Object.entries(SCENES).filter(([, scene]) => scene && typeof scene === 'object');
+        const sceneKeysSet = new Set(sceneEntries.map(([key]) => key));
+
+        const idToKeys = new Map();
+        sceneEntries.forEach(([key, scene]) => {
+            const idValue = scene.id || key;
+            if (!idToKeys.has(idValue)) idToKeys.set(idValue, []);
+            idToKeys.get(idValue).push(key);
+        });
+
+        // Global pass: known item ids + flags actually assigned anywhere,
+        // used by the per-scene flag/item sanity checks below.
+        const globalFlagsWritten = new Set();
+        const knownItemIds = new Set();
+        sceneEntries.forEach(([, scene]) => {
+            (scene.items || []).forEach(it => { if (it?.id) knownItemIds.add(it.id); });
+            const src = this._collectSceneFunctionSources(scene);
+            const { flagsWritten, itemsGranted } = this._harvestFlagsAndItems(src);
+            flagsWritten.forEach(f => globalFlagsWritten.add(f));
+            itemsGranted.forEach(i => knownItemIds.add(i));
+        });
+
+        const ctx = {
+            sceneKeysSet, idToKeys, globalFlagsWritten, knownItemIds,
+            backgroundChecks: [], musicChecks: [], spriteChecks: [],
+        };
+
+        sceneEntries.forEach(([key, scene]) => {
+            this.checkSceneStructure(findings, key, scene, ctx);
+            this.checkSceneCharacters(findings, key, scene, ctx);
+            this.checkSceneDialogue(findings, key, scene, ctx);
+        });
+
+        // ---- background assets ----
+        const bgResults = await this.probeMany(ctx.backgroundChecks.map(c => c.path), this.probeImage);
+        ctx.backgroundChecks.forEach(({ sceneId, path }) => {
+            if (!bgResults.get(path)) {
+                findings.push({
+                    sceneId, category: 'assets/background', severity: this.SEVERITY.ERROR,
+                    message: `Background asset not found or failed to load: ${path}`,
+                    fix: 'Add the missing background file or correct scene.background.',
+                });
+            }
+        });
+
+        // ---- music assets ----
+        const musicResults = await this.probeMany(ctx.musicChecks.map(c => c.path), this.probeAudio);
+        ctx.musicChecks.forEach(({ sceneId, path }) => {
+            if (!musicResults.get(path)) {
+                findings.push({
+                    sceneId, category: 'assets/music', severity: this.SEVERITY.WARNING,
+                    message: `Music asset not found or failed to load: ${path}`,
+                    fix: 'Add the missing audio file or correct scene.music (the scene still runs muted, but demo quality suffers).',
+                });
+            }
+        });
+
+        // ---- character sprites: primary first, fallback chain only if primary is missing ----
+        const primaryPaths = ctx.spriteChecks.map(c => `./assets/characters/${c.sprite}`);
+        const primaryResults = await this.probeMany(primaryPaths, this.probeImage);
+        const needsFallbackProbe = ctx.spriteChecks.filter(c => !primaryResults.get(`./assets/characters/${c.sprite}`));
+        const candidateListBySprite = new Map();
+        const fallbackCandidatePaths = [];
+        needsFallbackProbe.forEach(c => {
+            const candidates = sceneRenderer.buildSpriteCandidates(c.sprite, c.zone);
+            candidateListBySprite.set(c, candidates);
+            candidates.forEach(name => fallbackCandidatePaths.push(`./assets/characters/${name}`));
+        });
+        const fallbackResults = await this.probeMany(fallbackCandidatePaths, this.probeImage);
+        needsFallbackProbe.forEach(c => {
+            const candidates = candidateListBySprite.get(c) || [];
+            const workingCandidate = candidates.find(name => fallbackResults.get(`./assets/characters/${name}`));
+            if (workingCandidate) {
+                findings.push({
+                    sceneId: c.sceneId, category: 'assets/sprite', severity: this.SEVERITY.WARNING,
+                    message: `Character "${c.label}": primary sprite "${c.sprite}" not found; renders via fallback candidate "${workingCandidate}".`,
+                    fix: `Add a file named "${c.sprite}", or update scene data to reference "${workingCandidate}" directly and document the fallback.`,
+                });
+            } else {
+                findings.push({
+                    sceneId: c.sceneId, category: 'assets/sprite', severity: this.SEVERITY.ERROR,
+                    message: `Character "${c.label}": no valid sprite found (tried "${c.sprite}" and ${candidates.length} fallback candidate(s)).`,
+                    fix: 'Add a matching sprite file under assets/characters/.',
+                });
+            }
+        });
+
+        // ---- item icons ----
+        const itemIconChecks = [];
+        sceneEntries.forEach(([key, scene]) => {
+            (scene.items || []).forEach(it => {
+                if (it?.id) itemIconChecks.push({ sceneId: scene.id || key, id: it.id, path: `./assets/items/item_${it.id}.png` });
+            });
+        });
+        const itemIconResults = await this.probeMany(itemIconChecks.map(c => c.path), this.probeImage);
+        itemIconChecks.forEach(({ sceneId, id, path }) => {
+            if (!itemIconResults.get(path)) {
+                findings.push({
+                    sceneId, category: 'assets/item', severity: this.SEVERITY.ERROR,
+                    message: `Item "${id}" icon not found: ${path}`,
+                    fix: `Add assets/items/item_${id}.png.`,
+                });
+            }
+        });
+
+        // ---- global (non-scene-specific) assets ----
+        const bubbleAssets = [
+            './assets/menu_dialogue/dialogue-bubble-large-left.png',
+            './assets/menu_dialogue/dialogue-bubble-large-right.png',
+        ];
+        const bubbleResults = await this.probeMany(bubbleAssets, this.probeImage);
+        bubbleAssets.forEach(path => {
+            if (!bubbleResults.get(path)) {
+                findings.push({
+                    sceneId: this.GLOBAL_SCENE_LABEL, category: 'assets/bubble', severity: this.SEVERITY.ERROR,
+                    message: `Dialogue bubble asset not found: ${path}`,
+                    fix: 'Character-relative speech bubbles cannot render without this file.',
+                });
+            }
+        });
+
+        const uiAssets = assetLoader.getCriticalAssets().filter(a => a.startsWith('./assets/ui/'));
+        const uiResults = await this.probeMany(uiAssets, this.probeImage);
+        uiAssets.forEach(path => {
+            if (!uiResults.get(path)) {
+                findings.push({
+                    sceneId: this.GLOBAL_SCENE_LABEL, category: 'assets/ui', severity: this.SEVERITY.ERROR,
+                    message: `UI asset not found: ${path}`,
+                    fix: 'Add the missing UI asset.',
+                });
+            }
+        });
+
+        findings.push({
+            sceneId: this.GLOBAL_SCENE_LABEL, category: 'assets/sfx', severity: this.SEVERITY.INFO,
+            message: 'SFX are synthesized in-browser via SFXGenerator (Web Audio API) — there are no SFX file assets to validate.',
+            fix: 'No action needed.',
+        });
+
+        const totals = { error: 0, warning: 0, info: 0 };
+        findings.forEach(f => { totals[f.severity] = (totals[f.severity] || 0) + 1; });
+
+        const report = {
+            ok: totals.error === 0,
+            generatedAt: new Date().toISOString(),
+            durationMs: Date.now() - startedAt,
+            sceneCount: sceneEntries.length,
+            totals,
+            findings,
+        };
+        report.markdown = this.buildMarkdownReport(report);
+        this.lastReport = report;
+        return report;
+    },
+};
+
 // ===== SETTINGS PERSISTENCE =====
 function loadSettingsFromStorage() {
     try {
@@ -8488,40 +9504,74 @@ function hideTransitionLoader() {
     loader.innerHTML = '';
 }
 
-// Viewport height fix for iOS/browser UI chrome changes
-function setAppHeight() {
+// ===== UNIFIED RESIZE / ORIENTATION HANDLING =====
+// THE single place resize/orientationchange/visualViewport-resize work
+// happens. This used to be three independent systems — mobileOptimizer's
+// old syncViewportHeight() (visualViewport, window resize, +80ms on
+// orientationchange), the standalone setAppHeight()/
+// setupViewportHeightHandlers() (window resize +100ms, orientationchange
+// +100ms, iOS scroll +200ms), and a third resize/orientationchange pair
+// registered below in the DOMContentLoaded handler (+300ms) that did the
+// "real" recalculation (positioningSystem.recalculateAll(), dev tools,
+// dialogue reposition) — each on its own debounce timer, so a single
+// rotation could fire 3+ independent CSS-var writes and up to 2 full layout
+// recalculations. Replaced with one handler and one shared pending timer:
+// a resize immediately followed by an orientationchange (as happens on a
+// real rotation) now schedules exactly one recalculation, not several.
+function hbSyncViewportHeight() {
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
     const vh = window.innerHeight * 0.01;
-    const actualHeight = window.innerHeight;
-
+    document.documentElement.style.setProperty('--app-height', `${Math.round(viewportHeight)}px`);
     document.documentElement.style.setProperty('--vh', `${vh}px`);
-    document.documentElement.style.setProperty('--app-height', `${actualHeight}px`);
-
     const gameRoot = document.getElementById('game-root');
-    if (gameRoot) {
-        gameRoot.style.height = `${actualHeight}px`;
+    if (gameRoot) gameRoot.style.height = `${Math.round(viewportHeight)}px`;
+}
+
+// The 4 steps required of the consolidated handler: sync viewport height,
+// recalculate background/characters/items/hotspots, re-layout the active
+// dialogue through the canonical resolver (layoutDialogue(), via
+// repositionActiveDialogue()), and — debug builds only — validate the
+// result and warn on any violation.
+function hbRecalculateViewportLayout() {
+    try {
+        hbSyncViewportHeight();
+        mobileOptimizer.applyOrientationState();
+        positioningSystem.recalculateAll();
+        Dev.tools.applyForCurrentScene();
+        sceneRenderer.repositionActiveDialogue();
+        if (DEBUG) {
+            const result = hbValidateLayout();
+            if (result?.violations?.length) {
+                console.warn('[viewport-resize] layout violations after recalculation:', result.violations);
+            }
+        }
+    } catch (error) {
+        errorLogger.log('viewport-recalculate', error);
     }
 }
 
-let appHeightResizeTimeout;
-let appHeightScrollTimeout;
+let hbViewportChangeTimer = null;
+function hbScheduleViewportRecalc(delayMs) {
+    clearTimeout(hbViewportChangeTimer);
+    hbViewportChangeTimer = setTimeout(hbRecalculateViewportLayout, delayMs);
+}
 
-function setupViewportHeightHandlers() {
-    setAppHeight();
+function setupViewportChangeHandlers() {
+    hbSyncViewportHeight();
 
-    window.addEventListener('resize', () => {
-        clearTimeout(appHeightResizeTimeout);
-        appHeightResizeTimeout = setTimeout(setAppHeight, 100);
-    });
+    const onResize = () => hbScheduleViewportRecalc(mobileOptimizer.resizeDebounceMs);
+    const onOrientationChange = () => hbScheduleViewportRecalc(300);
 
-    window.addEventListener('orientationchange', () => {
-        setTimeout(setAppHeight, 100);
-    });
+    // visualViewport fires on mobile keyboard show/hide as well as resize —
+    // routed through the same debounced recalc as window 'resize'.
+    window.visualViewport?.addEventListener('resize', onResize);
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onOrientationChange);
 
+    // iOS Safari's chrome (URL bar) can change viewport height on scroll
+    // without firing 'resize'.
     if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
-        window.addEventListener('scroll', () => {
-            clearTimeout(appHeightScrollTimeout);
-            appHeightScrollTimeout = setTimeout(setAppHeight, 200);
-        }, { passive: true });
+        window.addEventListener('scroll', () => hbScheduleViewportRecalc(200), { passive: true });
     }
 }
 
@@ -8529,7 +9579,10 @@ function setupViewportHeightHandlers() {
 document.addEventListener('DOMContentLoaded', safeAsync(async () => {
     console.log('🎮 Initializing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL...');
 
-    setupViewportHeightHandlers();
+    setupViewportChangeHandlers();
+
+    // ?noAnimations=1 — apply before any scene/UI renders so nothing animates in.
+    if (HB_FLAG_NO_ANIMATIONS) document.body.classList.add('hb-no-animations');
 
     // Restore persisted settings before audio/UI init so volumes apply immediately
     loadSettingsFromStorage();
@@ -8543,6 +9596,11 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
 
     // Initialize audio
     audioManager.init();
+    // ?mute=1 — silence music/SFX from boot, before any track starts playing.
+    if (HB_FLAG_MUTE) {
+        SFXGenerator.muted = true;
+        audioManager.setMuted(true);
+    }
     mobileOptimizer.init();
 
     // Normalize scene data before the first scene loads.
@@ -8582,39 +9640,18 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
         console.log(`[Debug] Click → native: (${imgX}, ${imgY}) | percent: (${pctX}%, ${pctY}%) | screen: (${Math.round(nativePoint.localX)}, ${Math.round(nativePoint.localY)})`);
     });
 
-    // Responsive positioning: recalculate on resize with debounce
-    let resizeTimer;
-    window.addEventListener('resize', () => {
-        clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(() => {
-            try {
-                setAppHeight();
-                positioningSystem.recalculateAll();
-                Dev.tools.applyForCurrentScene();
-                sceneRenderer.repositionActiveDialogue();
-            } catch (error) {
-                errorLogger.log('resize-recalculate', error);
-            }
-        }, mobileOptimizer.resizeDebounceMs);
-    });
-
-    // Also recalculate on orientation change (mobile)
-    window.addEventListener('orientationchange', () => {
-        setTimeout(() => {
-            try {
-                setAppHeight();
-                positioningSystem.recalculateAll();
-                Dev.tools.applyForCurrentScene();
-                sceneRenderer.repositionActiveDialogue();
-            } catch (error) {
-                errorLogger.log('orientation-recalculate', error);
-            }
-        }, 300);
-    });
+    // Resize/orientationchange recalculation is handled entirely by
+    // setupViewportChangeHandlers() above — see its docstring.
 
     // Hide loading screen then play intro video before main menu
     setTimeout(() => {
         assetLoader.hideLoadingScreen();
+
+        // ?skipIntro=1 — bypass the studio intro video entirely.
+        if (HB_FLAG_SKIP_INTRO) {
+            sceneRenderer.loadScene('S0_MAIN_MENU');
+            return;
+        }
 
         const introScreen = document.getElementById('intro-video-screen');
         const introVideo = document.getElementById('intro-video');
@@ -8658,3 +9695,365 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
 
     console.log('✅ Game initialized successfully!');
 }, 'bootstrap'));
+
+// ============================================
+// ===== DEBUG / TESTING API (window.__HB_DEBUG__) =====
+// ============================================
+// Only attached when the page is loaded with ?debug=true (see HB_DEBUG_ENABLED
+// above). Provides deterministic hooks for automated layout/regression testing
+// without touching game content, story flags, or any production code path.
+// Documented in DEVELOPMENT.md.
+
+// Deep-clones a value into a plain, JSON-safe structure: functions are
+// dropped, Sets/Maps become arrays/objects, and circular refs are guarded.
+function hbToJSONSafe(value, seen, depth) {
+    seen = seen || new WeakSet();
+    depth = depth || 0;
+    if (value === null || value === undefined) return value;
+    const type = typeof value;
+    if (type === 'function') return undefined;
+    if (type !== 'object') return value;
+    if (depth > 6) return '[Truncated]';
+    if (value instanceof Set) return Array.from(value).map(v => hbToJSONSafe(v, seen, depth + 1));
+    if (value instanceof Map) return hbToJSONSafe(Object.fromEntries(value), seen, depth + 1);
+    if (Array.isArray(value)) return value.map(v => hbToJSONSafe(v, seen, depth + 1));
+    if (value instanceof Node) return undefined; // never serialize DOM nodes
+    if (seen.has(value)) return '[Circular]';
+    seen.add(value);
+    const out = {};
+    Object.keys(value).forEach(key => {
+        const v = hbToJSONSafe(value[key], seen, depth + 1);
+        if (v !== undefined) out[key] = v;
+    });
+    return out;
+}
+
+// Viewport-relative bounding rect plus a best-effort visibility check.
+function hbGetRect(el) {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const style = window.getComputedStyle(el);
+    const visible = style.display !== 'none' && style.visibility !== 'hidden' &&
+        parseFloat(style.opacity || '1') > 0.01 && r.width > 0 && r.height > 0;
+    return {
+        left: r.left, top: r.top, right: r.right, bottom: r.bottom,
+        width: r.width, height: r.height, visible
+    };
+}
+
+// The "scene safe area" is the rendered background frame (letterboxed/pillarboxed
+// as needed), in viewport coordinates — the same frame validateCurrentLayout()
+// checks other rectangles against.
+function hbGetSafeAreaRect() {
+    const container = document.getElementById('scene-container');
+    if (!container) return null;
+    const containerRect = container.getBoundingClientRect();
+    const bgRect = positioningSystem.getBackgroundRect();
+    if (!bgRect) {
+        return {
+            left: containerRect.left, top: containerRect.top,
+            right: containerRect.right, bottom: containerRect.bottom,
+            width: containerRect.width, height: containerRect.height
+        };
+    }
+    return {
+        left: containerRect.left + bgRect.offsetX,
+        top: containerRect.top + bgRect.offsetY,
+        right: containerRect.left + bgRect.offsetX + bgRect.renderedW,
+        bottom: containerRect.top + bgRect.offsetY + bgRect.renderedH,
+        width: bgRect.renderedW,
+        height: bgRect.renderedH
+    };
+}
+
+// True when `rect` extends outside `area` by more than `tolerance` px.
+// Rects with no rendered size (hidden elements) are never flagged.
+function hbRectOutsideArea(rect, area, tolerance) {
+    tolerance = tolerance || 1;
+    if (!rect || !area) return null;
+    if (rect.width <= 0 && rect.height <= 0) return false;
+    return (
+        rect.left < area.left - tolerance ||
+        rect.top < area.top - tolerance ||
+        rect.right > area.right + tolerance ||
+        rect.bottom > area.bottom + tolerance
+    );
+}
+
+function hbGetOverflow(el) {
+    if (!el) return null;
+    return {
+        scrollWidth: el.scrollWidth,
+        scrollHeight: el.scrollHeight,
+        clientWidth: el.clientWidth,
+        clientHeight: el.clientHeight,
+        overflowX: Math.max(0, el.scrollWidth - el.clientWidth),
+        overflowY: Math.max(0, el.scrollHeight - el.clientHeight)
+    };
+}
+
+// Images currently showing the "missing asset" SVG placeholder, plus any
+// srcs assetLoader already recorded as failed preloads.
+function hbGetMissingAssetInfo() {
+    const placeholders = Array.from(document.querySelectorAll('img'))
+        .filter(img => typeof img.src === 'string' && img.src.startsWith('data:image/svg'))
+        .map(img => ({ id: img.id || null, alt: img.alt || null }));
+    return {
+        preloadErrors: [...assetLoader.errors],
+        placeholderImagesInDom: placeholders
+    };
+}
+
+function hbBuildLayoutSnapshot() {
+    try {
+        const dialogueBox = document.getElementById('dialogue-box');
+        const dialogueContent = document.getElementById('dialogue-content');
+        const dialogueText = document.getElementById('dialogue-text');
+        const dialogueSpeaker = document.getElementById('dialogue-speaker');
+        const continueBtn = document.getElementById('dialogue-continue');
+        const choicesDiv = document.getElementById('dialogue-choices');
+
+        const safeArea = hbGetSafeAreaRect();
+        const dialogueBoxRect = hbGetRect(dialogueBox);
+        const continueRect = hbGetRect(continueBtn);
+
+        const choices = choicesDiv
+            ? Array.from(choicesDiv.querySelectorAll('.dialogue-choice')).map(btn => {
+                const rect = hbGetRect(btn);
+                return { text: btn.textContent, rect, outsideSafeArea: hbRectOutsideArea(rect, safeArea) };
+            })
+            : [];
+
+        const characters = Array.from(document.querySelectorAll('.character-sprite')).map(el => {
+            const rect = hbGetRect(el);
+            return {
+                id: el.dataset.characterId || null,
+                zone: el.dataset.zone || null,
+                slot: el.dataset.slot || null,
+                name: el.dataset.characterName || null,
+                rect,
+                visible: el.classList.contains('visible'),
+                outsideSafeArea: hbRectOutsideArea(rect, safeArea),
+                layout: {
+                    scale: parseFloat(el.style.getPropertyValue('--char-scale')) || 1,
+                    offsetX: parseFloat(el.dataset.offsetX) || 0,
+                    offsetY: parseFloat(el.dataset.offsetY) || 0,
+                    zIndex: el.style.zIndex || null,
+                    headAnchorX: el.dataset.headAnchorX != null ? parseFloat(el.dataset.headAnchorX) : null,
+                    headAnchorY: el.dataset.headAnchorY != null ? parseFloat(el.dataset.headAnchorY) : null,
+                }
+            };
+        });
+
+        return {
+            timestamp: Date.now(),
+            sceneId: gameState.currentSceneId,
+            viewport: { width: window.innerWidth, height: window.innerHeight },
+            backgroundRect: safeArea,
+            activeDialogueEntry: hbToJSONSafe(sceneRenderer._activeDialogueEntry || null),
+            dialogue: {
+                box: { rect: dialogueBoxRect, outsideSafeArea: hbRectOutsideArea(dialogueBoxRect, safeArea) },
+                content: { rect: hbGetRect(dialogueContent), overflow: hbGetOverflow(dialogueContent) },
+                text: { rect: hbGetRect(dialogueText), overflow: hbGetOverflow(dialogueText) },
+                speaker: { rect: hbGetRect(dialogueSpeaker) },
+                continueButton: { rect: continueRect, outsideSafeArea: hbRectOutsideArea(continueRect, safeArea) },
+                choices
+            },
+            characters,
+            characterLayoutWarnings: (sceneRenderer._lastCharacterLayoutWarnings || []).filter(w => w.sceneId === gameState.currentSceneId),
+            missingAssets: hbGetMissingAssetInfo()
+        };
+    } catch (error) {
+        errorLogger.log('debug-getLayoutSnapshot', error);
+        return { error: String((error && error.message) || error) };
+    }
+}
+
+function hbValidateLayout() {
+    try {
+        const snapshot = hbBuildLayoutSnapshot();
+        if (snapshot.error) {
+            return { ok: false, violations: [{ type: 'snapshot-error', severity: 'error', message: snapshot.error }], snapshot };
+        }
+
+        const violations = [];
+        const entry = snapshot.activeDialogueEntry;
+
+        // Dialogue outside the rendered game frame
+        const boxRect = snapshot.dialogue.box.rect;
+        if (boxRect && boxRect.width > 0 && snapshot.dialogue.box.outsideSafeArea) {
+            violations.push({ type: 'dialogue-outside-frame', severity: 'error', message: 'Dialogue box renders outside the visible background frame', rect: boxRect });
+        }
+
+        // Text / content overflow
+        const textOverflow = snapshot.dialogue.text.overflow;
+        if (textOverflow && (textOverflow.overflowX > 1 || textOverflow.overflowY > 1)) {
+            violations.push({ type: 'text-overflow', severity: 'warning', message: 'Dialogue text overflows its container', overflow: textOverflow });
+        }
+        const contentOverflow = snapshot.dialogue.content.overflow;
+        if (contentOverflow && (contentOverflow.overflowX > 1 || contentOverflow.overflowY > 1)) {
+            violations.push({ type: 'content-overflow', severity: 'warning', message: 'Dialogue content overflows its container', overflow: contentOverflow });
+        }
+
+        // Hidden or offscreen continue button (only when dialogue actually expects one)
+        const expectsContinue = !!(entry && entry.next && (!entry.choices || entry.choices.length === 0));
+        if (expectsContinue) {
+            const rect = snapshot.dialogue.continueButton.rect;
+            const isHiddenOrOffscreen = !rect || !rect.visible ||
+                rect.right <= 0 || rect.bottom <= 0 ||
+                rect.left >= snapshot.viewport.width || rect.top >= snapshot.viewport.height;
+            if (isHiddenOrOffscreen) {
+                violations.push({ type: 'continue-button-hidden-or-offscreen', severity: 'error', message: 'Continue button is hidden or offscreen while dialogue expects continuation', rect });
+            }
+        }
+
+        // Choices outside the safe area
+        snapshot.dialogue.choices.forEach((choice, idx) => {
+            if (choice.outsideSafeArea) {
+                violations.push({ type: 'choice-outside-safe-area', severity: 'error', message: `Choice button "${choice.text}" renders outside the safe area`, index: idx, rect: choice.rect });
+            }
+        });
+
+        // Missing visible speaker sprite (character-speech dialogue only).
+        // Resolution mirrors sceneRenderer's own priority: characterId
+        // first (exact), then exact name match.
+        const isNarration = !entry || !entry.speaker || entry.speaker === 'NARRATION' || entry.speaker === 'SYSTEM';
+        const isChoiceEntry = entry && (entry.speaker === 'CHOICE' || entry.speaker === 'FINAL CHOICE');
+        if (entry && !isNarration && !isChoiceEntry) {
+            const speakerName = String(entry.speaker || '').toUpperCase();
+            const characterId = entry.characterId || null;
+            const match = characterId
+                ? snapshot.characters.find(c => c.id === characterId)
+                : snapshot.characters.find(c => (c.name || '').toUpperCase() === speakerName);
+            if (!match) {
+                const label = characterId ? `characterId "${characterId}"` : `speaker "${entry.speaker}"`;
+                violations.push({ type: 'missing-speaker-sprite', severity: 'error', message: `No character sprite found in scene for ${label}` });
+            } else if (!match.visible || !match.rect || !match.rect.visible) {
+                violations.push({ type: 'missing-speaker-sprite', severity: 'error', message: `Speaker "${entry.speaker}" sprite is present but not visibly rendered`, character: match });
+            }
+        }
+
+        // Duplicate character IDs
+        const idCounts = new Map();
+        snapshot.characters.forEach(c => {
+            if (!c.id) return;
+            idCounts.set(c.id, (idCounts.get(c.id) || 0) + 1);
+        });
+        idCounts.forEach((count, id) => {
+            if (count > 1) {
+                violations.push({ type: 'duplicate-character-id', severity: 'error', message: `Character id "${id}" appears ${count} times in the scene`, id, count });
+            }
+        });
+
+        // Duplicate slots — recorded by normalizeCharacterZones() when two
+        // scene characters claim the same slot/position instead of one
+        // silently being remapped.
+        (snapshot.characterLayoutWarnings || []).forEach(w => {
+            if (w.type !== 'duplicate-slot') return;
+            violations.push({ type: 'duplicate-slot', severity: 'error', message: `Duplicate character slot "${w.slot}" claimed by: ${w.characters.join(', ')}`, slot: w.slot, characters: w.characters });
+        });
+
+        // Missing image assets already reported by the loader
+        snapshot.missingAssets.preloadErrors.forEach(src => {
+            violations.push({ type: 'missing-asset', severity: 'error', message: `Asset failed to preload: ${src}`, src });
+        });
+        snapshot.missingAssets.placeholderImagesInDom.forEach(img => {
+            violations.push({ type: 'missing-asset', severity: 'error', message: `Placeholder image currently rendered in DOM (${img.id || img.alt || 'unknown'})`, image: img });
+        });
+
+        return { ok: violations.length === 0, violations, snapshot };
+    } catch (error) {
+        errorLogger.log('debug-validateCurrentLayout', error);
+        return { ok: false, violations: [{ type: 'internal-error', severity: 'error', message: String((error && error.message) || error) }], snapshot: null };
+    }
+}
+
+const HBDebugAPI = {
+    listScenes() {
+        return Object.keys(SCENES).map(id => ({
+            id,
+            title: SCENES[id]?.title || null,
+            background: SCENES[id]?.background || null
+        }));
+    },
+
+    /**
+     * Runs the full demo-readiness validator across every SCENES entry —
+     * structure, characters, dialogue, and live asset probes — without
+     * entering any scene or mutating SCENES/save data/game state. Intended
+     * for automated tests: check `result.ok` (true iff zero error-severity
+     * findings) and `result.totals`/`result.findings` for details.
+     */
+    async validateAllScenes() {
+        const report = await demoValidator.validateAll();
+        return hbToJSONSafe(report);
+    },
+
+    jumpToScene(sceneId) {
+        if (!SCENES[sceneId]) return { ok: false, error: `Unknown scene id: ${sceneId}` };
+        sceneRenderer.loadScene(sceneId);
+        return { ok: true, sceneId };
+    },
+
+    getActiveDialogue() {
+        return hbToJSONSafe(sceneRenderer._activeDialogueEntry || null);
+    },
+
+    async showDialogue(entry) {
+        if (!entry || typeof entry !== 'object') {
+            return { ok: false, error: 'showDialogue requires a dialogue entry object' };
+        }
+        // Debug override: clear any lock left by a prior line the test never
+        // clicked through, so this call is deterministic regardless of state.
+        gameState.dialogueLock = false;
+        // Awaited (not fire-and-forget) so callers — e.g. Playwright driving
+        // this over page.evaluate() — can rely on layout having fully settled
+        // by the time this call resolves.
+        await sceneRenderer.showDialogue(entry);
+        return { ok: true };
+    },
+
+    finishTyping() {
+        const textEl = document.getElementById('dialogue-text');
+        return { ok: sceneRenderer.finishTypeText(textEl) };
+    },
+
+    advanceDialogue() {
+        const textEl = document.getElementById('dialogue-text');
+        const continueBtn = document.getElementById('dialogue-continue');
+        if (sceneRenderer.isTyping) {
+            sceneRenderer.finishTypeText(textEl);
+            return { ok: true, action: 'finished-typing' };
+        }
+        if (continueBtn && !continueBtn.classList.contains('hidden') && typeof continueBtn.onclick === 'function') {
+            continueBtn.onclick();
+            return { ok: true, action: 'advanced' };
+        }
+        return { ok: false, action: 'no-op', reason: 'no active continue button (choices pending or dialogue idle)' };
+    },
+
+    getLayoutSnapshot() {
+        return hbBuildLayoutSnapshot();
+    },
+
+    validateCurrentLayout() {
+        return hbValidateLayout();
+    },
+
+    setAnimationsEnabled(enabled) {
+        document.body.classList.toggle('hb-no-animations', enabled === false);
+        return { ok: true, animationsEnabled: enabled !== false };
+    },
+
+    setAudioEnabled(enabled) {
+        const muted = enabled === false;
+        SFXGenerator.muted = muted;
+        audioManager.setMuted(muted);
+        return { ok: true, audioEnabled: !muted };
+    }
+};
+
+if (HB_DEBUG_ENABLED) {
+    window.__HB_DEBUG__ = HBDebugAPI;
+    console.log('[HB_DEBUG] window.__HB_DEBUG__ enabled (?debug=true) — see DEVELOPMENT.md');
+}
