@@ -25,6 +25,7 @@ https://<host>/index.html?debug=true&skipIntro=1&mute=1&noAnimations=1
 | `skipIntro=1` | Skips the studio intro video and loads `S0_MAIN_MENU` immediately. |
 | `mute=1` | Silences music and SFX from boot (via `SFXGenerator.muted` / `audioManager.muted`). |
 | `noAnimations=1` | Adds a `hb-no-animations` class to `<body>` that collapses all CSS animation/transition durations to ~0, so layout can be inspected without waiting on transitions. |
+| `noSave=1` | Makes `saveSystem.save()` a no-op (still returns `true`) so scene transitions during an automated run never write to `localStorage`. Used by the Playwright layout smoke tests. |
 
 None of these flags affect the game when absent from the URL.
 
@@ -129,6 +130,101 @@ and that file's own "Methodology / known limitations" section for what the
 validator can and can't see (e.g. dialogue shown from inside `onClick`/
 `onEnter`/`next`/`onShow` callbacks is only covered via best-effort source
 inspection, not execution).
+
+## Layout regression tests (Playwright)
+
+A minimal Node-only harness (`package.json`, `playwright.config.js`,
+`tests/layout/`) drives the real game in a real Chromium across 7 viewports
+and asserts layout invariants via `window.__HB_DEBUG__.validateCurrentLayout()`
+— it is dev/test tooling only. **The GitHub Pages build itself is still a
+plain static site and needs no Node runtime**; nothing here is required to
+serve or play the game.
+
+### Setup (one-time)
+
+```
+npm install
+npx playwright install chromium   # downloads a managed Chromium if you don't already have one
+```
+
+### Running
+
+```
+npm run serve          # optional — playwright test starts/stops its own server automatically
+npm run test:layout        # run the full suite (7 viewports x 7 scenes x up to 4 dialogue cases)
+npm run test:layout:update # same, but also refreshes tests/layout/baseline/ (the tracked artifact set)
+```
+
+`test:layout` starts a local static server (`http-server`) on `127.0.0.1:4173`
+automatically (via Playwright's `webServer` config) and tears it down after
+the run — you don't need `npm run serve` running separately unless you want
+to poke at the game manually. Set `HB_TEST_PORT` to use a different port.
+
+If you're pointing at a Chromium binary already installed somewhere other
+than Playwright's managed cache (e.g. a CI image with a pre-warmed browser),
+set `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chromium` — otherwise leave it
+unset and let Playwright manage its own browser.
+
+### What it checks
+
+For each of the 7 viewports (Desktop 1920x1080, Laptop 1366x768, Tablet
+1024x768, Android landscape 915x412, iPhone landscape 844x390, Small
+landscape 740x360, iPhone SE landscape 667x375):
+
+1. Loads the main menu (`?debug=true&skipIntro=1&mute=1&noAnimations=1&noSave=1`).
+2. Jumps to each representative high-risk scene (`tests/layout/scenes.js`:
+   `S1_LIVING_ROOM_INTRO`, `S2_ICE_RAID_WINDOW`, `S5_SOFIA_INTEL`,
+   `S7B_CARTEL_TARGETING`, `S8B_HANK_DISGUISE_BRIEFING`,
+   `S9_FINAL_WAREHOUSE_SHOWDOWN`, and the `E_CHAOTIC` ending).
+3. Shows that scene's own authored narration, short-speech, long-speech, and
+   choice dialogue entries (picked automatically — see
+   `pickRepresentativeDialogueEntries()` in `tests/layout/helpers.js`; a
+   scene that lacks one of the four categories skips that case rather than
+   failing).
+4. Waits for fonts (`document.fonts.ready`) and the dialogue pipeline to
+   settle, then calls `validateCurrentLayout()`.
+5. **Fails** the case on: a console error (uncaught exceptions and
+   `console.error` — NOT the expected, documented sprite-fallback-candidate
+   404 noise from `buildSpriteCandidates()`, see the comment in
+   `layout.spec.js`), a `missing-asset` violation, `text-overflow` /
+   `content-overflow`, `dialogue-outside-frame`, a hidden/offscreen continue
+   button, a choice button outside the safe area, or (for authored
+   `bubbleLayout` entries only) the dialogue box drifting more than 4px from
+   the same scaled-rect math the engine itself uses — see
+   `checkBubbleLayoutTolerance()` — *unless* the unclamped authored position
+   wouldn't have fit the safe area on that viewport anyway, in which case
+   the engine's own viewport clamping is expected, not a regression.
+6. Saves a screenshot + JSON layout snapshot per (viewport, scene, case) to
+   `test-results/layout/` regardless of pass/fail, for manual review.
+
+Deliberately **not** asserted: fragile pixel-perfect box positions
+everywhere. `test:layout` never runs a Playwright `toHaveScreenshot()`
+pixel-diff — screenshots are artifacts for a human to look at, not an
+automated gate (see `tests/layout/baseline/README.md`).
+
+### Test mode and saves
+
+`?noSave=1` (added alongside `skipIntro`/`mute`/`noAnimations`) makes
+`saveSystem.save()` a no-op for the whole page session, so the automated
+scene-jumping this suite does never writes `localStorage`. Every test also
+asserts `localStorage.getItem('hardigan_brothers_save') === null` directly,
+rather than relying on that flag alone.
+
+### Reading a failure
+
+Every failed assertion's message is self-contained —
+`viewport="..." scene="..." case="..." dialogueIndex=N speaker="..." metric=...`
+— so a failure identifies scene, dialogue entry, viewport, and the specific
+violated metric without needing to cross-reference the Playwright project
+name. The HTML report (`test-results/html-report/index.html`) and the raw
+`test-results/results.json` are also available after any run.
+
+### Artifacts
+
+| Location | Tracked in git? | Contents |
+|---|---|---|
+| `test-results/` | No (gitignored) | Screenshots, JSON layout snapshots, HTML report, traces — regenerated every run. |
+| `tests/layout/baseline/` | **Yes** | The one approved reference artifact set, only updated deliberately via `npm run test:layout:update` — see that directory's `README.md`. |
 
 ## Character layout schema
 

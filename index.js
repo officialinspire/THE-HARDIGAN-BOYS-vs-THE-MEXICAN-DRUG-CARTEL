@@ -219,12 +219,16 @@ const DEV_FORCE_WHITE_STRIP = false;
 // ?debug=true unlocks window.__HB_DEBUG__, a deterministic test API (see bottom of file).
 // ?skipIntro=1 bypasses the studio intro video and loads the main menu directly.
 // ?mute=1 silences music/SFX from boot. ?noAnimations=1 disables CSS animations/transitions.
+// ?noSave=1 makes saveSystem.save() a no-op (still returns true) so automated
+// runs (e.g. the Playwright layout smoke tests) never touch localStorage,
+// regardless of Playwright's own per-context storage isolation.
 // None of these flags change behavior unless explicitly present in the URL.
 const HB_URL_PARAMS = new URLSearchParams(window.location.search);
 const HB_DEBUG_ENABLED = HB_URL_PARAMS.get('debug') === 'true';
 const HB_FLAG_SKIP_INTRO = HB_URL_PARAMS.get('skipIntro') === '1';
 const HB_FLAG_MUTE = HB_URL_PARAMS.get('mute') === '1';
 const HB_FLAG_NO_ANIMATIONS = HB_URL_PARAMS.get('noAnimations') === '1';
+const HB_FLAG_NO_SAVE = HB_URL_PARAMS.get('noSave') === '1';
 
 const SETTINGS_STORAGE_KEY = 'HB_SETTINGS_V1';
 
@@ -2395,8 +2399,19 @@ const assetLoader = {
                 resolve();
             };
             img.onerror = () => {
-                this.errors.push(src);
+                // logErrors:false calls (lazyLoadSceneAssets' parallel
+                // sprite-candidate warm-up, next-scene background prefetch)
+                // are speculative/best-effort — an individual candidate
+                // 404ing there is expected whenever a later candidate in
+                // the same fallback chain succeeds, so it must not
+                // permanently pollute assetLoader.errors (which
+                // hbGetMissingAssetInfo()/validateCurrentLayout() treats as
+                // authoritative "this asset is missing" signals). A
+                // genuinely missing asset still surfaces via the DOM
+                // placeholder check (registerImageFallback/
+                // registerBackgroundFallback) when it's actually rendered.
                 if (logErrors) {
+                    this.errors.push(src);
                     errorLogger.log('preload-assets', new Error(`Failed to preload image`), { src });
                 }
                 resolve();
@@ -2575,6 +2590,9 @@ const saveSystem = {
     SAVE_KEY: 'hardigan_brothers_save',
     
     save() {
+        // ?noSave=1 — used by automated tests (see HB_FLAG_NO_SAVE) so a
+        // full playthrough of scene transitions never touches localStorage.
+        if (HB_FLAG_NO_SAVE) return true;
         const saveData = {
             currentSceneId: gameState.currentSceneId,
             inventory: gameState.inventory,
