@@ -6747,7 +6747,19 @@ const SCENES = {
                 speaker: 'HANK',
                 text: "(uneasy) They made Carlos look like a Bond villain for being late on rent.",
                 position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'MOM',
+                text: "Here. Take my hospital badge. Not because I want you involved — I don't — but if you're going to go poking around anyway, at least look like you belong somewhere.",
+                position: 'right',
                 next: () => {
+                    // "Restricted areas or establish trust in official-looking
+                    // situations" (see getItemDescription('moms_nurse_badge')) —
+                    // used at S4C_ICE_PROCESSING_ROOM, only reachable from this
+                    // branch (S3A -> S4A2 -> "follow the ICE van").
+                    inventory.add('moms_nurse_badge');
+                    notebook.add("MOM'S NURSE BADGE", 'Mom\'s real hospital ID. "Look official, stay quiet, don\'t get arrested." Surprisingly solid advice, coming from her.');
                     sceneRenderer.showDialogue({
                         speaker: 'CHOICE',
                         text: 'What do you do?',
@@ -6773,7 +6785,7 @@ const SCENES = {
             }
         ]
     },
-    
+
     // ===== S3B: HELP NEIGHBORS PATH =====
     S3B_RIVERA_BACKYARD: {
         id: 'S3B_RIVERA_BACKYARD',
@@ -7231,6 +7243,43 @@ const SCENES = {
                         speaker: 'NARRATION',
                         text: "You angle the burner phone and quietly capture the room — the rows, the masked figure, the unmarked equipment. Smith doesn't notice. This evidence could matter later.",
                         next: 'NEXT_DIALOGUE'
+                    });
+                }
+            },
+            moms_nurse_badge: {
+                action() {
+                    addJournalOnce('used_nurse_badge_s4c', 'BLUFF ATTEMPTED — Nurse Badge at the Facility', 'You flashed Mom\'s hospital badge at Agent Smith, playing it off as a medical-liaison check-in on detainee welfare. He didn\'t buy it exactly, but he didn\'t throw you out either.');
+                    // Usable at any point during the scene's normal flow, not
+                    // gated behind a specific line -- see the identical note
+                    // on fake_fbi_badge's handlers for why _closeDialogueThen()
+                    // is needed here (showDialogue()'s "already showing" guard
+                    // would otherwise silently drop this whole chain).
+                    sceneRenderer._closeDialogueThen(() => {
+                        sceneRenderer.showDialogue({
+                            speaker: 'HANK',
+                            text: "(holds up a badge) Medical liaison. Just checking on detainee welfare. Federal regulation, you understand.",
+                            position: 'left',
+                            next: () => {
+                                sceneRenderer.showDialogue({
+                                    speaker: 'AGENT SMITH',
+                                    text: "(squints at it) That's a nursing badge. From a hospital forty minutes from here.",
+                                    next: () => {
+                                        sceneRenderer.showDialogue({
+                                            speaker: 'HANK',
+                                            text: "...Interagency cooperation?",
+                                            position: 'left',
+                                            next: () => {
+                                                sceneRenderer.showDialogue({
+                                                    speaker: 'AGENT SMITH',
+                                                    text: "(long pause) You've got ten more minutes. Don't touch anything.",
+                                                    next: 'NEXT_DIALOGUE'
+                                                });
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                        });
                     });
                 }
             }

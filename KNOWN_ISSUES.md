@@ -16,14 +16,7 @@ These do not block the stable demo release — see `DEMO_READINESS.md` for the r
 - **Detail:** each scene references a primary sprite filename (e.g. `char_hank_thinking.png`) that isn't present, but a directional fallback candidate (`char_hank_thinking-left.png`) is present and renders correctly.
 - **Why non-blocking:** the character always renders correctly via the fallback. Purely a naming-convention cleanup opportunity, not a rendering defect.
 
-## 3. One item is defined but never granted by the current script
+## Resolved since this file was created
 
-- **Item:** `moms_nurse_badge`. (`fake_fbi_badge` and `cartel_usb` were previously in this list — both are now granted and verified reachable and working: `fake_fbi_badge` via `S1_LIVING_ROOM_INTRO`'s notebook hotspot, used at `S7A_CARTEL_CONTACT`/`S7C_VENEZ_BACKROOM_ORTEGA`; `cartel_usb` via a new `TOOK_CARTEL_DEAL`-gated beat at `S8_PRE_FINAL`, used at `S9_FINAL_WAREHOUSE_SHOWDOWN`.)
-- **Detail:** `moms_nurse_badge` has a `getItemDescription()` entry but no `itemUses` handler anywhere and no grant point — fully vestigial.
-- **Why non-blocking:** confirmed via full branch-graph mapping that all 4 endings (`E_HAPPY`, `E_SAD`, `E_CHAOTIC`, `E_IRONIC_MEDIA`) remain reachable through the fully-tested `neighbors_usb`/`mysterious_passport`/`cartel_usb`/`fake_fbi_badge` item flows. `S6` and `S9` both have explicit no-USB fallback paths (verified working) rather than soft-locking. This is a content-completeness gap, not a broken feature.
-
-## 4. Two optional branches were not independently exercised this pass
-
-- **Branches:** the `S7C_VENEZ_BACKROOM_ORTEGA` ("Meet Ortega") detour from `S7A`'s choice screen, and the `S4C_ICE_PROCESSING_ROOM` ("follow the ICE van") detour from `S4A2`.
-- **Why non-blocking:** both are optional side-detours that route back into the same S8/S9 spine already covered by the tested routes (confirmed via scene-graph mapping), not separate endings. Neither is required to reach any of the 4 endings, all of which were confirmed reachable without them.
-- **Follow-up:** worth a manual pass in a future testing cycle, but outside this gate's scope of "at least one route through every major branch."
+- **All three previously-unreachable items now have grant points and verified-working `itemUses` handlers:** `fake_fbi_badge` — granted via `S1_LIVING_ROOM_INTRO`'s notebook hotspot, used at `S7A_CARTEL_CONTACT`/`S7C_VENEZ_BACKROOM_ORTEGA`. `cartel_usb` — granted via a `TOOK_CARTEL_DEAL`-gated beat at `S8_PRE_FINAL`, used at `S9_FINAL_WAREHOUSE_SHOWDOWN`. `moms_nurse_badge` — granted by Mom in `S3A_FRONT_YARD_FROM_DISTANCE` (the "stay inside" branch), used at `S4C_ICE_PROCESSING_ROOM`.
+- **Both previously-untested optional detours** (`S7C_VENEZ_BACKROOM_ORTEGA` and `S4C_ICE_PROCESSING_ROOM`) have since been exercised via these item-verification playthroughs and confirmed working, remaining completable to `S8_PRE_FINAL`/`S6` respectively with no soft locks.
