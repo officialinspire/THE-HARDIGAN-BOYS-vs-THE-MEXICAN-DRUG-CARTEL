@@ -2781,6 +2781,32 @@ function addJournalOnce(key, title, content) {
     saveSystem.save();
 }
 
+// Shows a list of dialogue entries one after another, then calls onDone.
+// Used by the ending scenes' flag-conditional epilogues (see
+// buildFlagEpilogueLines()) so a variable-length, flag-dependent list of
+// lines doesn't need to be hand-nested as next() callbacks.
+function chainDialogueLines(lines, onDone) {
+    if (!lines || lines.length === 0) {
+        if (typeof onDone === 'function') onDone();
+        return;
+    }
+    const [entry, ...rest] = lines;
+    sceneRenderer.showDialogue({
+        ...entry,
+        next: () => chainDialogueLines(rest, onDone)
+    });
+}
+
+// Builds a short epilogue for an ending scene: one line per variant whose
+// flag is currently true, in the order given. Lets each ending acknowledge
+// the player's earlier choices (CIA/cartel/Ortega alignment, badge bluffs)
+// without restructuring the ending itself -- see chainDialogueLines().
+function buildFlagEpilogueLines(variants) {
+    return variants
+        .filter(v => gameState.flags[v.flag])
+        .map(v => ({ speaker: v.speaker, text: v.text, position: v.position }));
+}
+
 // ===== INVENTORY SYSTEM =====
 const inventory = {
     add(itemId) {
@@ -8360,20 +8386,29 @@ const SCENES = {
                 speaker: 'JONAH',
                 text: "Does this mean we're heroes? Or just... less terrible?",
                 position: 'right',
-                next: 'NEXT_DIALOGUE'
-            },
-            {
-                speaker: 'NARRATION',
-                text: "ENDING: THE HAPPY ENDING (Well, Happy-ish)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
                 next: () => {
-                    setTimeout(() => {
-                        sceneRenderer.loadScene('S0_MAIN_MENU');
-                    }, 5000);
+                    const epilogue = buildFlagEpilogueLines([
+                        { flag: 'TOOK_CARTEL_DEAL', speaker: 'NARRATION', text: "Mendoza never came looking. Word is he decided two suburban kids weren't worth the paperwork." },
+                        { flag: 'WORKING_WITH_CIA', speaker: 'NARRATION', text: "Ms. Gray sent one message after the dust settled: \"Good instincts. Terrible operational security.\" Hank still has it screenshotted." },
+                        { flag: 'ALLIED_WITH_ORTEGA', speaker: 'NARRATION', text: "Ortega sent a single text: a thumbs up emoji. Nobody has heard from him since." },
+                        { flag: 'DOUBLE_CROSSED_SOMEONE', speaker: 'HANK', position: 'left', text: "We may have lied to a cartel boss's face. That's staying between us." }
+                    ]);
+                    chainDialogueLines(epilogue, () => {
+                        sceneRenderer.showDialogue({
+                            speaker: 'NARRATION',
+                            text: "ENDING: THE HAPPY ENDING (Well, Happy-ish)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
+                            next: () => {
+                                setTimeout(() => {
+                                    sceneRenderer.loadScene('S0_MAIN_MENU');
+                                }, 5000);
+                            }
+                        });
+                    });
                 }
             }
         ]
     },
-    
+
     E_SAD: {
         id: 'E_SAD',
         title: 'People Become Statistics',
@@ -8395,20 +8430,29 @@ const SCENES = {
                 speaker: 'HANK',
                 text: "We tried to do the right thing. Or... did we?",
                 position: 'left',
-                next: 'NEXT_DIALOGUE'
-            },
-            {
-                speaker: 'NARRATION',
-                text: "ENDING: THE SAD ENDING (Some People Become Statistics)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
                 next: () => {
-                    setTimeout(() => {
-                        sceneRenderer.loadScene('S0_MAIN_MENU');
-                    }, 5000);
+                    const epilogue = buildFlagEpilogueLines([
+                        { flag: 'TOOK_CARTEL_DEAL', speaker: 'NARRATION', text: "Mendoza got his shipment route. Nobody asked what happened to the family that used to live next door." },
+                        { flag: 'WORKING_WITH_CIA', speaker: 'NARRATION', text: "Ms. Gray's number stopped working a week later. The agency has a way of doing that." },
+                        { flag: 'ALLIED_WITH_ORTEGA', speaker: 'NARRATION', text: "Ortega's version of events made the news in three countries. Yours didn't make it anywhere." },
+                        { flag: 'DOUBLE_CROSSED_SOMEONE', speaker: 'HANK', position: 'left', text: "We lied to get here. It didn't end up mattering." }
+                    ]);
+                    chainDialogueLines(epilogue, () => {
+                        sceneRenderer.showDialogue({
+                            speaker: 'NARRATION',
+                            text: "ENDING: THE SAD ENDING (Some People Become Statistics)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
+                            next: () => {
+                                setTimeout(() => {
+                                    sceneRenderer.loadScene('S0_MAIN_MENU');
+                                }, 5000);
+                            }
+                        });
+                    });
                 }
             }
         ]
     },
-    
+
     E_CHAOTIC: {
         id: 'E_CHAOTIC',
         title: 'Multilateral Dumbassery',
@@ -8479,6 +8523,28 @@ const SCENES = {
                 text: "So we won? By losing completely?",
                 position: 'left',
                 next: () => {
+                    const finishChaoticEnding = () => {
+                        setTimeout(() => {
+                            const epilogue = buildFlagEpilogueLines([
+                                { flag: 'TOOK_CARTEL_DEAL', speaker: 'LUPITA', position: 'right', text: "Mendoza's still furious you double-booked him with literally everyone else." },
+                                { flag: 'WORKING_WITH_CIA', speaker: 'LUPITA', position: 'right', text: "Your CIA friend just filed the weirdest incident report of her career." },
+                                { flag: 'ALLIED_WITH_ORTEGA', speaker: 'LUPITA', position: 'right', text: "Ortega's already pitching this as a joint operation. He's very flexible with the truth." },
+                                { flag: 'DOUBLE_CROSSED_SOMEONE', speaker: 'LUPITA', position: 'right', text: "And you lied to at least one of us to get here. Respect." }
+                            ]);
+                            chainDialogueLines(epilogue, () => {
+                                sceneRenderer.showDialogue({
+                                    speaker: 'NARRATION',
+                                    text: "ENDING: MULTILATERAL DUMBASSERY\n(Everybody's Mad, Nobody Wins — But The Riveras Are Okay)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
+                                    next: () => {
+                                        setTimeout(() => {
+                                            sceneRenderer.loadScene('S0_MAIN_MENU');
+                                        }, 5000);
+                                    }
+                                });
+                            });
+                        }, 2500);
+                    };
+
                     sceneRenderer.showDialogue({
                         speaker: 'CHOICE',
                         text: 'How do you feel about this outcome?',
@@ -8492,18 +8558,7 @@ const SCENES = {
                                         position: 'left',
                                         next: 'NEXT_DIALOGUE'
                                     });
-                                    // Continue to ending narration after a beat
-                                    setTimeout(() => {
-                                        sceneRenderer.showDialogue({
-                                            speaker: 'NARRATION',
-                                            text: "ENDING: MULTILATERAL DUMBASSERY\n(Everybody's Mad, Nobody Wins — But The Riveras Are Okay)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
-                                            next: () => {
-                                                setTimeout(() => {
-                                                    sceneRenderer.loadScene('S0_MAIN_MENU');
-                                                }, 5000);
-                                            }
-                                        });
-                                    }, 2500);
+                                    finishChaoticEnding();
                                 }
                             },
                             {
@@ -8515,17 +8570,7 @@ const SCENES = {
                                         position: 'right',
                                         next: 'NEXT_DIALOGUE'
                                     });
-                                    setTimeout(() => {
-                                        sceneRenderer.showDialogue({
-                                            speaker: 'NARRATION',
-                                            text: "ENDING: MULTILATERAL DUMBASSERY\n(Everybody's Mad, Nobody Wins — But The Riveras Are Okay)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
-                                            next: () => {
-                                                setTimeout(() => {
-                                                    sceneRenderer.loadScene('S0_MAIN_MENU');
-                                                }, 5000);
-                                            }
-                                        });
-                                    }, 2500);
+                                    finishChaoticEnding();
                                 }
                             }
                         ]
@@ -8563,15 +8608,24 @@ const SCENES = {
                 speaker: 'JONAH',
                 text: "At least we got, like, a really good engagement rate?",
                 position: 'right',
-                next: 'NEXT_DIALOGUE'
-            },
-            {
-                speaker: 'NARRATION',
-                text: "ENDING: THE IRONIC MEDIA ENDING (Truth Becomes Just Another Story)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
                 next: () => {
-                    setTimeout(() => {
-                        sceneRenderer.loadScene('S0_MAIN_MENU');
-                    }, 5000);
+                    const epilogue = buildFlagEpilogueLines([
+                        { flag: 'TOOK_CARTEL_DEAL', speaker: 'NARRATION', text: "One cable news chyron called it 'CARTEL TEEN AFFILIATE GOES ROGUE.' Mendoza's lawyers sent a strongly worded statement." },
+                        { flag: 'WORKING_WITH_CIA', speaker: 'NARRATION', text: "A think tank cited 'unnamed intelligence sources' who were definitely Ms. Gray, pretending not to be furious." },
+                        { flag: 'ALLIED_WITH_ORTEGA', speaker: 'NARRATION', text: "Ortega gave an interview calling himself a 'whistleblower.' Nobody fact-checked it." },
+                        { flag: 'DOUBLE_CROSSED_SOMEONE', speaker: 'JONAH', position: 'right', text: "At some point in all this we straight-up lied to a cartel boss. That part didn't even make the article." }
+                    ]);
+                    chainDialogueLines(epilogue, () => {
+                        sceneRenderer.showDialogue({
+                            speaker: 'NARRATION',
+                            text: "ENDING: THE IRONIC MEDIA ENDING (Truth Becomes Just Another Story)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
+                            next: () => {
+                                setTimeout(() => {
+                                    sceneRenderer.loadScene('S0_MAIN_MENU');
+                                }, 5000);
+                            }
+                        });
+                    });
                 }
             }
         ]
