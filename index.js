@@ -7675,26 +7675,20 @@ const SCENES = {
             addJournalOnce('status_s7b', 'STATUS — Under Surveillance', 'The cartel knows. There\'s an unmarked car outside that\'s been there for an hour. You\'re being watched. If you have the BURNER PHONE, this is the time to USE it — call Ms. Gray for backup before things escalate.');
             addJournalOnce('clue_s7b_burner', 'ACTION AVAILABLE — Call for Backup', 'Open your INVENTORY and USE the BURNER PHONE to contact Ms. Gray while the surveillance car is still watching. Letting her know about the cartel\'s presence gives the CIA a heads-up before the airport meeting and may give you better support later.');
 
-            // Surveillance operative slides in from right as soon as scene loads
+            // Surveillance operative slides in from right as soon as scene loads,
+            // slightly larger than the default character cap (35%/55% of the
+            // background) — scale: 1.257 reproduces the same rendered size as
+            // the previous post-hoc maxWidth/maxHeight override (0.44/0.35 =
+            // 0.68/0.55 ~= 1.257), but through the character layout schema's
+            // own reference-space-relative `scale` field instead of a
+            // pixel-computing .then() callback.
             sceneRenderer.addCharacter({
                 id: 'cartel_surveillance',
                 name: 'CARTEL SURVEILLANCE',
                 sprite: 'char_cartel-surveillance.png',
-                position: 'right'
-            }, 400).then(() => {
-                // Make the surveillance character slightly larger than the default cap
-                const el = document.getElementById('char-cartel_surveillance');
-                if (el) {
-                    const rect = positioningSystem.getBackgroundRect();
-                    if (rect) {
-                        el.style.maxWidth  = (rect.renderedW * 0.44) + 'px';
-                        el.style.maxHeight = (rect.renderedH * 0.68) + 'px';
-                    } else {
-                        el.style.maxWidth  = '44%';
-                        el.style.maxHeight = '68%';
-                    }
-                }
-            });
+                position: 'right',
+                scale: 1.257
+            }, 400);
         },
 
         dialogue: [
