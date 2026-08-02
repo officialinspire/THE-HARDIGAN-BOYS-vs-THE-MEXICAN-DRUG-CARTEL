@@ -8187,53 +8187,110 @@ const SCENES = {
                         text: "(holds up the USB drive) Right here. The thing everyone came for. And I'm the one holding it.",
                         position: 'left',
                         next: () => {
-                            sceneRenderer.showDialogue({
-                                // Shortened speaker label — see the S7A note
-                                // on the first MENDOZA line for why.
-                                speaker: 'MENDOZA',
-                                characterId: 'cartel_boss',
-                                text: "Smart boy. Now — choose.",
-                                position: 'right-2',
-                                next: () => {
-                                    sceneRenderer.showDialogue({
-                                        speaker: 'FINAL CHOICE',
-                                        text: 'What do you do with the USB?',
-                                        choices: [
-                                            {
-                                                text: 'Destroy the USB publicly',
-                                                action() {
-                                                    if (gameState.flags.HELPED_NEIGHBORS) {
-                                                        gameState.flags.SAVED_NEIGHBORS = true;
-                                                        sceneRenderer.loadScene('E_HAPPY');
-                                                    } else {
-                                                        sceneRenderer.loadScene('E_SAD');
-                                                    }
-                                                }
-                                            },
-                                            {
-                                                text: 'Upload everything to the internet',
-                                                action() {
-                                                    sceneRenderer.loadScene('E_IRONIC_MEDIA');
-                                                }
-                                            },
-                                            {
-                                                text: 'Fake-destroy it but keep a copy',
-                                                action() {
-                                                    gameState.flags.DOUBLE_CROSSED_SOMEONE = true;
-                                                    sceneRenderer.loadScene('E_CHAOTIC');
-                                                }
-                                            },
-                                            {
-                                                text: 'Give it to the cartel',
-                                                action() {
-                                                    gameState.flags.TOOK_CARTEL_DEAL = true;
-                                                    sceneRenderer.loadScene('E_CHAOTIC');
+                            // Payoff for S7A's "Pretend to cooperate (plan secret
+                            // betrayal)" choice: SECRETLY_AGAINST_CARTEL was set
+                            // back at the airstrip and has been sitting unused
+                            // ever since (see notebook entry 'DOUBLE CROSS').
+                            // Give it a real branch here -- Hank springs the
+                            // trap he's been planning since S7A, which unlocks
+                            // a bonus final-choice option below and guarantees
+                            // the good ending regardless of HELPED_NEIGHBORS,
+                            // since out-maneuvering the cartel is a distinct
+                            // win condition from saving the Riveras.
+                            const showFinalChoice = () => {
+                                sceneRenderer.showDialogue({
+                                    speaker: 'FINAL CHOICE',
+                                    text: 'What do you do with the USB?',
+                                    choices: [
+                                        {
+                                            text: 'Destroy the USB publicly',
+                                            action() {
+                                                if (gameState.flags.HELPED_NEIGHBORS) {
+                                                    gameState.flags.SAVED_NEIGHBORS = true;
+                                                    sceneRenderer.loadScene('E_HAPPY');
+                                                } else {
+                                                    sceneRenderer.loadScene('E_SAD');
                                                 }
                                             }
-                                        ]
-                                    });
-                                }
-                            });
+                                        },
+                                        {
+                                            text: 'Upload everything to the internet',
+                                            action() {
+                                                sceneRenderer.loadScene('E_IRONIC_MEDIA');
+                                            }
+                                        },
+                                        {
+                                            text: 'Fake-destroy it but keep a copy',
+                                            action() {
+                                                gameState.flags.DOUBLE_CROSSED_SOMEONE = true;
+                                                sceneRenderer.loadScene('E_CHAOTIC');
+                                            }
+                                        },
+                                        {
+                                            text: 'Give it to the cartel',
+                                            action() {
+                                                gameState.flags.TOOK_CARTEL_DEAL = true;
+                                                sceneRenderer.loadScene('E_CHAOTIC');
+                                            }
+                                        },
+                                        ...(gameState.flags.SECRETLY_AGAINST_CARTEL ? [{
+                                            text: "Spring the trap you've been planning since the airstrip",
+                                            action() {
+                                                gameState.flags.DOUBLE_CROSSED_SOMEONE = true;
+                                                sceneRenderer.showDialogue({
+                                                    speaker: 'HANK',
+                                                    text: "Turns out \"pretend to cooperate\" works a lot better when you planned the double-cross three days in advance.",
+                                                    position: 'left',
+                                                    next: () => {
+                                                        sceneRenderer.loadScene('E_HAPPY');
+                                                    }
+                                                });
+                                            }
+                                        }] : [])
+                                    ]
+                                });
+                            };
+
+                            if (gameState.flags.SECRETLY_AGAINST_CARTEL) {
+                                sceneRenderer.showDialogue({
+                                    speaker: 'HANK',
+                                    text: "Funny thing about \"pretending to cooperate,\" Mendoza — I've been calling this play since the airstrip.",
+                                    position: 'left',
+                                    next: () => {
+                                        sceneRenderer.showDialogue({
+                                            speaker: 'MENDOZA',
+                                            characterId: 'cartel_boss',
+                                            text: "(the smile drops) Explain. Now.",
+                                            position: 'right-2',
+                                            next: () => {
+                                                sceneRenderer.showDialogue({
+                                                    speaker: 'MS. GRAY',
+                                                    text: "He's been feeding me your shipment routes for three days, Mendoza. My team's already inside the perimeter.",
+                                                    position: 'left',
+                                                    next: () => {
+                                                        sceneRenderer.showDialogue({
+                                                            speaker: 'EL GATO',
+                                                            text: "...I told you kids were a bad idea.",
+                                                            position: 'right',
+                                                            next: showFinalChoice
+                                                        });
+                                                    }
+                                                });
+                                            }
+                                        });
+                                    }
+                                });
+                            } else {
+                                sceneRenderer.showDialogue({
+                                    // Shortened speaker label — see the S7A note
+                                    // on the first MENDOZA line for why.
+                                    speaker: 'MENDOZA',
+                                    characterId: 'cartel_boss',
+                                    text: "Smart boy. Now — choose.",
+                                    position: 'right-2',
+                                    next: showFinalChoice
+                                });
+                            }
                         }
                     });
                 }
