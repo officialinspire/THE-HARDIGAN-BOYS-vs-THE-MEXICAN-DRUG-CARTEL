@@ -10,13 +10,9 @@ These do not block the stable demo release — see `DEMO_READINESS.md` for the r
 - **Real next step (not attempted here — needs its own investigation pass):** compare live `positioningSystem.getBackgroundRect()` vs `getDialogueSafeRect()` output at the moment of a reproduced failure (e.g. via `window.__HB_DEBUG__.getLayoutSnapshot()`) to find why the measured box position falls outside the safe area on these specific narrow viewports, rather than assuming it's a simple call-ordering bug. The double-rAF settle pattern itself may need replacing with a more deterministic signal (e.g. `ResizeObserver`, or polling `getBoundingClientRect()` until two consecutive reads agree) instead of a fixed two-frame wait.
 - **Why non-blocking:** Affects at most ~5 of 203 automated layout-suite cases, only at the 3 narrowest tested viewports, only on `narration`-type entries. Not reproduced in any manual real-click walkthrough at desktop or iPhone SE landscape.
 
-## 2. Sprite-fallback naming mismatches (9 validator warnings)
-
-- **Where:** `S1_LIVING_ROOM_INTRO` (hank, jonah), `S3A_FRONT_YARD_FROM_DISTANCE` (mom), `S3B_RIVERA_BACKYARD` (hank, sofia), `S4B_SCHOOL_AFTERSHOCK` (hank), `S7A_CARTEL_CONTACT` (hank), `E_SAD` (hank), `E_IRONIC_MEDIA` (hank).
-- **Detail:** each scene references a primary sprite filename (e.g. `char_hank_thinking.png`) that isn't present, but a directional fallback candidate (`char_hank_thinking-left.png`) is present and renders correctly.
-- **Why non-blocking:** the character always renders correctly via the fallback. Purely a naming-convention cleanup opportunity, not a rendering defect.
-
 ## Resolved since this file was created
 
 - **All three previously-unreachable items now have grant points and verified-working `itemUses` handlers:** `fake_fbi_badge` — granted via `S1_LIVING_ROOM_INTRO`'s notebook hotspot, used at `S7A_CARTEL_CONTACT`/`S7C_VENEZ_BACKROOM_ORTEGA`. `cartel_usb` — granted via a `TOOK_CARTEL_DEAL`-gated beat at `S8_PRE_FINAL`, used at `S9_FINAL_WAREHOUSE_SHOWDOWN`. `moms_nurse_badge` — granted by Mom in `S3A_FRONT_YARD_FROM_DISTANCE` (the "stay inside" branch), used at `S4C_ICE_PROCESSING_ROOM`.
 - **Both previously-untested optional detours** (`S7C_VENEZ_BACKROOM_ORTEGA` and `S4C_ICE_PROCESSING_ROOM`) have since been exercised via these item-verification playthroughs and confirmed working, remaining completable to `S8_PRE_FINAL`/`S6` respectively with no soft locks.
+- **`SECRETLY_AGAINST_CARTEL` (S7A's "Pretend to cooperate" choice) now has a real payoff:** a distinct reveal beat and bonus final-choice option at `S9_FINAL_WAREHOUSE_SHOWDOWN` that routes to `E_HAPPY` regardless of `HELPED_NEIGHBORS`.
+- **Sprite-fallback naming mismatches (formerly 9 validator warnings) fixed:** `S1_LIVING_ROOM_INTRO`, `S3A_FRONT_YARD_FROM_DISTANCE`, `S3B_RIVERA_BACKYARD`, `S4B_SCHOOL_AFTERSHOCK`, `S7A_CARTEL_CONTACT`, `E_SAD`, and `E_IRONIC_MEDIA` now reference their sprites' actual on-disk `-left`/`-right` filenames directly instead of relying on the runtime fallback probe. Validator warnings: 9 → 0.

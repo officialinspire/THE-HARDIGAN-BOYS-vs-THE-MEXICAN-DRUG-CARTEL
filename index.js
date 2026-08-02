@@ -6307,8 +6307,8 @@ const SCENES = {
         },
 
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
-            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_excited.png', position: 'right' }
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking-left.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_excited-right.png', position: 'right' }
         ],
 
         items: [],
@@ -6753,7 +6753,7 @@ const SCENES = {
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused-left.png', position: 'left-2' },
-            { id: 'mom', name: 'MOM', sprite: 'char_mom_worried.png', position: 'right' }
+            { id: 'mom', name: 'MOM', sprite: 'char_mom_worried-right.png', position: 'right' }
         ],
 
         hotspots: [],
@@ -6820,9 +6820,9 @@ const SCENES = {
         music: 'The Raid Escape.mp3',
 
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' },
-            { id: 'sofia', name: 'SOFIA', sprite: 'char_sofia_upset.png', position: 'right' }
+            { id: 'sofia', name: 'SOFIA', sprite: 'char_sofia_upset-right.png', position: 'right' }
         ],
 
         hotspots: [],
@@ -7022,7 +7022,7 @@ const SCENES = {
         music: 'Empty Hallways (Ambient Mix).mp3',
 
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
             { id: 'student_1', name: 'RANDOM STUDENT', sprite: 'char_random-student-01.png', position: 'right-2' },
             { id: 'student_2', name: 'ANOTHER STUDENT', sprite: 'char_random-student-02-right.png', position: 'right' }
@@ -7456,7 +7456,7 @@ const SCENES = {
         music: 'Safehouse Ambience.mp3',
 
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked.png', position: 'left' },
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' },
             { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk.png', position: 'right-2' },
             { id: 'cartel_boss', name: 'ANDREAS "THE BUTCHER" MENDOZA', sprite: 'char_cartel_boss_menacing-right.png', position: 'right' }
@@ -8473,7 +8473,7 @@ const SCENES = {
         music: 'Muted Aftermath.mp3',
         
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' }
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral-left.png', position: 'left' }
         ],
         hotspots: [],
         
@@ -8644,7 +8644,7 @@ const SCENES = {
         music: 'Hardigan Noir Tension.mp3',
         
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'right' }
         ],
         hotspots: [],
