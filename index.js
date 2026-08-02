@@ -5578,8 +5578,13 @@ const sceneRenderer = {
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
                     const settledMode = this.layoutDialogue(dialogueBox, dialogueEntry);
-                    this._clampDialogueToViewport(dialogueBox, { preserveCentered: settledMode === 'narrative' });
+                    // reflow() must run before the viewport clamp: for a
+                    // narrative-mode box, it's what finishes growing the box
+                    // toward its CSS max-height (via _clampChoicesPanel) —
+                    // clamping first was measuring the box's pre-growth
+                    // rect, letting it render outside the visible frame.
                     dialoguePager.reflow(dialogueBox);
+                    this._clampDialogueToViewport(dialogueBox, { preserveCentered: settledMode === 'narrative' });
                     dialogueBox.classList.remove('dialogue-positioning');
                     this._animateDialogueEntry();
                 });
