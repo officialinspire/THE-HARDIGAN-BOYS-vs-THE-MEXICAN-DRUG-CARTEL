@@ -113,7 +113,11 @@ test('main menu loads cleanly', async ({ page }, testInfo) => {
     null,
     { timeout: 10_000 }
   );
-  await page.waitForTimeout(500);
+  // !isTransitioning doesn't guarantee #main-menu-content has actually been
+  // built yet — a fixed wait here raced that gap under CPU load (several
+  // Playwright workers running concurrently), intermittently failing on a
+  // different viewport each run. Wait for the real DOM signal instead.
+  await page.waitForFunction(() => !!document.getElementById('main-menu-content'), null, { timeout: 10_000 });
 
   const state = await page.evaluate(() => ({
     currentSceneId: gameState.currentSceneId,

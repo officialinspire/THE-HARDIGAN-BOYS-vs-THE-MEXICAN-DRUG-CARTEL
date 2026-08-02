@@ -228,28 +228,34 @@ name. The HTML report (`test-results/html-report/index.html`) and the raw
 
 ### Known layout findings (recorded, not fixed here)
 
-The suite is left red on these — deliberately, per its own "record failures,
-don't hide them" mandate — rather than loosened to pass. As of the last
-recorded run (`tests/layout/baseline/`, 87 passed / 8 failed / 89 skipped /
-19 did not run), the failures fall into three root causes, each independently
-reproduced outside the suite (not a harness timing artifact):
+Updated by the `DEMO_LAYOUT_AUDIT.md` scene-data audit — two of the three
+findings originally recorded here turned out to be scene-data bugs, not
+engine bugs, and were fixed by correcting the scene data (see that file for
+the full per-scene writeup):
 
-- **`S9_FINAL_WAREHOUSE_SHOWDOWN` `shortSpeech` — `content-overflow`**
-  (laptop-1366x768, android-landscape-915x412, iphone-landscape-844x390).
-  Mendoza's short line overflows its bubble on these three viewports.
-- **`S1_LIVING_ROOM_INTRO` `shortSpeech` — `bubbleLayoutTolerance`**
-  (small-landscape-740x360, iphone-se-landscape-667x375). JONAH's authored
-  `bubbleLayout` width is overridden by the generic
-  `@media (max-width: 1024px) #dialogue-box { min-width: min(240px, 86vw); }`
-  rule (styles.css), which forces the box wider than the authored rect on
-  these two smallest viewports; the resulting overflow then gets absorbed by
-  `_clampDialogueToViewport()` shifting `left`, landing ~17px off the
-  authored position.
+- ~~`S9_FINAL_WAREHOUSE_SHOWDOWN` `shortSpeech` — `content-overflow`~~
+  **Fixed.** Root cause: `'ANDREAS "THE BUTCHER" MENDOZA'` used as a literal
+  dialogue speaker attribution wraps to 3 lines in the compact-landscape
+  dialogue header, leaving almost no room for the line. Shortened to
+  `'MENDOZA'` (+ `characterId: 'cartel_boss'` to keep sprite-highlight
+  resolution correct) everywhere he speaks in S7A/S9.
+- ~~`S1_LIVING_ROOM_INTRO` `shortSpeech` — `bubbleLayoutTolerance`~~
+  **Fixed.** Root cause: an authored `bubbleLayout` on an ordinary
+  Hank/Jonah exchange, unnecessary now that the default zone slot places
+  the bubble correctly — removed rather than patched, which also removes
+  the CSS `min-width` interaction that was causing the drift.
+
+One finding remains open, confirmed still genuine (not a harness artifact)
+by the scene-data audit — no character position, zone, or authored rect
+fixes it, since it's a bug in the engine's own settle-pass ordering:
+
 - **Narrative (`narration`) entries — `dialogue-outside-frame`**, seen on
   `S8B_HANK_DISGUISE_BRIEFING` and `S9_FINAL_WAREHOUSE_SHOWDOWN`
   (small-landscape-740x360) and `S7B_CARTEL_TARGETING`
-  (iphone-se-landscape-667x375). `showDialogue()`'s settle pass (index.js,
-  the double-`requestAnimationFrame` callback) calls
+  (iphone-se-landscape-667x375) — the exact scene/viewport combination that
+  reproduces varies slightly run to run, since it depends on how much a
+  given narration's content needs to grow during pagination. `showDialogue()`'s
+  settle pass (index.js, the double-`requestAnimationFrame` callback) calls
   `_clampDialogueToViewport()` *before* `dialoguePager.reflow()` can grow a
   narrative-mode box up toward its CSS max-height once pagination/content
   measurement finishes; when that growth happens, the box's final rendered
