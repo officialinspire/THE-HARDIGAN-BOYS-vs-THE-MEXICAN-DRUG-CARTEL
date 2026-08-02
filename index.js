@@ -6408,9 +6408,17 @@ const SCENES = {
                         gameState.objectsClicked.add('notebook');
                         inventory.add('conspiracy_notebook');
                         notebook.add('THE NOTEBOOK', 'Hank\'s conspiracy theories and "research". Everything connects, apparently.');
+                        // Tucked inside the same notebook -- a novelty prop from
+                        // Hank's "investigative kit" phase. Payoff comes later:
+                        // both S7A_CARTEL_CONTACT and S7C_VENEZ_BACKROOM_ORTEGA
+                        // already have full itemUses.fake_fbi_badge handlers
+                        // written, but nothing in the script ever granted the
+                        // item -- this is that grant point.
+                        inventory.add('fake_fbi_badge');
+                        notebook.add('FAKE FBI BADGE', 'Tucked inside the notebook — a suspiciously convincing badge Hank ordered off a "definitely not a scam" website for "investigative purposes." Never leaves home without it.');
                         sceneRenderer.showDialogue({
                             speaker: 'HANK',
-                            text: "Ah yes, my research. Every thread connects. Every pattern matters. Mostly.",
+                            text: "Ah yes, my research — and my completely legitimate federal credentials, acquired through completely legitimate means.",
                             position: 'left',
                             next: 'NEXT_DIALOGUE'
                         });
@@ -7390,6 +7398,16 @@ const SCENES = {
             fake_fbi_badge: {
                 action() {
                     addJournalOnce('used_badge_s7a', 'BLUFF ATTEMPTED — FBI Badge at Cartel Meeting', 'You flashed the fake FBI badge at Mendoza. He stared at it for a long moment. Then he laughed — but it was the kind of laugh that means he\'s recalculating.');
+                    // This item is usable at any point during the scene's
+                    // normal dialogue flow (it's an optional action, not
+                    // gated behind a specific line like neighbors_usb), so
+                    // whatever line is currently resting on screen is still
+                    // holding gameState.dialogueLock -- showDialogue() would
+                    // otherwise silently drop this whole chain via its
+                    // "already showing" guard. _closeDialogueThen() cleanly
+                    // interrupts the current line first, same mechanism
+                    // scene-authored item gates already rely on.
+                    sceneRenderer._closeDialogueThen(() => {
                     sceneRenderer.showDialogue({
                         speaker: 'HANK',
                         text: "(holds up the badge) Federal Bureau of Investigation. We're not here to negotiate — we're here to audit.",
@@ -7428,6 +7446,7 @@ const SCENES = {
                                 }
                             });
                         }
+                    });
                     });
                 }
             }
@@ -7563,6 +7582,11 @@ const SCENES = {
                 action() {
                     addJournalOnce('used_badge_s7c', 'CREDIBILITY ESTABLISHED — Badge Used with Ortega', 'You showed Ortega the FBI badge before he could set the terms. He paused, reassessed, and shifted his pitch. The badge bought you a better opening position in this negotiation.');
                     gameState.flags.ALLIED_WITH_ORTEGA = true;
+                    // Same optional-at-any-time item as S7A's badge use --
+                    // see the comment there for why _closeDialogueThen() is
+                    // needed to avoid showDialogue()'s "already showing"
+                    // guard silently dropping this whole chain.
+                    sceneRenderer._closeDialogueThen(() => {
                     sceneRenderer.showDialogue({
                         speaker: 'HANK',
                         text: "(slides the badge across the table) Before you start — you should know who you're dealing with.",
@@ -7590,6 +7614,7 @@ const SCENES = {
                                 }
                             });
                         }
+                    });
                     });
                 }
             }
