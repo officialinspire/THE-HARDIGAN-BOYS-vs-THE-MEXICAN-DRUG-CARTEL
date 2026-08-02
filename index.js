@@ -3965,7 +3965,15 @@ const dialoguePager = {
                 gameState.dialogueLock = false;
                 SFXGenerator.playButtonClick();
                 if (choice.action) choice.action();
-                gameState.actionLock = false;
+                // Release on a short delay, like the item/hotspot click
+                // handlers — releasing synchronously right after a
+                // synchronous choice.action() call provided no real
+                // protection (nothing can run between two lines of
+                // synchronous JS), so a second real click landing in that
+                // same tick was never actually blocked by this lock.
+                setTimeout(() => {
+                    gameState.actionLock = false;
+                }, 300);
             };
 
             const handleInteraction = (e) => {
@@ -4774,18 +4782,11 @@ const sceneRenderer = {
         gameState.sceneTransitioning = true;
 
         try {
-            // Call existing transition start callback
-            if (this.onTransitionStart) {
-                this.onTransitionStart(sceneId);
-            }
-
-            // Perform the actual transition
+            // _executeSceneLoad() fires onTransitionStart/onTransitionComplete
+            // itself (with try/catch protection), scoped to the actual
+            // transition work — do not fire them here too. Doing so
+            // double-invoked every callback once per transition.
             await this._executeSceneLoad(sceneId);
-
-            // Call existing transition complete callback
-            if (this.onTransitionComplete) {
-                this.onTransitionComplete(sceneId);
-            }
 
         } catch (error) {
             // Log detailed error for debugging
@@ -5073,6 +5074,13 @@ const sceneRenderer = {
     },
     
     clearScene() {
+        // Clear every scene-owned timer before tearing down the old scene —
+        // otherwise a reanchor/lock-safety timer from the previous scene can
+        // fire mid-transition (or into the new scene) and touch a dialogue
+        // box/lock state that no longer belongs to it.
+        clearTimeout(this._dialogueReanchorTimer);
+        clearTimeout(this._dialogueLockTimeout);
+
         return new Promise(resolve => {
             const characters = document.querySelectorAll('.character-sprite');
             const charCount = characters.length;
