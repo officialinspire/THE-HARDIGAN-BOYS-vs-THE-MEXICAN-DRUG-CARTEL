@@ -6660,7 +6660,6 @@ const SCENES = {
                         sceneRenderer.showDialogue({
                         speaker: 'CHOICE',
                         text: 'What do you do?',
-                        bubbleLayout: { left: 821, top: 221, width: 898, height: 518 },
                         choices: [
                             {
                                 text: 'Listen to Mom - stay inside and watch',
