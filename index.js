@@ -3941,8 +3941,6 @@ const dialoguePager = {
      * last page's text has fully typed out. Intermediate pages keep the
      * "more..." button already wired by renderCurrentPage(). */
     _finalizePageAction(dialogueBox, sceneRendererRef, isLastPage) {
-        if (!isLastPage) return;
-
         // typeText()'s onFinish fires asynchronously — by the time it does,
         // a newer dialogue entry (or a scene transition, via clearScene())
         // can already have called reset() and nulled this.state. Same guard
@@ -3951,28 +3949,49 @@ const dialoguePager = {
         // have rendered no longer belongs to the active dialogue.
         const s = this.state;
         if (!s) return;
-        const entry = s.entry;
-        const continueBtn = document.getElementById('dialogue-continue');
 
-        if (entry.choices && entry.choices.length > 0) {
-            continueBtn.classList.add('hidden');
-            continueBtn.onclick = null;
-            this._renderChoices(entry, sceneRendererRef);
-            // Measure/clamp AFTER the real choice buttons are in the DOM.
-            this._clampChoicesPanel(dialogueBox);
-        } else if (entry.next) {
-            continueBtn.classList.remove('hidden');
-            continueBtn.textContent = 'continue';
-            continueBtn.setAttribute('aria-label', 'Continue dialogue');
-            // onclick is already _onActionClick from renderCurrentPage, which
-            // now resolves to "last page, no choices" -> advance the entry.
-        } else {
-            continueBtn.classList.add('hidden');
-            setTimeout(() => {
-                gameState.dialogueLock = false;
-                sceneRendererRef._closeDialogueThen(() => sceneRendererRef.nextDialogue());
-            }, 3000);
+        if (isLastPage) {
+            const entry = s.entry;
+            const continueBtn = document.getElementById('dialogue-continue');
+
+            if (entry.choices && entry.choices.length > 0) {
+                continueBtn.classList.add('hidden');
+                continueBtn.onclick = null;
+                this._renderChoices(entry, sceneRendererRef);
+                // Measure/clamp AFTER the real choice buttons are in the DOM.
+                this._clampChoicesPanel(dialogueBox);
+            } else if (entry.next) {
+                continueBtn.classList.remove('hidden');
+                continueBtn.textContent = 'continue';
+                continueBtn.setAttribute('aria-label', 'Continue dialogue');
+                // onclick is already _onActionClick from renderCurrentPage, which
+                // now resolves to "last page, no choices" -> advance the entry.
+            } else {
+                continueBtn.classList.add('hidden');
+                setTimeout(() => {
+                    gameState.dialogueLock = false;
+                    sceneRendererRef._closeDialogueThen(() => sceneRendererRef.nextDialogue());
+                }, 3000);
+            }
         }
+
+        // Re-clamp position now that the box holds its true settled content
+        // for THIS page -- not the near-empty content showDialogue()'s
+        // double-rAF settle pass saw a couple of frames after typing
+        // *started*. A narrative/preserveCentered box has no fixed reserved
+        // height (#dialogue-container.narrative-mode is `height: auto` up
+        // to its CSS max-height), so it keeps growing as the typewriter
+        // reveals more text; nothing previously re-ran this after typing
+        // actually finished, so a `top` computed for the box's tiny early
+        // height stayed fixed while the box later grew underneath it,
+        // pushing its bottom edge past the safe area. This is the real
+        // mechanism behind the "dialogue box renders outside the visible
+        // frame" flakiness on narration entries. Runs on every page (not
+        // just the last) -- a multi-page entry's own "more..." page can be
+        // just as tall as its final page, and a player (or a test that
+        // force-finishes typing and checks layout without clicking through
+        // every page) can be resting on any of them.
+        sceneRendererRef._clampDialogueToViewport(dialogueBox, { preserveCentered: s.layoutMode === 'narrative' });
     },
 
     /** Builds the real, interactive choice buttons (single implementation —
@@ -5446,6 +5465,17 @@ const sceneRenderer = {
 
             gameState.dialogueLock = true;
 
+            // Identifies *this* call's eventual double-rAF settle pass (see
+            // below) so a stale one from a superseded call can recognize
+            // itself and bail instead of clobbering a newer call's layout.
+            // Comparing dialogueEntry objects isn't enough here — a test/debug
+            // caller can legitimately re-show the exact same entry object
+            // (same reference) while an earlier call's settle pass for that
+            // same entry is still pending under CPU load, so identity alone
+            // can't tell the two calls apart. A counter can.
+            this._dialogueRenderToken = (this._dialogueRenderToken || 0) + 1;
+            const renderToken = this._dialogueRenderToken;
+
             // Safety: auto-release lock after 30 seconds to prevent permanent lockout
             clearTimeout(this._dialogueLockTimeout);
             this._dialogueLockTimeout = setTimeout(() => {
@@ -5603,6 +5633,21 @@ const sceneRenderer = {
             // re-clamp the choices panel/re-assert against the settled box.
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
+                    // A newer showDialogue() call can start (and even fully
+                    // settle) while these two frames were pending — e.g. a
+                    // debug/test caller re-showing the same entry object
+                    // before this pass got to run, where object identity
+                    // alone can't tell the two calls apart. Its layoutDialogue()/
+                    // reflow()/clamp math is for a box state that's no longer
+                    // current; bail rather than clobber the newer call's
+                    // already-settled position. See renderToken assignment
+                    // above. (This is a secondary hardening — the primary
+                    // "dialogue box renders outside the visible frame" cause
+                    // is fixed in dialoguePager._finalizePageAction(), which
+                    // re-clamps once the box holds its true final content;
+                    // this rAF pass runs only ~2 frames after typing *starts*,
+                    // measuring a box that's still mostly empty.)
+                    if (renderToken !== this._dialogueRenderToken) return;
                     const settledMode = this.layoutDialogue(dialogueBox, dialogueEntry);
                     // reflow() must run before the viewport clamp: for a
                     // narrative-mode box, it's what finishes growing the box
