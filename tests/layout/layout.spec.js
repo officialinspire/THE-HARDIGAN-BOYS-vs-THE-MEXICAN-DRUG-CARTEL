@@ -51,23 +51,44 @@ const CASE_ORDER = ['narration', 'shortSpeech', 'longSpeech', 'choice'];
 
 // buildSpriteCandidates() (index.js) deliberately tries directional sprite
 // filenames before falling back to a working one — an earlier candidate
-//404ing is expected, documented behavior (see DEMO_VALIDATION_REPORT.md),
+// 404ing is expected, documented behavior (see DEMO_VALIDATION_REPORT.md),
 // not a bug, so it's excluded from the "no console errors" invariant.
 // Anything else — including a *background*, item, UI, or bubble 404 (none
 // of which have a fallback chain) — still fails.
-function isExpectedSpriteFallbackNoise(text) {
-  return /assets\/characters\//.test(text) && /(404|Failed to load resource)/.test(text);
+function isExpectedSpriteFallbackNoise(url) {
+  return /\/assets\/characters\//.test(url);
 }
 
+/**
+ * Browser-generated "Failed to load resource: ..." console messages carry
+ * no URL in msg.text() — Chromium doesn't put it there — so filtering them
+ * by text (an earlier version of this file tried that) can never actually
+ * match isExpectedSpriteFallbackNoise() and silently fails every test that
+ * touches any fallback-chain sprite. page.on('response') gives the real
+ * URL, so resource-load failures are tracked there instead; the console
+ * listener below is left to genuine app-level console.error() calls
+ * (uncaught logic errors), which always have meaningful, non-URL-dependent
+ * text and need no filtering.
+ */
 function attachConsoleCapture(page) {
   const errors = [];
+
+  page.on('pageerror', err => errors.push(`pageerror: ${err.message}`));
+
   page.on('console', msg => {
     if (msg.type() !== 'error') return;
     const text = msg.text();
-    if (isExpectedSpriteFallbackNoise(text)) return;
+    if (/Failed to load resource/i.test(text)) return;
     errors.push(text);
   });
-  page.on('pageerror', err => errors.push(`pageerror: ${err.message}`));
+
+  page.on('response', response => {
+    if (response.ok()) return;
+    const url = response.url();
+    if (isExpectedSpriteFallbackNoise(url)) return;
+    errors.push(`Failed to load resource: ${url} (status ${response.status()})`);
+  });
+
   return errors;
 }
 
