@@ -2211,11 +2211,13 @@ function safeAsync(handler, context) {
 const mobileOptimizer = {
     resizeDebounceMs: 300,
     init() {
-        this.syncViewportHeight();
         this.setupTouchGuards();
         this.setupIOSBouncePrevention();
         this.setupImmersiveMode();
         this.setupOrientationLock();
+        // Viewport-height sync + resize/orientationchange listeners are
+        // registered once, centrally, by setupViewportChangeHandlers() (see
+        // bottom of file) — not here.
     },
 
     isMobile() {
@@ -2243,20 +2245,6 @@ const mobileOptimizer = {
                 event.preventDefault();
             }
         }, { passive: false });
-    },
-
-    syncViewportHeight() {
-        const updateViewportHeight = () => {
-            const viewportHeight = window.visualViewport?.height || window.innerHeight;
-            document.documentElement.style.setProperty('--app-height', `${Math.round(viewportHeight)}px`);
-        };
-
-        updateViewportHeight();
-        window.visualViewport?.addEventListener('resize', updateViewportHeight);
-        window.addEventListener('resize', updateViewportHeight);
-        window.addEventListener('orientationchange', () => {
-            setTimeout(updateViewportHeight, 80);
-        });
     },
 
     setupImmersiveMode() {
@@ -2287,6 +2275,20 @@ const mobileOptimizer = {
         document.addEventListener('touchend', requestFullscreen, onceOptions);
     },
 
+    // Shows/hides the "please rotate" overlay. A real method (not a local
+    // closure) so the single consolidated resize/orientation handler (see
+    // setupViewportChangeHandlers() at the bottom of the file) can call it
+    // too, instead of this registering its own resize/orientationchange
+    // listeners that would just duplicate that work.
+    applyOrientationState() {
+        const orientationQuery = window.matchMedia('(orientation: portrait)');
+        const isPortrait = orientationQuery.matches || window.innerHeight > window.innerWidth;
+        const overlay = document.getElementById('orientation-overlay');
+        if (!overlay) return;
+        overlay.classList.toggle('hidden', !isPortrait || !this.isMobile());
+        overlay.setAttribute('aria-hidden', (!isPortrait || !this.isMobile()).toString());
+    },
+
     async setupOrientationLock() {
         if (!this.isMobile()) return;
         if (screen.orientation && screen.orientation.lock) {
@@ -2297,17 +2299,8 @@ const mobileOptimizer = {
             }
         }
 
-        const applyOrientationState = () => {
-            const orientationQuery = window.matchMedia('(orientation: portrait)');
-            const isPortrait = orientationQuery.matches || window.innerHeight > window.innerWidth;
-            const overlay = document.getElementById('orientation-overlay');
-            if (!overlay) return;
-            overlay.classList.toggle('hidden', !isPortrait || !this.isMobile());
-            overlay.setAttribute('aria-hidden', (!isPortrait || !this.isMobile()).toString());
-        };
-
         const orientationQuery = window.matchMedia('(orientation: portrait)');
-        const queryListener = () => applyOrientationState();
+        const queryListener = () => this.applyOrientationState();
 
         if (typeof orientationQuery.addEventListener === 'function') {
             orientationQuery.addEventListener('change', queryListener);
@@ -2316,17 +2309,20 @@ const mobileOptimizer = {
         }
 
         if (window.screen?.orientation?.addEventListener) {
-            window.screen.orientation.addEventListener('change', applyOrientationState);
+            window.screen.orientation.addEventListener('change', queryListener);
         }
 
-        window.addEventListener('orientationchange', applyOrientationState);
-        window.addEventListener('resize', applyOrientationState);
-        window.addEventListener('pageshow', applyOrientationState);
-        document.addEventListener('visibilitychange', applyOrientationState);
-        applyOrientationState();
+        // resize/orientationchange are NOT registered here — the
+        // consolidated viewport-change handler already calls
+        // applyOrientationState() on every resize/orientationchange it
+        // handles. pageshow/visibilitychange are genuinely distinct events
+        // (bfcache restores, tab switches) it doesn't cover, so those stay.
+        window.addEventListener('pageshow', queryListener);
+        document.addEventListener('visibilitychange', queryListener);
+        this.applyOrientationState();
 
         // Some mobile browsers (notably iOS Safari) can skip orientation events.
-        setTimeout(applyOrientationState, 250);
+        setTimeout(queryListener, 250);
     }
 };
 
@@ -9494,40 +9490,74 @@ function hideTransitionLoader() {
     loader.innerHTML = '';
 }
 
-// Viewport height fix for iOS/browser UI chrome changes
-function setAppHeight() {
+// ===== UNIFIED RESIZE / ORIENTATION HANDLING =====
+// THE single place resize/orientationchange/visualViewport-resize work
+// happens. This used to be three independent systems — mobileOptimizer's
+// old syncViewportHeight() (visualViewport, window resize, +80ms on
+// orientationchange), the standalone setAppHeight()/
+// setupViewportHeightHandlers() (window resize +100ms, orientationchange
+// +100ms, iOS scroll +200ms), and a third resize/orientationchange pair
+// registered below in the DOMContentLoaded handler (+300ms) that did the
+// "real" recalculation (positioningSystem.recalculateAll(), dev tools,
+// dialogue reposition) — each on its own debounce timer, so a single
+// rotation could fire 3+ independent CSS-var writes and up to 2 full layout
+// recalculations. Replaced with one handler and one shared pending timer:
+// a resize immediately followed by an orientationchange (as happens on a
+// real rotation) now schedules exactly one recalculation, not several.
+function hbSyncViewportHeight() {
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
     const vh = window.innerHeight * 0.01;
-    const actualHeight = window.innerHeight;
-
+    document.documentElement.style.setProperty('--app-height', `${Math.round(viewportHeight)}px`);
     document.documentElement.style.setProperty('--vh', `${vh}px`);
-    document.documentElement.style.setProperty('--app-height', `${actualHeight}px`);
-
     const gameRoot = document.getElementById('game-root');
-    if (gameRoot) {
-        gameRoot.style.height = `${actualHeight}px`;
+    if (gameRoot) gameRoot.style.height = `${Math.round(viewportHeight)}px`;
+}
+
+// The 4 steps required of the consolidated handler: sync viewport height,
+// recalculate background/characters/items/hotspots, re-layout the active
+// dialogue through the canonical resolver (layoutDialogue(), via
+// repositionActiveDialogue()), and — debug builds only — validate the
+// result and warn on any violation.
+function hbRecalculateViewportLayout() {
+    try {
+        hbSyncViewportHeight();
+        mobileOptimizer.applyOrientationState();
+        positioningSystem.recalculateAll();
+        Dev.tools.applyForCurrentScene();
+        sceneRenderer.repositionActiveDialogue();
+        if (DEBUG) {
+            const result = hbValidateLayout();
+            if (result?.violations?.length) {
+                console.warn('[viewport-resize] layout violations after recalculation:', result.violations);
+            }
+        }
+    } catch (error) {
+        errorLogger.log('viewport-recalculate', error);
     }
 }
 
-let appHeightResizeTimeout;
-let appHeightScrollTimeout;
+let hbViewportChangeTimer = null;
+function hbScheduleViewportRecalc(delayMs) {
+    clearTimeout(hbViewportChangeTimer);
+    hbViewportChangeTimer = setTimeout(hbRecalculateViewportLayout, delayMs);
+}
 
-function setupViewportHeightHandlers() {
-    setAppHeight();
+function setupViewportChangeHandlers() {
+    hbSyncViewportHeight();
 
-    window.addEventListener('resize', () => {
-        clearTimeout(appHeightResizeTimeout);
-        appHeightResizeTimeout = setTimeout(setAppHeight, 100);
-    });
+    const onResize = () => hbScheduleViewportRecalc(mobileOptimizer.resizeDebounceMs);
+    const onOrientationChange = () => hbScheduleViewportRecalc(300);
 
-    window.addEventListener('orientationchange', () => {
-        setTimeout(setAppHeight, 100);
-    });
+    // visualViewport fires on mobile keyboard show/hide as well as resize —
+    // routed through the same debounced recalc as window 'resize'.
+    window.visualViewport?.addEventListener('resize', onResize);
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onOrientationChange);
 
+    // iOS Safari's chrome (URL bar) can change viewport height on scroll
+    // without firing 'resize'.
     if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
-        window.addEventListener('scroll', () => {
-            clearTimeout(appHeightScrollTimeout);
-            appHeightScrollTimeout = setTimeout(setAppHeight, 200);
-        }, { passive: true });
+        window.addEventListener('scroll', () => hbScheduleViewportRecalc(200), { passive: true });
     }
 }
 
@@ -9535,7 +9565,7 @@ function setupViewportHeightHandlers() {
 document.addEventListener('DOMContentLoaded', safeAsync(async () => {
     console.log('🎮 Initializing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL...');
 
-    setupViewportHeightHandlers();
+    setupViewportChangeHandlers();
 
     // ?noAnimations=1 — apply before any scene/UI renders so nothing animates in.
     if (HB_FLAG_NO_ANIMATIONS) document.body.classList.add('hb-no-animations');
@@ -9596,35 +9626,8 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
         console.log(`[Debug] Click → native: (${imgX}, ${imgY}) | percent: (${pctX}%, ${pctY}%) | screen: (${Math.round(nativePoint.localX)}, ${Math.round(nativePoint.localY)})`);
     });
 
-    // Responsive positioning: recalculate on resize with debounce
-    let resizeTimer;
-    window.addEventListener('resize', () => {
-        clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(() => {
-            try {
-                setAppHeight();
-                positioningSystem.recalculateAll();
-                Dev.tools.applyForCurrentScene();
-                sceneRenderer.repositionActiveDialogue();
-            } catch (error) {
-                errorLogger.log('resize-recalculate', error);
-            }
-        }, mobileOptimizer.resizeDebounceMs);
-    });
-
-    // Also recalculate on orientation change (mobile)
-    window.addEventListener('orientationchange', () => {
-        setTimeout(() => {
-            try {
-                setAppHeight();
-                positioningSystem.recalculateAll();
-                Dev.tools.applyForCurrentScene();
-                sceneRenderer.repositionActiveDialogue();
-            } catch (error) {
-                errorLogger.log('orientation-recalculate', error);
-            }
-        }, 300);
-    });
+    // Resize/orientationchange recalculation is handled entirely by
+    // setupViewportChangeHandlers() above — see its docstring.
 
     // Hide loading screen then play intro video before main menu
     setTimeout(() => {
