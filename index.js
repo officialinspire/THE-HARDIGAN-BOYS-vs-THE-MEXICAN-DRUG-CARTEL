@@ -7538,7 +7538,11 @@ const SCENES = {
         music: 'Consulate Backroom.mp3',
 
         characters: [
-            { id: 'hank_disguise', name: 'HANK', sprite: 'char_hank_in_disguise-right.png', position: 'left' },
+            // Plain Hank, not the "Marco Delgado" disguise (char_hank_in_disguise) --
+            // that cover identity isn't established until S8B_HANK_DISGUISE_BRIEFING,
+            // which happens after this scene on the S7A -> S7C branch. Matches the
+            // sprite S7A/S7B use for this same story beat.
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
             { id: 'ortega', name: 'ORTEGA', sprite: 'char_ortega_ranting-right.png', position: 'right' }
         ],
 
