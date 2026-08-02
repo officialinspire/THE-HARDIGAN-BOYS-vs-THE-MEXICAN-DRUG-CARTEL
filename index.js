@@ -6259,8 +6259,10 @@ const SCENES = {
                 dialogueBox.classList.remove('dialogue-enter', 'dialogue-exit', 'dialogue-left', 'dialogue-right', 'dialogue-center');
             }
 
-            // Start music automatically with fade in
-            audioManager.playMusic('main-menu-theme.mp3', true);
+            // Music already started by the generic scene.music handling in
+            // _executeSceneLoad() (runs before onEnter()) -- this used to
+            // redundantly call playMusic() again here, racing two separate
+            // fade-in timers against the same <audio> element's volume.
 
             const container = document.getElementById('hotspot-layer');
             container.innerHTML = `
@@ -6479,17 +6481,9 @@ const SCENES = {
                         gameState.objectsClicked.add('notebook');
                         inventory.add('conspiracy_notebook');
                         notebook.add('THE NOTEBOOK', 'Hank\'s conspiracy theories and "research". Everything connects, apparently.');
-                        // Tucked inside the same notebook -- a novelty prop from
-                        // Hank's "investigative kit" phase. Payoff comes later:
-                        // both S7A_CARTEL_CONTACT and S7C_VENEZ_BACKROOM_ORTEGA
-                        // already have full itemUses.fake_fbi_badge handlers
-                        // written, but nothing in the script ever granted the
-                        // item -- this is that grant point.
-                        inventory.add('fake_fbi_badge');
-                        notebook.add('FAKE FBI BADGE', 'Tucked inside the notebook — a suspiciously convincing badge Hank ordered off a "definitely not a scam" website for "investigative purposes." Never leaves home without it.');
                         sceneRenderer.showDialogue({
                             speaker: 'HANK',
-                            text: "Ah yes, my research — and my completely legitimate federal credentials, acquired through completely legitimate means.",
+                            text: "Ah yes, my research. Don't touch anything, it's organized by 'how likely to get us killed.'",
                             position: 'left',
                             next: 'NEXT_DIALOGUE'
                         });
@@ -7450,7 +7444,36 @@ const SCENES = {
                                 action() {
                                     gameState.flags.INDEPENDENT_OPERATORS = true;
                                     notebook.add('DECISION', 'Kept the USB. Gray wasn\'t happy. Now we need another angle — the cartel might be the only other option.');
-                                    sceneRenderer.loadScene('S7A_CARTEL_CONTACT');
+                                    // Going independent means going in without CIA
+                                    // backup -- this is the natural moment for
+                                    // Hank to break out the fake badge. S7A_CARTEL_
+                                    // CONTACT and S7C_VENEZ_BACKROOM_ORTEGA already
+                                    // have full itemUses.fake_fbi_badge handlers;
+                                    // this is that grant point.
+                                    inventory.add('fake_fbi_badge');
+                                    notebook.add('FAKE FBI BADGE', 'Before heading anywhere near the cartel, Hank dug out the fake FBI badge he ordered off a "definitely not a scam" website months ago. If they\'re doing this alone, they need some kind of leverage.');
+                                    sceneRenderer.showDialogue({
+                                        speaker: 'HANK',
+                                        text: "If we're doing this ourselves, we're doing this the right way. I've got... credentials.",
+                                        position: 'left',
+                                        next: () => {
+                                            sceneRenderer.showDialogue({
+                                                speaker: 'JONAH',
+                                                text: "Those aren't real. You bought those from a guy named 'TrustMeBro47'.",
+                                                position: 'right',
+                                                next: () => {
+                                                    sceneRenderer.showDialogue({
+                                                        speaker: 'HANK',
+                                                        text: "They're real enough.",
+                                                        position: 'left',
+                                                        next: () => {
+                                                            sceneRenderer.loadScene('S7A_CARTEL_CONTACT');
+                                                        }
+                                                    });
+                                                }
+                                            });
+                                        }
+                                    });
                                 }
                             }
                         ]
@@ -9960,8 +9983,13 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
         // Keyboard skip (any key)
         document.addEventListener('keydown', finishIntro, { once: true });
 
-        // Try to play with sound; fall back to muted for autoplay policy
-        introVideo.muted = false;
+        // Try to play with sound; fall back to muted for autoplay policy.
+        // Respect the player's mute flag/settings first -- this previously
+        // ignored both ?mute=1 and the saved music volume entirely, so a
+        // muted/quiet player still got the intro at full, unmanaged volume.
+        const introMuted = HB_FLAG_MUTE || gameState.settings.musicVolume === 0;
+        introVideo.muted = introMuted;
+        introVideo.volume = gameState.settings.musicVolume / 100;
         introVideo.play().catch(() => {
             introVideo.muted = true;
             introVideo.play().catch(() => {
