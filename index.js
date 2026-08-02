@@ -7860,7 +7860,13 @@ const SCENES = {
 
         characters: [
             { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk.png', position: 'right' },
-            { id: 'elgato', name: 'EL GATO', sprite: 'char_elgato_neutral-right.png', position: 'right-2' }
+            { id: 'elgato', name: 'EL GATO', sprite: 'char_elgato_neutral-right.png', position: 'right-2' },
+            // Not spoken for in the scene's original dialogue array (Lupita/
+            // El Gato carry that), but the TOOK_CARTEL_DEAL cartel_usb beat
+            // below gives Hank and Jonah lines, so they need to be declared
+            // here like every other scene where they speak.
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' }
         ],
 
         hotspots: [],
@@ -7911,12 +7917,45 @@ const SCENES = {
                 text: "Time to see if you boys are serious. The warehouse. Tonight.",
                 position: 'right',
                 next: () => {
-                    sceneRenderer.loadScene('S8B_HANK_DISGUISE_BRIEFING');
+                    // "The cartel's own data turned against them" (see
+                    // getItemDescription('cartel_usb')) -- only makes sense
+                    // for a player who's actually embedded with the cartel
+                    // at this point (TOOK_CARTEL_DEAL, set by S7A's "Take
+                    // the cartel deal" / "Pretend to cooperate" choices).
+                    // itemUses.cartel_usb's own handler is at S9_FINAL_
+                    // WAREHOUSE_SHOWDOWN.
+                    if (gameState.flags.TOOK_CARTEL_DEAL && !inventory.has('cartel_usb')) {
+                        sceneRenderer.showDialogue({
+                            speaker: 'NARRATION',
+                            text: "While Lupita and El Gato argue about seating arrangements for a criminal summit, Hank notices a USB drive sitting on El Gato's open laptop bag. He doesn't think. He just... acquires it.",
+                            next: () => {
+                                inventory.add('cartel_usb');
+                                notebook.add('CARTEL USB', 'Lifted off El Gato\'s bag while nobody was looking. No idea what\'s on it. Feels like a terrible idea. Keeping it anyway.');
+                                sceneRenderer.showDialogue({
+                                    speaker: 'JONAH',
+                                    text: "We already have one stolen government-adjacent USB. Now you want a matching set?",
+                                    position: 'right',
+                                    next: () => {
+                                        sceneRenderer.showDialogue({
+                                            speaker: 'HANK',
+                                            text: "It's called diversification, Jonah.",
+                                            position: 'left',
+                                            next: () => {
+                                                sceneRenderer.loadScene('S8B_HANK_DISGUISE_BRIEFING');
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                    } else {
+                        sceneRenderer.loadScene('S8B_HANK_DISGUISE_BRIEFING');
+                    }
                 }
             }
         ]
     },
-    
+
     // ===== S8B: HANK IN DISGUISE — CIA BRIEFING =====
     S8B_HANK_DISGUISE_BRIEFING: {
         id: 'S8B_HANK_DISGUISE_BRIEFING',

@@ -16,11 +16,11 @@ These do not block the stable demo release — see `DEMO_READINESS.md` for the r
 - **Detail:** each scene references a primary sprite filename (e.g. `char_hank_thinking.png`) that isn't present, but a directional fallback candidate (`char_hank_thinking-left.png`) is present and renders correctly.
 - **Why non-blocking:** the character always renders correctly via the fallback. Purely a naming-convention cleanup opportunity, not a rendering defect.
 
-## 3. Two items are defined but never granted by the current script
+## 3. One item is defined but never granted by the current script
 
-- **Items:** `moms_nurse_badge`, `cartel_usb`. (`fake_fbi_badge` was previously in this list — it's now granted via `S1_LIVING_ROOM_INTRO`'s notebook hotspot, and both its `itemUses` handlers, in `S7A_CARTEL_CONTACT` and `S7C_VENEZ_BACKROOM_ORTEGA`, are verified reachable and working.)
-- **Detail:** `cartel_usb` has a fully-wired `itemUses` handler at `S9_FINAL_WAREHOUSE_SHOWDOWN`; `moms_nurse_badge` has no handler anywhere, fully vestigial. Both have `getItemDescription()` entries, but no `inventory.add()` call anywhere in the script ever grants either to the player.
-- **Why non-blocking:** confirmed via full branch-graph mapping that all 4 endings (`E_HAPPY`, `E_SAD`, `E_CHAOTIC`, `E_IRONIC_MEDIA`) remain reachable through the fully-tested `neighbors_usb`/`mysterious_passport` item flow. `S6` and `S9` both have explicit no-USB fallback paths (verified working) rather than soft-locking. This is a content-completeness gap, not a broken feature.
+- **Item:** `moms_nurse_badge`. (`fake_fbi_badge` and `cartel_usb` were previously in this list — both are now granted and verified reachable and working: `fake_fbi_badge` via `S1_LIVING_ROOM_INTRO`'s notebook hotspot, used at `S7A_CARTEL_CONTACT`/`S7C_VENEZ_BACKROOM_ORTEGA`; `cartel_usb` via a new `TOOK_CARTEL_DEAL`-gated beat at `S8_PRE_FINAL`, used at `S9_FINAL_WAREHOUSE_SHOWDOWN`.)
+- **Detail:** `moms_nurse_badge` has a `getItemDescription()` entry but no `itemUses` handler anywhere and no grant point — fully vestigial.
+- **Why non-blocking:** confirmed via full branch-graph mapping that all 4 endings (`E_HAPPY`, `E_SAD`, `E_CHAOTIC`, `E_IRONIC_MEDIA`) remain reachable through the fully-tested `neighbors_usb`/`mysterious_passport`/`cartel_usb`/`fake_fbi_badge` item flows. `S6` and `S9` both have explicit no-USB fallback paths (verified working) rather than soft-locking. This is a content-completeness gap, not a broken feature.
 
 ## 4. Two optional branches were not independently exercised this pass
 
