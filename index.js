@@ -2781,6 +2781,32 @@ function addJournalOnce(key, title, content) {
     saveSystem.save();
 }
 
+// Shows a list of dialogue entries one after another, then calls onDone.
+// Used by the ending scenes' flag-conditional epilogues (see
+// buildFlagEpilogueLines()) so a variable-length, flag-dependent list of
+// lines doesn't need to be hand-nested as next() callbacks.
+function chainDialogueLines(lines, onDone) {
+    if (!lines || lines.length === 0) {
+        if (typeof onDone === 'function') onDone();
+        return;
+    }
+    const [entry, ...rest] = lines;
+    sceneRenderer.showDialogue({
+        ...entry,
+        next: () => chainDialogueLines(rest, onDone)
+    });
+}
+
+// Builds a short epilogue for an ending scene: one line per variant whose
+// flag is currently true, in the order given. Lets each ending acknowledge
+// the player's earlier choices (CIA/cartel/Ortega alignment, badge bluffs)
+// without restructuring the ending itself -- see chainDialogueLines().
+function buildFlagEpilogueLines(variants) {
+    return variants
+        .filter(v => gameState.flags[v.flag])
+        .map(v => ({ speaker: v.speaker, text: v.text, position: v.position }));
+}
+
 // ===== INVENTORY SYSTEM =====
 const inventory = {
     add(itemId) {
@@ -3915,8 +3941,6 @@ const dialoguePager = {
      * last page's text has fully typed out. Intermediate pages keep the
      * "more..." button already wired by renderCurrentPage(). */
     _finalizePageAction(dialogueBox, sceneRendererRef, isLastPage) {
-        if (!isLastPage) return;
-
         // typeText()'s onFinish fires asynchronously — by the time it does,
         // a newer dialogue entry (or a scene transition, via clearScene())
         // can already have called reset() and nulled this.state. Same guard
@@ -3925,28 +3949,49 @@ const dialoguePager = {
         // have rendered no longer belongs to the active dialogue.
         const s = this.state;
         if (!s) return;
-        const entry = s.entry;
-        const continueBtn = document.getElementById('dialogue-continue');
 
-        if (entry.choices && entry.choices.length > 0) {
-            continueBtn.classList.add('hidden');
-            continueBtn.onclick = null;
-            this._renderChoices(entry, sceneRendererRef);
-            // Measure/clamp AFTER the real choice buttons are in the DOM.
-            this._clampChoicesPanel(dialogueBox);
-        } else if (entry.next) {
-            continueBtn.classList.remove('hidden');
-            continueBtn.textContent = 'continue';
-            continueBtn.setAttribute('aria-label', 'Continue dialogue');
-            // onclick is already _onActionClick from renderCurrentPage, which
-            // now resolves to "last page, no choices" -> advance the entry.
-        } else {
-            continueBtn.classList.add('hidden');
-            setTimeout(() => {
-                gameState.dialogueLock = false;
-                sceneRendererRef._closeDialogueThen(() => sceneRendererRef.nextDialogue());
-            }, 3000);
+        if (isLastPage) {
+            const entry = s.entry;
+            const continueBtn = document.getElementById('dialogue-continue');
+
+            if (entry.choices && entry.choices.length > 0) {
+                continueBtn.classList.add('hidden');
+                continueBtn.onclick = null;
+                this._renderChoices(entry, sceneRendererRef);
+                // Measure/clamp AFTER the real choice buttons are in the DOM.
+                this._clampChoicesPanel(dialogueBox);
+            } else if (entry.next) {
+                continueBtn.classList.remove('hidden');
+                continueBtn.textContent = 'continue';
+                continueBtn.setAttribute('aria-label', 'Continue dialogue');
+                // onclick is already _onActionClick from renderCurrentPage, which
+                // now resolves to "last page, no choices" -> advance the entry.
+            } else {
+                continueBtn.classList.add('hidden');
+                setTimeout(() => {
+                    gameState.dialogueLock = false;
+                    sceneRendererRef._closeDialogueThen(() => sceneRendererRef.nextDialogue());
+                }, 3000);
+            }
         }
+
+        // Re-clamp position now that the box holds its true settled content
+        // for THIS page -- not the near-empty content showDialogue()'s
+        // double-rAF settle pass saw a couple of frames after typing
+        // *started*. A narrative/preserveCentered box has no fixed reserved
+        // height (#dialogue-container.narrative-mode is `height: auto` up
+        // to its CSS max-height), so it keeps growing as the typewriter
+        // reveals more text; nothing previously re-ran this after typing
+        // actually finished, so a `top` computed for the box's tiny early
+        // height stayed fixed while the box later grew underneath it,
+        // pushing its bottom edge past the safe area. This is the real
+        // mechanism behind the "dialogue box renders outside the visible
+        // frame" flakiness on narration entries. Runs on every page (not
+        // just the last) -- a multi-page entry's own "more..." page can be
+        // just as tall as its final page, and a player (or a test that
+        // force-finishes typing and checks layout without clicking through
+        // every page) can be resting on any of them.
+        sceneRendererRef._clampDialogueToViewport(dialogueBox, { preserveCentered: s.layoutMode === 'narrative' });
     },
 
     /** Builds the real, interactive choice buttons (single implementation —
@@ -5420,6 +5465,17 @@ const sceneRenderer = {
 
             gameState.dialogueLock = true;
 
+            // Identifies *this* call's eventual double-rAF settle pass (see
+            // below) so a stale one from a superseded call can recognize
+            // itself and bail instead of clobbering a newer call's layout.
+            // Comparing dialogueEntry objects isn't enough here — a test/debug
+            // caller can legitimately re-show the exact same entry object
+            // (same reference) while an earlier call's settle pass for that
+            // same entry is still pending under CPU load, so identity alone
+            // can't tell the two calls apart. A counter can.
+            this._dialogueRenderToken = (this._dialogueRenderToken || 0) + 1;
+            const renderToken = this._dialogueRenderToken;
+
             // Safety: auto-release lock after 30 seconds to prevent permanent lockout
             clearTimeout(this._dialogueLockTimeout);
             this._dialogueLockTimeout = setTimeout(() => {
@@ -5577,9 +5633,29 @@ const sceneRenderer = {
             // re-clamp the choices panel/re-assert against the settled box.
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
+                    // A newer showDialogue() call can start (and even fully
+                    // settle) while these two frames were pending — e.g. a
+                    // debug/test caller re-showing the same entry object
+                    // before this pass got to run, where object identity
+                    // alone can't tell the two calls apart. Its layoutDialogue()/
+                    // reflow()/clamp math is for a box state that's no longer
+                    // current; bail rather than clobber the newer call's
+                    // already-settled position. See renderToken assignment
+                    // above. (This is a secondary hardening — the primary
+                    // "dialogue box renders outside the visible frame" cause
+                    // is fixed in dialoguePager._finalizePageAction(), which
+                    // re-clamps once the box holds its true final content;
+                    // this rAF pass runs only ~2 frames after typing *starts*,
+                    // measuring a box that's still mostly empty.)
+                    if (renderToken !== this._dialogueRenderToken) return;
                     const settledMode = this.layoutDialogue(dialogueBox, dialogueEntry);
-                    this._clampDialogueToViewport(dialogueBox, { preserveCentered: settledMode === 'narrative' });
+                    // reflow() must run before the viewport clamp: for a
+                    // narrative-mode box, it's what finishes growing the box
+                    // toward its CSS max-height (via _clampChoicesPanel) —
+                    // clamping first was measuring the box's pre-growth
+                    // rect, letting it render outside the visible frame.
                     dialoguePager.reflow(dialogueBox);
+                    this._clampDialogueToViewport(dialogueBox, { preserveCentered: settledMode === 'narrative' });
                     dialogueBox.classList.remove('dialogue-positioning');
                     this._animateDialogueEntry();
                 });
@@ -6276,8 +6352,8 @@ const SCENES = {
         },
 
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
-            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_excited.png', position: 'right' }
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking-left.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_excited-right.png', position: 'right' }
         ],
 
         items: [],
@@ -6403,9 +6479,17 @@ const SCENES = {
                         gameState.objectsClicked.add('notebook');
                         inventory.add('conspiracy_notebook');
                         notebook.add('THE NOTEBOOK', 'Hank\'s conspiracy theories and "research". Everything connects, apparently.');
+                        // Tucked inside the same notebook -- a novelty prop from
+                        // Hank's "investigative kit" phase. Payoff comes later:
+                        // both S7A_CARTEL_CONTACT and S7C_VENEZ_BACKROOM_ORTEGA
+                        // already have full itemUses.fake_fbi_badge handlers
+                        // written, but nothing in the script ever granted the
+                        // item -- this is that grant point.
+                        inventory.add('fake_fbi_badge');
+                        notebook.add('FAKE FBI BADGE', 'Tucked inside the notebook — a suspiciously convincing badge Hank ordered off a "definitely not a scam" website for "investigative purposes." Never leaves home without it.');
                         sceneRenderer.showDialogue({
                             speaker: 'HANK',
-                            text: "Ah yes, my research. Every thread connects. Every pattern matters. Mostly.",
+                            text: "Ah yes, my research — and my completely legitimate federal credentials, acquired through completely legitimate means.",
                             position: 'left',
                             next: 'NEXT_DIALOGUE'
                         });
@@ -6714,7 +6798,7 @@ const SCENES = {
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused-left.png', position: 'left-2' },
-            { id: 'mom', name: 'MOM', sprite: 'char_mom_worried.png', position: 'right' }
+            { id: 'mom', name: 'MOM', sprite: 'char_mom_worried-right.png', position: 'right' }
         ],
 
         hotspots: [],
@@ -6734,7 +6818,19 @@ const SCENES = {
                 speaker: 'HANK',
                 text: "(uneasy) They made Carlos look like a Bond villain for being late on rent.",
                 position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'MOM',
+                text: "Here. Take my hospital badge. Not because I want you involved — I don't — but if you're going to go poking around anyway, at least look like you belong somewhere.",
+                position: 'right',
                 next: () => {
+                    // "Restricted areas or establish trust in official-looking
+                    // situations" (see getItemDescription('moms_nurse_badge')) —
+                    // used at S4C_ICE_PROCESSING_ROOM, only reachable from this
+                    // branch (S3A -> S4A2 -> "follow the ICE van").
+                    inventory.add('moms_nurse_badge');
+                    notebook.add("MOM'S NURSE BADGE", 'Mom\'s real hospital ID. "Look official, stay quiet, don\'t get arrested." Surprisingly solid advice, coming from her.');
                     sceneRenderer.showDialogue({
                         speaker: 'CHOICE',
                         text: 'What do you do?',
@@ -6760,7 +6856,7 @@ const SCENES = {
             }
         ]
     },
-    
+
     // ===== S3B: HELP NEIGHBORS PATH =====
     S3B_RIVERA_BACKYARD: {
         id: 'S3B_RIVERA_BACKYARD',
@@ -6769,9 +6865,9 @@ const SCENES = {
         music: 'The Raid Escape.mp3',
 
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' },
-            { id: 'sofia', name: 'SOFIA', sprite: 'char_sofia_upset.png', position: 'right' }
+            { id: 'sofia', name: 'SOFIA', sprite: 'char_sofia_upset-right.png', position: 'right' }
         ],
 
         hotspots: [],
@@ -6971,7 +7067,7 @@ const SCENES = {
         music: 'Empty Hallways (Ambient Mix).mp3',
 
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' },
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'left-2' },
             { id: 'student_1', name: 'RANDOM STUDENT', sprite: 'char_random-student-01.png', position: 'right-2' },
             { id: 'student_2', name: 'ANOTHER STUDENT', sprite: 'char_random-student-02-right.png', position: 'right' }
@@ -7220,6 +7316,43 @@ const SCENES = {
                         next: 'NEXT_DIALOGUE'
                     });
                 }
+            },
+            moms_nurse_badge: {
+                action() {
+                    addJournalOnce('used_nurse_badge_s4c', 'BLUFF ATTEMPTED — Nurse Badge at the Facility', 'You flashed Mom\'s hospital badge at Agent Smith, playing it off as a medical-liaison check-in on detainee welfare. He didn\'t buy it exactly, but he didn\'t throw you out either.');
+                    // Usable at any point during the scene's normal flow, not
+                    // gated behind a specific line -- see the identical note
+                    // on fake_fbi_badge's handlers for why _closeDialogueThen()
+                    // is needed here (showDialogue()'s "already showing" guard
+                    // would otherwise silently drop this whole chain).
+                    sceneRenderer._closeDialogueThen(() => {
+                        sceneRenderer.showDialogue({
+                            speaker: 'HANK',
+                            text: "(holds up a badge) Medical liaison. Just checking on detainee welfare. Federal regulation, you understand.",
+                            position: 'left',
+                            next: () => {
+                                sceneRenderer.showDialogue({
+                                    speaker: 'AGENT SMITH',
+                                    text: "(squints at it) That's a nursing badge. From a hospital forty minutes from here.",
+                                    next: () => {
+                                        sceneRenderer.showDialogue({
+                                            speaker: 'HANK',
+                                            text: "...Interagency cooperation?",
+                                            position: 'left',
+                                            next: () => {
+                                                sceneRenderer.showDialogue({
+                                                    speaker: 'AGENT SMITH',
+                                                    text: "(long pause) You've got ten more minutes. Don't touch anything.",
+                                                    next: 'NEXT_DIALOGUE'
+                                                });
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                    });
+                }
             }
         },
 
@@ -7368,7 +7501,7 @@ const SCENES = {
         music: 'Safehouse Ambience.mp3',
 
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked.png', position: 'left' },
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' },
             { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk.png', position: 'right-2' },
             { id: 'cartel_boss', name: 'ANDREAS "THE BUTCHER" MENDOZA', sprite: 'char_cartel_boss_menacing-right.png', position: 'right' }
@@ -7385,6 +7518,16 @@ const SCENES = {
             fake_fbi_badge: {
                 action() {
                     addJournalOnce('used_badge_s7a', 'BLUFF ATTEMPTED — FBI Badge at Cartel Meeting', 'You flashed the fake FBI badge at Mendoza. He stared at it for a long moment. Then he laughed — but it was the kind of laugh that means he\'s recalculating.');
+                    // This item is usable at any point during the scene's
+                    // normal dialogue flow (it's an optional action, not
+                    // gated behind a specific line like neighbors_usb), so
+                    // whatever line is currently resting on screen is still
+                    // holding gameState.dialogueLock -- showDialogue() would
+                    // otherwise silently drop this whole chain via its
+                    // "already showing" guard. _closeDialogueThen() cleanly
+                    // interrupts the current line first, same mechanism
+                    // scene-authored item gates already rely on.
+                    sceneRenderer._closeDialogueThen(() => {
                     sceneRenderer.showDialogue({
                         speaker: 'HANK',
                         text: "(holds up the badge) Federal Bureau of Investigation. We're not here to negotiate — we're here to audit.",
@@ -7423,6 +7566,7 @@ const SCENES = {
                                 }
                             });
                         }
+                    });
                     });
                 }
             }
@@ -7538,7 +7682,11 @@ const SCENES = {
         music: 'Consulate Backroom.mp3',
 
         characters: [
-            { id: 'hank_disguise', name: 'HANK', sprite: 'char_hank_in_disguise-right.png', position: 'left' },
+            // Plain Hank, not the "Marco Delgado" disguise (char_hank_in_disguise) --
+            // that cover identity isn't established until S8B_HANK_DISGUISE_BRIEFING,
+            // which happens after this scene on the S7A -> S7C branch. Matches the
+            // sprite S7A/S7B use for this same story beat.
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
             { id: 'ortega', name: 'ORTEGA', sprite: 'char_ortega_ranting-right.png', position: 'right' }
         ],
 
@@ -7554,6 +7702,11 @@ const SCENES = {
                 action() {
                     addJournalOnce('used_badge_s7c', 'CREDIBILITY ESTABLISHED — Badge Used with Ortega', 'You showed Ortega the FBI badge before he could set the terms. He paused, reassessed, and shifted his pitch. The badge bought you a better opening position in this negotiation.');
                     gameState.flags.ALLIED_WITH_ORTEGA = true;
+                    // Same optional-at-any-time item as S7A's badge use --
+                    // see the comment there for why _closeDialogueThen() is
+                    // needed to avoid showDialogue()'s "already showing"
+                    // guard silently dropping this whole chain.
+                    sceneRenderer._closeDialogueThen(() => {
                     sceneRenderer.showDialogue({
                         speaker: 'HANK',
                         text: "(slides the badge across the table) Before you start — you should know who you're dealing with.",
@@ -7581,6 +7734,7 @@ const SCENES = {
                                 }
                             });
                         }
+                    });
                     });
                 }
             }
@@ -7826,7 +7980,13 @@ const SCENES = {
 
         characters: [
             { id: 'lupita', name: 'LUPITA', sprite: 'char_lupita_smirk.png', position: 'right' },
-            { id: 'elgato', name: 'EL GATO', sprite: 'char_elgato_neutral-right.png', position: 'right-2' }
+            { id: 'elgato', name: 'EL GATO', sprite: 'char_elgato_neutral-right.png', position: 'right-2' },
+            // Not spoken for in the scene's original dialogue array (Lupita/
+            // El Gato carry that), but the TOOK_CARTEL_DEAL cartel_usb beat
+            // below gives Hank and Jonah lines, so they need to be declared
+            // here like every other scene where they speak.
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
+            { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' }
         ],
 
         hotspots: [],
@@ -7877,12 +8037,45 @@ const SCENES = {
                 text: "Time to see if you boys are serious. The warehouse. Tonight.",
                 position: 'right',
                 next: () => {
-                    sceneRenderer.loadScene('S8B_HANK_DISGUISE_BRIEFING');
+                    // "The cartel's own data turned against them" (see
+                    // getItemDescription('cartel_usb')) -- only makes sense
+                    // for a player who's actually embedded with the cartel
+                    // at this point (TOOK_CARTEL_DEAL, set by S7A's "Take
+                    // the cartel deal" / "Pretend to cooperate" choices).
+                    // itemUses.cartel_usb's own handler is at S9_FINAL_
+                    // WAREHOUSE_SHOWDOWN.
+                    if (gameState.flags.TOOK_CARTEL_DEAL && !inventory.has('cartel_usb')) {
+                        sceneRenderer.showDialogue({
+                            speaker: 'NARRATION',
+                            text: "While Lupita and El Gato argue about seating arrangements for a criminal summit, Hank notices a USB drive sitting on El Gato's open laptop bag. He doesn't think. He just... acquires it.",
+                            next: () => {
+                                inventory.add('cartel_usb');
+                                notebook.add('CARTEL USB', 'Lifted off El Gato\'s bag while nobody was looking. No idea what\'s on it. Feels like a terrible idea. Keeping it anyway.');
+                                sceneRenderer.showDialogue({
+                                    speaker: 'JONAH',
+                                    text: "We already have one stolen government-adjacent USB. Now you want a matching set?",
+                                    position: 'right',
+                                    next: () => {
+                                        sceneRenderer.showDialogue({
+                                            speaker: 'HANK',
+                                            text: "It's called diversification, Jonah.",
+                                            position: 'left',
+                                            next: () => {
+                                                sceneRenderer.loadScene('S8B_HANK_DISGUISE_BRIEFING');
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                    } else {
+                        sceneRenderer.loadScene('S8B_HANK_DISGUISE_BRIEFING');
+                    }
                 }
             }
         ]
     },
-    
+
     // ===== S8B: HANK IN DISGUISE — CIA BRIEFING =====
     S8B_HANK_DISGUISE_BRIEFING: {
         id: 'S8B_HANK_DISGUISE_BRIEFING',
@@ -8039,53 +8232,110 @@ const SCENES = {
                         text: "(holds up the USB drive) Right here. The thing everyone came for. And I'm the one holding it.",
                         position: 'left',
                         next: () => {
-                            sceneRenderer.showDialogue({
-                                // Shortened speaker label — see the S7A note
-                                // on the first MENDOZA line for why.
-                                speaker: 'MENDOZA',
-                                characterId: 'cartel_boss',
-                                text: "Smart boy. Now — choose.",
-                                position: 'right-2',
-                                next: () => {
-                                    sceneRenderer.showDialogue({
-                                        speaker: 'FINAL CHOICE',
-                                        text: 'What do you do with the USB?',
-                                        choices: [
-                                            {
-                                                text: 'Destroy the USB publicly',
-                                                action() {
-                                                    if (gameState.flags.HELPED_NEIGHBORS) {
-                                                        gameState.flags.SAVED_NEIGHBORS = true;
-                                                        sceneRenderer.loadScene('E_HAPPY');
-                                                    } else {
-                                                        sceneRenderer.loadScene('E_SAD');
-                                                    }
-                                                }
-                                            },
-                                            {
-                                                text: 'Upload everything to the internet',
-                                                action() {
-                                                    sceneRenderer.loadScene('E_IRONIC_MEDIA');
-                                                }
-                                            },
-                                            {
-                                                text: 'Fake-destroy it but keep a copy',
-                                                action() {
-                                                    gameState.flags.DOUBLE_CROSSED_SOMEONE = true;
-                                                    sceneRenderer.loadScene('E_CHAOTIC');
-                                                }
-                                            },
-                                            {
-                                                text: 'Give it to the cartel',
-                                                action() {
-                                                    gameState.flags.TOOK_CARTEL_DEAL = true;
-                                                    sceneRenderer.loadScene('E_CHAOTIC');
+                            // Payoff for S7A's "Pretend to cooperate (plan secret
+                            // betrayal)" choice: SECRETLY_AGAINST_CARTEL was set
+                            // back at the airstrip and has been sitting unused
+                            // ever since (see notebook entry 'DOUBLE CROSS').
+                            // Give it a real branch here -- Hank springs the
+                            // trap he's been planning since S7A, which unlocks
+                            // a bonus final-choice option below and guarantees
+                            // the good ending regardless of HELPED_NEIGHBORS,
+                            // since out-maneuvering the cartel is a distinct
+                            // win condition from saving the Riveras.
+                            const showFinalChoice = () => {
+                                sceneRenderer.showDialogue({
+                                    speaker: 'FINAL CHOICE',
+                                    text: 'What do you do with the USB?',
+                                    choices: [
+                                        {
+                                            text: 'Destroy the USB publicly',
+                                            action() {
+                                                if (gameState.flags.HELPED_NEIGHBORS) {
+                                                    gameState.flags.SAVED_NEIGHBORS = true;
+                                                    sceneRenderer.loadScene('E_HAPPY');
+                                                } else {
+                                                    sceneRenderer.loadScene('E_SAD');
                                                 }
                                             }
-                                        ]
-                                    });
-                                }
-                            });
+                                        },
+                                        {
+                                            text: 'Upload everything to the internet',
+                                            action() {
+                                                sceneRenderer.loadScene('E_IRONIC_MEDIA');
+                                            }
+                                        },
+                                        {
+                                            text: 'Fake-destroy it but keep a copy',
+                                            action() {
+                                                gameState.flags.DOUBLE_CROSSED_SOMEONE = true;
+                                                sceneRenderer.loadScene('E_CHAOTIC');
+                                            }
+                                        },
+                                        {
+                                            text: 'Give it to the cartel',
+                                            action() {
+                                                gameState.flags.TOOK_CARTEL_DEAL = true;
+                                                sceneRenderer.loadScene('E_CHAOTIC');
+                                            }
+                                        },
+                                        ...(gameState.flags.SECRETLY_AGAINST_CARTEL ? [{
+                                            text: "Spring the trap you've been planning since the airstrip",
+                                            action() {
+                                                gameState.flags.DOUBLE_CROSSED_SOMEONE = true;
+                                                sceneRenderer.showDialogue({
+                                                    speaker: 'HANK',
+                                                    text: "Turns out \"pretend to cooperate\" works a lot better when you planned the double-cross three days in advance.",
+                                                    position: 'left',
+                                                    next: () => {
+                                                        sceneRenderer.loadScene('E_HAPPY');
+                                                    }
+                                                });
+                                            }
+                                        }] : [])
+                                    ]
+                                });
+                            };
+
+                            if (gameState.flags.SECRETLY_AGAINST_CARTEL) {
+                                sceneRenderer.showDialogue({
+                                    speaker: 'HANK',
+                                    text: "Funny thing about \"pretending to cooperate,\" Mendoza — I've been calling this play since the airstrip.",
+                                    position: 'left',
+                                    next: () => {
+                                        sceneRenderer.showDialogue({
+                                            speaker: 'MENDOZA',
+                                            characterId: 'cartel_boss',
+                                            text: "(the smile drops) Explain. Now.",
+                                            position: 'right-2',
+                                            next: () => {
+                                                sceneRenderer.showDialogue({
+                                                    speaker: 'MS. GRAY',
+                                                    text: "He's been feeding me your shipment routes for three days, Mendoza. My team's already inside the perimeter.",
+                                                    position: 'left',
+                                                    next: () => {
+                                                        sceneRenderer.showDialogue({
+                                                            speaker: 'EL GATO',
+                                                            text: "...I told you kids were a bad idea.",
+                                                            position: 'right',
+                                                            next: showFinalChoice
+                                                        });
+                                                    }
+                                                });
+                                            }
+                                        });
+                                    }
+                                });
+                            } else {
+                                sceneRenderer.showDialogue({
+                                    // Shortened speaker label — see the S7A note
+                                    // on the first MENDOZA line for why.
+                                    speaker: 'MENDOZA',
+                                    characterId: 'cartel_boss',
+                                    text: "Smart boy. Now — choose.",
+                                    position: 'right-2',
+                                    next: showFinalChoice
+                                });
+                            }
                         }
                     });
                 }
@@ -8238,20 +8488,29 @@ const SCENES = {
                 speaker: 'JONAH',
                 text: "Does this mean we're heroes? Or just... less terrible?",
                 position: 'right',
-                next: 'NEXT_DIALOGUE'
-            },
-            {
-                speaker: 'NARRATION',
-                text: "ENDING: THE HAPPY ENDING (Well, Happy-ish)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
                 next: () => {
-                    setTimeout(() => {
-                        sceneRenderer.loadScene('S0_MAIN_MENU');
-                    }, 5000);
+                    const epilogue = buildFlagEpilogueLines([
+                        { flag: 'TOOK_CARTEL_DEAL', speaker: 'NARRATION', text: "Mendoza never came looking. Word is he decided two suburban kids weren't worth the paperwork." },
+                        { flag: 'WORKING_WITH_CIA', speaker: 'NARRATION', text: "Ms. Gray sent one message after the dust settled: \"Good instincts. Terrible operational security.\" Hank still has it screenshotted." },
+                        { flag: 'ALLIED_WITH_ORTEGA', speaker: 'NARRATION', text: "Ortega sent a single text: a thumbs up emoji. Nobody has heard from him since." },
+                        { flag: 'DOUBLE_CROSSED_SOMEONE', speaker: 'HANK', position: 'left', text: "We may have lied to a cartel boss's face. That's staying between us." }
+                    ]);
+                    chainDialogueLines(epilogue, () => {
+                        sceneRenderer.showDialogue({
+                            speaker: 'NARRATION',
+                            text: "ENDING: THE HAPPY ENDING (Well, Happy-ish)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
+                            next: () => {
+                                setTimeout(() => {
+                                    sceneRenderer.loadScene('S0_MAIN_MENU');
+                                }, 5000);
+                            }
+                        });
+                    });
                 }
             }
         ]
     },
-    
+
     E_SAD: {
         id: 'E_SAD',
         title: 'People Become Statistics',
@@ -8259,7 +8518,7 @@ const SCENES = {
         music: 'Muted Aftermath.mp3',
         
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral.png', position: 'left' }
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_neutral-left.png', position: 'left' }
         ],
         hotspots: [],
         
@@ -8273,20 +8532,29 @@ const SCENES = {
                 speaker: 'HANK',
                 text: "We tried to do the right thing. Or... did we?",
                 position: 'left',
-                next: 'NEXT_DIALOGUE'
-            },
-            {
-                speaker: 'NARRATION',
-                text: "ENDING: THE SAD ENDING (Some People Become Statistics)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
                 next: () => {
-                    setTimeout(() => {
-                        sceneRenderer.loadScene('S0_MAIN_MENU');
-                    }, 5000);
+                    const epilogue = buildFlagEpilogueLines([
+                        { flag: 'TOOK_CARTEL_DEAL', speaker: 'NARRATION', text: "Mendoza got his shipment route. Nobody asked what happened to the family that used to live next door." },
+                        { flag: 'WORKING_WITH_CIA', speaker: 'NARRATION', text: "Ms. Gray's number stopped working a week later. The agency has a way of doing that." },
+                        { flag: 'ALLIED_WITH_ORTEGA', speaker: 'NARRATION', text: "Ortega's version of events made the news in three countries. Yours didn't make it anywhere." },
+                        { flag: 'DOUBLE_CROSSED_SOMEONE', speaker: 'HANK', position: 'left', text: "We lied to get here. It didn't end up mattering." }
+                    ]);
+                    chainDialogueLines(epilogue, () => {
+                        sceneRenderer.showDialogue({
+                            speaker: 'NARRATION',
+                            text: "ENDING: THE SAD ENDING (Some People Become Statistics)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
+                            next: () => {
+                                setTimeout(() => {
+                                    sceneRenderer.loadScene('S0_MAIN_MENU');
+                                }, 5000);
+                            }
+                        });
+                    });
                 }
             }
         ]
     },
-    
+
     E_CHAOTIC: {
         id: 'E_CHAOTIC',
         title: 'Multilateral Dumbassery',
@@ -8357,6 +8625,28 @@ const SCENES = {
                 text: "So we won? By losing completely?",
                 position: 'left',
                 next: () => {
+                    const finishChaoticEnding = () => {
+                        setTimeout(() => {
+                            const epilogue = buildFlagEpilogueLines([
+                                { flag: 'TOOK_CARTEL_DEAL', speaker: 'LUPITA', position: 'right', text: "Mendoza's still furious you double-booked him with literally everyone else." },
+                                { flag: 'WORKING_WITH_CIA', speaker: 'LUPITA', position: 'right', text: "Your CIA friend just filed the weirdest incident report of her career." },
+                                { flag: 'ALLIED_WITH_ORTEGA', speaker: 'LUPITA', position: 'right', text: "Ortega's already pitching this as a joint operation. He's very flexible with the truth." },
+                                { flag: 'DOUBLE_CROSSED_SOMEONE', speaker: 'LUPITA', position: 'right', text: "And you lied to at least one of us to get here. Respect." }
+                            ]);
+                            chainDialogueLines(epilogue, () => {
+                                sceneRenderer.showDialogue({
+                                    speaker: 'NARRATION',
+                                    text: "ENDING: MULTILATERAL DUMBASSERY\n(Everybody's Mad, Nobody Wins — But The Riveras Are Okay)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
+                                    next: () => {
+                                        setTimeout(() => {
+                                            sceneRenderer.loadScene('S0_MAIN_MENU');
+                                        }, 5000);
+                                    }
+                                });
+                            });
+                        }, 2500);
+                    };
+
                     sceneRenderer.showDialogue({
                         speaker: 'CHOICE',
                         text: 'How do you feel about this outcome?',
@@ -8370,18 +8660,7 @@ const SCENES = {
                                         position: 'left',
                                         next: 'NEXT_DIALOGUE'
                                     });
-                                    // Continue to ending narration after a beat
-                                    setTimeout(() => {
-                                        sceneRenderer.showDialogue({
-                                            speaker: 'NARRATION',
-                                            text: "ENDING: MULTILATERAL DUMBASSERY\n(Everybody's Mad, Nobody Wins — But The Riveras Are Okay)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
-                                            next: () => {
-                                                setTimeout(() => {
-                                                    sceneRenderer.loadScene('S0_MAIN_MENU');
-                                                }, 5000);
-                                            }
-                                        });
-                                    }, 2500);
+                                    finishChaoticEnding();
                                 }
                             },
                             {
@@ -8393,17 +8672,7 @@ const SCENES = {
                                         position: 'right',
                                         next: 'NEXT_DIALOGUE'
                                     });
-                                    setTimeout(() => {
-                                        sceneRenderer.showDialogue({
-                                            speaker: 'NARRATION',
-                                            text: "ENDING: MULTILATERAL DUMBASSERY\n(Everybody's Mad, Nobody Wins — But The Riveras Are Okay)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
-                                            next: () => {
-                                                setTimeout(() => {
-                                                    sceneRenderer.loadScene('S0_MAIN_MENU');
-                                                }, 5000);
-                                            }
-                                        });
-                                    }, 2500);
+                                    finishChaoticEnding();
                                 }
                             }
                         ]
@@ -8420,7 +8689,7 @@ const SCENES = {
         music: 'Hardigan Noir Tension.mp3',
         
         characters: [
-            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking.png', position: 'left' },
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_confused.png', position: 'right' }
         ],
         hotspots: [],
@@ -8441,15 +8710,24 @@ const SCENES = {
                 speaker: 'JONAH',
                 text: "At least we got, like, a really good engagement rate?",
                 position: 'right',
-                next: 'NEXT_DIALOGUE'
-            },
-            {
-                speaker: 'NARRATION',
-                text: "ENDING: THE IRONIC MEDIA ENDING (Truth Becomes Just Another Story)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
                 next: () => {
-                    setTimeout(() => {
-                        sceneRenderer.loadScene('S0_MAIN_MENU');
-                    }, 5000);
+                    const epilogue = buildFlagEpilogueLines([
+                        { flag: 'TOOK_CARTEL_DEAL', speaker: 'NARRATION', text: "One cable news chyron called it 'CARTEL TEEN AFFILIATE GOES ROGUE.' Mendoza's lawyers sent a strongly worded statement." },
+                        { flag: 'WORKING_WITH_CIA', speaker: 'NARRATION', text: "A think tank cited 'unnamed intelligence sources' who were definitely Ms. Gray, pretending not to be furious." },
+                        { flag: 'ALLIED_WITH_ORTEGA', speaker: 'NARRATION', text: "Ortega gave an interview calling himself a 'whistleblower.' Nobody fact-checked it." },
+                        { flag: 'DOUBLE_CROSSED_SOMEONE', speaker: 'JONAH', position: 'right', text: "At some point in all this we straight-up lied to a cartel boss. That part didn't even make the article." }
+                    ]);
+                    chainDialogueLines(epilogue, () => {
+                        sceneRenderer.showDialogue({
+                            speaker: 'NARRATION',
+                            text: "ENDING: THE IRONIC MEDIA ENDING (Truth Becomes Just Another Story)\n\nThanks for playing THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL",
+                            next: () => {
+                                setTimeout(() => {
+                                    sceneRenderer.loadScene('S0_MAIN_MENU');
+                                }, 5000);
+                            }
+                        });
+                    });
                 }
             }
         ]

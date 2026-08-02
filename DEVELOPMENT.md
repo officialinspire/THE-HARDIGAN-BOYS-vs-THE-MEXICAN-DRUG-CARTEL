@@ -245,27 +245,32 @@ the full per-scene writeup):
   the bubble correctly — removed rather than patched, which also removes
   the CSS `min-width` interaction that was causing the drift.
 
-One finding remains open, confirmed still genuine (not a harness artifact)
-by the scene-data audit — no character position, zone, or authored rect
-fixes it, since it's a bug in the engine's own settle-pass ordering:
+One finding remains open. The `_clampDialogueToViewport()`-before-`reflow()`
+ordering described in earlier revisions of this doc was real and has been
+corrected (`reflow()` now runs first in `showDialogue()`'s settle pass), but
+**that reorder does not fix this** — investigated and disproven:
+`dialoguePager.reflow()`'s only size-affecting step (`_clampChoicesPanel()`)
+only runs when `#dialogue-choices` has children, so for `narration` entries
+(no choices, ever) `reflow()` is a no-op regardless of call order. Two
+layout-suite runs before the reorder and two after show the same failure
+magnitude (1-5 of 203 cases) and the same rotating set of affected scenes —
+not a reduction. See `KNOWN_ISSUES.md` #1 for the full investigation,
+including what the failing rects actually show (a position problem, not a
+still-growing box — the flagged height matches `--dlg-narrative-max-h`
+exactly) and the concrete next step (compare live
+`positioningSystem.getBackgroundRect()` vs `getDialogueSafeRect()` output at
+a reproduced failure, and/or replace the double-`requestAnimationFrame`
+settle heuristic with a more deterministic signal):
 
-- **Narrative (`narration`) entries — `dialogue-outside-frame`**, seen on
-  `S8B_HANK_DISGUISE_BRIEFING` and `S9_FINAL_WAREHOUSE_SHOWDOWN`
-  (small-landscape-740x360) and `S7B_CARTEL_TARGETING`
-  (iphone-se-landscape-667x375) — the exact scene/viewport combination that
-  reproduces varies slightly run to run, since it depends on how much a
-  given narration's content needs to grow during pagination. `showDialogue()`'s
-  settle pass (index.js, the double-`requestAnimationFrame` callback) calls
-  `_clampDialogueToViewport()` *before* `dialoguePager.reflow()` can grow a
-  narrative-mode box up toward its CSS max-height once pagination/content
-  measurement finishes; when that growth happens, the box's final rendered
-  height overflows past the already-computed centered position, pushing its
-  bottom edge below the visible frame. Which exact scene/viewport
-  combinations trip this depends on how much a given narration's content
-  needs to grow during reflow, so the precise set has varied slightly
-  between runs (e.g. `S7B` on small-landscape-740x360 individually
-  reproduces the same failure) — the underlying clamp-before-reflow
-  ordering bug is the same one every time.
+- **Narrative (`narration`) entries — `dialogue-outside-frame`**, at one of
+  the 3 narrowest tested viewports (`tablet-1024x768`,
+  `small-landscape-740x360`, `iphone-se-landscape-667x375`). Which scene
+  fails is nondeterministic between otherwise-identical runs — observed on
+  `S1_LIVING_ROOM_INTRO`, `S5_SOFIA_INTEL`, `S7B_CARTEL_TARGETING`,
+  `S8B_HANK_DISGUISE_BRIEFING`, and `S9_FINAL_WAREHOUSE_SHOWDOWN` across
+  repeated runs of the same code — consistent with a genuine frame-timing
+  race under CPU load (as `tests/layout/helpers.js`'s `isDialogueSettled()`
+  comment already anticipated) rather than a fixed ordering bug.
 
 ## Character layout schema
 

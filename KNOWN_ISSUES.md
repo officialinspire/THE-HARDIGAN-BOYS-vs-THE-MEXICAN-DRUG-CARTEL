@@ -2,27 +2,13 @@
 
 These do not block the stable demo release — see `DEMO_READINESS.md` for the release recommendation. Listed here so they aren't rediscovered as "new" bugs later.
 
-## 1. Narration dialogue box can render outside the visible frame at 3 narrow-viewport/scene combinations
+There are currently no known open issues. See "Resolved since this file was created" below.
 
-- **Where:** `S1_LIVING_ROOM_INTRO` narration at `tablet-1024x768`; `S7B_CARTEL_TARGETING` narration at `small-landscape-740x360` and `iphone-se-landscape-667x375`.
-- **Root cause (already identified, pre-dates this pass):** `showDialogue()`'s settle callback calls `_clampDialogueToViewport()` before `dialoguePager.reflow()` finishes growing a narrative-mode box toward its CSS max-height. This is an engine-level timing/ordering issue, not a scene-data problem — no character position, zone, or authored rect fixes it, and it reproduces on any narration whose paginated content needs that late growth. Documented in `DEVELOPMENT.md`'s "Known layout findings" and `DEMO_LAYOUT_AUDIT.md`.
-- **Why non-blocking:** Affects 3 of 203 automated layout-suite cases, only at the narrowest tested viewports, only on `narration`-type entries in 2 of 22 scenes. Not reproduced in any manual real-click walkthrough at desktop or iPhone SE landscape.
-- **Suggested fix (future work, out of scope for this gate):** reorder `showDialogue()`'s settle callback so `_clampDialogueToViewport()` runs after `dialoguePager.reflow()` completes, not before.
+## Resolved since this file was created
 
-## 2. Sprite-fallback naming mismatches (9 validator warnings)
+- **Narration dialogue box rendering outside the visible frame (flaky, ~1-5 of 203 layout-suite cases) — root-caused and fixed.** The real cause was never the call-ordering issue originally suspected (see git history for that dead end): `dialoguePager._finalizePageAction()` — which runs once a page's text has fully finished typing — never re-clamped the dialogue box's position. The box's `top` is fixed by `showDialogue()`'s settle pass ~2 animation frames after typing *starts*, while `#dialogue-container.narrative-mode` has no reserved height (`height: auto` up to its CSS max-height) — so on a long enough narration, the box keeps growing under that already-fixed `top` for the ~2+ seconds typing takes, and nothing ever re-clamped it once typing (and, critically, pagination — a page can be the box's tallest state even when it isn't the *last* page) actually settled. Reproduced reliably via CDP CPU throttling and confirmed against the real multi-worker layout suite. Fixed by moving the `_clampDialogueToViewport()` call in `_finalizePageAction()` to run on every page's typing completion (not just the last page), plus a secondary hardening (a monotonic render-token guard) so a stale, superseded `showDialogue()` call's settle pass can no longer clobber a newer call's already-correct position. Verified: 3 consecutive full multi-worker layout-suite runs at 0 failures (down from the established 1-5/run baseline), 25+ clean CPU-throttled reproduction attempts (vs. reproducing within the first few attempts before the fix), and a manual playthrough spot-check of the exact previously-flaky scene.
 
-- **Where:** `S1_LIVING_ROOM_INTRO` (hank, jonah), `S3A_FRONT_YARD_FROM_DISTANCE` (mom), `S3B_RIVERA_BACKYARD` (hank, sofia), `S4B_SCHOOL_AFTERSHOCK` (hank), `S7A_CARTEL_CONTACT` (hank), `E_SAD` (hank), `E_IRONIC_MEDIA` (hank).
-- **Detail:** each scene references a primary sprite filename (e.g. `char_hank_thinking.png`) that isn't present, but a directional fallback candidate (`char_hank_thinking-left.png`) is present and renders correctly.
-- **Why non-blocking:** the character always renders correctly via the fallback. Purely a naming-convention cleanup opportunity, not a rendering defect.
-
-## 3. Three items are defined but never granted by the current script
-
-- **Items:** `fake_fbi_badge`, `moms_nurse_badge`, `cartel_usb`.
-- **Detail:** all three have fully-wired `itemUses` handlers in one or more scenes (e.g. `fake_fbi_badge` in `S7A_CARTEL_CONTACT` and `S7C_VENEZ_BACKROOM_ORTEGA`) and `getItemDescription()` entries, but no `inventory.add()` call anywhere in the script ever grants them to the player. Their handlers are therefore permanently unreachable with the current story content.
-- **Why non-blocking:** confirmed via full branch-graph mapping that all 4 endings (`E_HAPPY`, `E_SAD`, `E_CHAOTIC`, `E_IRONIC_MEDIA`) remain reachable through the fully-tested `neighbors_usb`/`mysterious_passport` item flow. `S6` and `S9` both have explicit no-USB fallback paths (verified working) rather than soft-locking. This is a content-completeness gap, not a broken feature — per this release gate's explicit "no new story content or features" constraint, granting these items was out of scope to fix here.
-
-## 4. Two optional branches were not independently exercised this pass
-
-- **Branches:** the `S7C_VENEZ_BACKROOM_ORTEGA` ("Meet Ortega") detour from `S7A`'s choice screen, and the `S4C_ICE_PROCESSING_ROOM` ("follow the ICE van") detour from `S4A2`.
-- **Why non-blocking:** both are optional side-detours that route back into the same S8/S9 spine already covered by the tested routes (confirmed via scene-graph mapping), not separate endings. Neither is required to reach any of the 4 endings, all of which were confirmed reachable without them.
-- **Follow-up:** worth a manual pass in a future testing cycle, but outside this gate's scope of "at least one route through every major branch."
+- **All three previously-unreachable items now have grant points and verified-working `itemUses` handlers:** `fake_fbi_badge` — granted via `S1_LIVING_ROOM_INTRO`'s notebook hotspot, used at `S7A_CARTEL_CONTACT`/`S7C_VENEZ_BACKROOM_ORTEGA`. `cartel_usb` — granted via a `TOOK_CARTEL_DEAL`-gated beat at `S8_PRE_FINAL`, used at `S9_FINAL_WAREHOUSE_SHOWDOWN`. `moms_nurse_badge` — granted by Mom in `S3A_FRONT_YARD_FROM_DISTANCE` (the "stay inside" branch), used at `S4C_ICE_PROCESSING_ROOM`.
+- **Both previously-untested optional detours** (`S7C_VENEZ_BACKROOM_ORTEGA` and `S4C_ICE_PROCESSING_ROOM`) have since been exercised via these item-verification playthroughs and confirmed working, remaining completable to `S8_PRE_FINAL`/`S6` respectively with no soft locks.
+- **`SECRETLY_AGAINST_CARTEL` (S7A's "Pretend to cooperate" choice) now has a real payoff:** a distinct reveal beat and bonus final-choice option at `S9_FINAL_WAREHOUSE_SHOWDOWN` that routes to `E_HAPPY` regardless of `HELPED_NEIGHBORS`.
+- **Sprite-fallback naming mismatches (formerly 9 validator warnings) fixed:** `S1_LIVING_ROOM_INTRO`, `S3A_FRONT_YARD_FROM_DISTANCE`, `S3B_RIVERA_BACKYARD`, `S4B_SCHOOL_AFTERSHOCK`, `S7A_CARTEL_CONTACT`, `E_SAD`, and `E_IRONIC_MEDIA` now reference their sprites' actual on-disk `-left`/`-right` filenames directly instead of relying on the runtime fallback probe. Validator warnings: 9 → 0.
