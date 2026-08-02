@@ -5,13 +5,7 @@
     "textLength": 47,
     "hasBubbleLayout": false
   },
-  "allViolations": [
-    {
-      "type": "missing-speaker-sprite",
-      "severity": "error",
-      "message": "No character sprite found in scene for speaker \"HANK\""
-    }
-  ],
+  "allViolations": [],
   "failingViolations": [],
   "newConsoleErrors": [],
   "bubbleTolerance": null,

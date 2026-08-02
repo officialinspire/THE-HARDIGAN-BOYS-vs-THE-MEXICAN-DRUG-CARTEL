@@ -3,19 +3,11 @@
     "index": 2,
     "speaker": "JONAH",
     "textLength": 50,
-    "hasBubbleLayout": true
+    "hasBubbleLayout": false
   },
   "allViolations": [],
   "failingViolations": [],
   "newConsoleErrors": [],
-  "bubbleTolerance": {
-    "expectedLeft": 388.8515625,
-    "expectedTop": 112.30555555555556,
-    "actualLeft": 388.852,
-    "actualTop": 112.306,
-    "deltaLeft": 0.00043749999997544364,
-    "deltaTop": 0.00044444444444025066,
-    "expectedWithinSafe": true
-  },
+  "bubbleTolerance": null,
   "saveWriteCheck": null
 }

@@ -1,40 +1,12 @@
 {
   "entry": {
     "index": 2,
-    "speaker": "ANDREAS \"THE BUTCHER\" MENDOZA",
+    "speaker": "MENDOZA",
     "textLength": 62,
     "hasBubbleLayout": false
   },
-  "allViolations": [
-    {
-      "type": "content-overflow",
-      "severity": "warning",
-      "message": "Dialogue content overflows its container",
-      "overflow": {
-        "scrollWidth": 240,
-        "scrollHeight": 159,
-        "clientWidth": 240,
-        "clientHeight": 152,
-        "overflowX": 0,
-        "overflowY": 7
-      }
-    }
-  ],
-  "failingViolations": [
-    {
-      "type": "content-overflow",
-      "severity": "warning",
-      "message": "Dialogue content overflows its container",
-      "overflow": {
-        "scrollWidth": 240,
-        "scrollHeight": 159,
-        "clientWidth": 240,
-        "clientHeight": 152,
-        "overflowX": 0,
-        "overflowY": 7
-      }
-    }
-  ],
+  "allViolations": [],
+  "failingViolations": [],
   "newConsoleErrors": [],
   "bubbleTolerance": null,
   "saveWriteCheck": null
