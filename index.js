@@ -5027,7 +5027,13 @@ const sceneRenderer = {
                 try { this.onTransitionComplete(sceneId); } catch (e) { errorLogger.log('onTransitionComplete', e, { sceneId }); }
             }
 
-            saveSystem.save();
+            // Loading the main menu itself is never a resume point, and
+            // autosaving here would immediately clobber a real in-progress
+            // save with blank defaults every time the game boots or the
+            // player quits to the menu -- breaking CONTINUE entirely.
+            if (sceneId !== 'S0_MAIN_MENU') {
+                saveSystem.save();
+            }
             Dev.tools.applyForCurrentScene();
         } catch (error) {
             errorLogger.log('scene-transition', error, { sceneId });
