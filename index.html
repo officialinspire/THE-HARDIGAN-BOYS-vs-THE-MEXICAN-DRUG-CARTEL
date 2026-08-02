@@ -102,8 +102,12 @@
             <div class="notebook-ui">
                 <img id="notebook-bg" src="./assets/ui/notebook-menu-open.png" alt="Notebook">
                 <div id="notebook-text-overlay">
-                    <div id="notebook-entries"></div>
+                    <div id="notebook-page-left" class="notebook-page"></div>
+                    <div id="notebook-page-right" class="notebook-page"></div>
                 </div>
+                <button id="notebook-prev" class="notebook-nav-btn notebook-nav-prev" aria-label="Previous page">&#8249;</button>
+                <button id="notebook-next" class="notebook-nav-btn notebook-nav-next" aria-label="Next page">&#8250;</button>
+                <div id="notebook-page-indicator" class="notebook-page-indicator"></div>
                 <button id="notebook-close" class="notebook-close-btn">×</button>
             </div>
         </div>

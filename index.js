@@ -3003,92 +3003,254 @@ function getItemDescription(itemId) {
 }
 
 // ===== NOTEBOOK SYSTEM =====
+// Category prefix -> CSS tag class mapping, shared by notebook entry rendering.
+const NOTEBOOK_TAG_CLASSES = {
+    'STATUS':                  'journal-tag-status',
+    'FINAL SCENE':             'journal-tag-status',
+    'ACTION REQUIRED':         'journal-tag-action',
+    'ACTION AVAILABLE':        'journal-tag-action',
+    'OPTIONAL ACTION':         'journal-tag-action',
+    'CLUE':                    'journal-tag-clue',
+    'KEY CONTACT':             'journal-tag-clue',
+    'NEXT STEP':               'journal-tag-clue',
+    'CHOICE AHEAD':            'journal-tag-clue',
+    'UPCOMING':                'journal-tag-clue',
+    'INCOMING ITEM':           'journal-tag-clue',
+    'INTEL GATHERED':          'journal-tag-result',
+    'CONFIRMED':               'journal-tag-result',
+    'CREDIBILITY ESTABLISHED': 'journal-tag-result',
+    'COVER CONFIRMED':         'journal-tag-result',
+    'UNDERCOVER READY':        'journal-tag-result',
+    'READY':                   'journal-tag-result',
+    'IMPROVED OFFER':          'journal-tag-result',
+    'CIA INFORMED':            'journal-tag-result',
+    'BACKUP CALLED':           'journal-tag-result',
+    'WILDCARD':                'journal-tag-story',
+    'MOMENT OF TRUTH':         'journal-tag-story',
+    'DECISION POINT':          'journal-tag-story',
+    'BLUFF ATTEMPTED':         'journal-tag-story',
+    'BLUFF RESULT':            'journal-tag-story',
+};
+
+// Real two-page "book spread" for the notebook. Entries used to be dumped
+// into one flat scrolling container spanning the whole book image, so long
+// runs of text drew straight across the spine with no page boundary at all.
+// This paginates entries (whole entries -- they're short, hand-authored
+// clues, never split mid-entry) into height-fitting pages using the same
+// offscreen-measurement-clone technique dialoguePager uses for dialogue
+// text, then shows two consecutive pages side by side (one on narrow
+// phones, where the right column is hidden by CSS).
 const notebook = {
+    _pages: [],       // array of pages; each page is an array of entry-HTML strings
+    _pageIndex: 0,     // index of the left-most/only currently visible page
+    _measureClone: null,
+
     add(title, content) {
         gameState.notebook.push({ title, content, timestamp: Date.now() });
         saveSystem.save();
     },
-    
+
+    _buildEntryHTML(entry, index) {
+        const entryNumber = String(index + 1).padStart(2, '0');
+
+        // Parse "CATEGORY — Subject" from title
+        const dashIdx = entry.title.indexOf(' — ');
+        let category = null;
+        let subject = entry.title;
+        if (dashIdx !== -1) {
+            const prefix = entry.title.slice(0, dashIdx);
+            if (NOTEBOOK_TAG_CLASSES[prefix] !== undefined || prefix === 'NOTE') {
+                category = prefix;
+                subject = entry.title.slice(dashIdx + 3);
+            }
+        }
+
+        const tagClass = category ? (NOTEBOOK_TAG_CLASSES[category] || 'journal-tag-note') : '';
+        const tagHTML = category
+            ? `<span class="journal-tag ${tagClass}">${category}</span>`
+            : '';
+
+        const date = new Date(entry.timestamp);
+        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+        return `
+            <div class="notebook-entry">
+                <div class="journal-entry-header">
+                    ${tagHTML}
+                    <span class="journal-entry-num">#${entryNumber}</span>
+                    <span class="journal-entry-date">${dateStr} · ${timeStr}</span>
+                </div>
+                <div class="notebook-entry-title">${subject}</div>
+                <div class="notebook-entry-body">${entry.content}</div>
+            </div>
+        `;
+    },
+
+    // ===== offscreen measurement clone (mirrors dialoguePager's technique) =====
+    _getMeasureClone() {
+        if (this._measureClone && document.body.contains(this._measureClone)) {
+            return this._measureClone;
+        }
+        const root = document.createElement('div');
+        root.setAttribute('aria-hidden', 'true');
+        root.style.position = 'absolute';
+        root.style.left = '-9999px';
+        root.style.top = '0';
+        root.style.visibility = 'hidden';
+        root.style.pointerEvents = 'none';
+        document.body.appendChild(root);
+        this._measureClone = root;
+        return root;
+    },
+
+    /** Copies the resolved sizing styles from the live left page onto the clone so measured heights match what will actually render. */
+    _syncMeasureClone(clone, livePage) {
+        const cs = getComputedStyle(livePage);
+        ['width', 'boxSizing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+         'fontFamily', 'fontSize', 'lineHeight', 'rowGap', 'columnGap', 'gap'].forEach(p => {
+            clone.style[p] = cs[p];
+        });
+        clone.style.display = 'flex';
+        clone.style.flexDirection = 'column';
+        clone.style.height = 'auto';
+    },
+
+    // ===== pagination =====
+    /** Packs gameState.notebook entries (whole, never split) into height-fitting pages against the live left page's real budget. */
+    _paginate() {
+        const livePage = document.getElementById('notebook-page-left');
+        if (!livePage) { this._pages = []; return; }
+
+        const clone = this._getMeasureClone();
+        this._syncMeasureClone(clone, livePage);
+        const budgetPx = livePage.clientHeight;
+
+        const entryHTMLs = gameState.notebook.map((entry, i) => this._buildEntryHTML(entry, i));
+
+        const fits = (htmlList) => {
+            clone.innerHTML = htmlList.join('');
+            return clone.scrollHeight <= budgetPx + 0.5;
+        };
+
+        const pages = [];
+        let current = [];
+        for (const html of entryHTMLs) {
+            const trial = [...current, html];
+            if (fits(trial)) {
+                current = trial;
+                continue;
+            }
+            if (current.length) pages.push(current);
+            // A single entry taller than an empty page can't be split
+            // further (notebook entries are short, hand-authored text) --
+            // place it alone; .notebook-page's overflow-y:auto is the
+            // safety net if it still doesn't fit.
+            current = [html];
+        }
+        if (current.length) pages.push(current);
+
+        this._pages = pages;
+    },
+
+    _isTwoPageView() {
+        const rightPage = document.getElementById('notebook-page-right');
+        return !!rightPage && getComputedStyle(rightPage).display !== 'none';
+    },
+
+    _stepSize() {
+        return this._isTwoPageView() ? 2 : 1;
+    },
+
+    /** Largest page-aligned index (a multiple of the current step) that is still a valid starting index. */
+    _lastAlignedStart() {
+        const step = this._stepSize();
+        const lastPageIdx = Math.max(0, this._pages.length - 1);
+        return Math.floor(lastPageIdx / step) * step;
+    },
+
+    _render() {
+        const leftPage = document.getElementById('notebook-page-left');
+        const rightPage = document.getElementById('notebook-page-right');
+        const prevBtn = document.getElementById('notebook-prev');
+        const nextBtn = document.getElementById('notebook-next');
+        const indicator = document.getElementById('notebook-page-indicator');
+        if (!leftPage || !rightPage) return;
+
+        if (gameState.notebook.length === 0) {
+            leftPage.innerHTML = '<p style="color: #666; font-style: italic; text-align: center; margin-top: 20px;">No entries yet...</p>';
+            rightPage.innerHTML = '';
+            if (prevBtn) prevBtn.classList.add('hidden');
+            if (nextBtn) nextBtn.classList.add('hidden');
+            if (indicator) indicator.textContent = '';
+            return;
+        }
+
+        const step = this._stepSize();
+        const twoPage = step === 2;
+        leftPage.innerHTML = (this._pages[this._pageIndex] || []).join('');
+        rightPage.innerHTML = twoPage ? (this._pages[this._pageIndex + 1] || []).join('') : '';
+
+        const totalPages = this._pages.length;
+        const canNavigate = totalPages > step;
+        if (prevBtn) {
+            prevBtn.classList.toggle('hidden', !canNavigate);
+            prevBtn.disabled = this._pageIndex <= 0;
+        }
+        if (nextBtn) {
+            nextBtn.classList.toggle('hidden', !canNavigate);
+            nextBtn.disabled = this._pageIndex + step >= totalPages;
+        }
+        if (indicator) {
+            indicator.textContent = canNavigate
+                ? (twoPage
+                    ? `Pages ${this._pageIndex + 1}–${Math.min(this._pageIndex + 2, totalPages)} of ${totalPages}`
+                    : `Page ${this._pageIndex + 1} of ${totalPages}`)
+                : '';
+        }
+    },
+
+    prevPage() {
+        const step = this._stepSize();
+        this._pageIndex = Math.max(0, this._pageIndex - step);
+        this._render();
+    },
+
+    nextPage() {
+        const step = this._stepSize();
+        this._pageIndex = Math.min(this._lastAlignedStart(), this._pageIndex + step);
+        this._render();
+    },
+
+    /** Re-measures pagination in place (e.g. after a viewport resize) while the notebook is open, keeping the current position clamped to the new page count. */
+    repaginateIfOpen() {
+        const overlay = document.getElementById('notebook-overlay');
+        if (!overlay || overlay.classList.contains('hidden')) return;
+        if (gameState.notebook.length === 0) return;
+        this._paginate();
+        this._pageIndex = Math.min(this._pageIndex, this._lastAlignedStart());
+        this._render();
+    },
+
     show() {
         SFXGenerator.playMenuOpen();
         const overlay = document.getElementById('notebook-overlay');
-        const entriesDiv = document.getElementById('notebook-entries');
-
-        entriesDiv.innerHTML = '';
+        // Unhide BEFORE measuring/paginating -- #notebook-page-left has
+        // zero clientHeight while the overlay is display:none, which would
+        // otherwise make every entry "too tall" for an empty page and force
+        // one entry per page regardless of actual content length.
+        overlay.classList.remove('hidden');
 
         if (gameState.notebook.length === 0) {
-            entriesDiv.innerHTML = '<p style="color: #666; font-style: italic; text-align: center; margin-top: 20px;">No entries yet...</p>';
+            this._pages = [];
+            this._pageIndex = 0;
         } else {
-            // Category prefix → CSS tag class mapping
-            const TAG_CLASSES = {
-                'STATUS':                  'journal-tag-status',
-                'FINAL SCENE':             'journal-tag-status',
-                'ACTION REQUIRED':         'journal-tag-action',
-                'ACTION AVAILABLE':        'journal-tag-action',
-                'OPTIONAL ACTION':         'journal-tag-action',
-                'CLUE':                    'journal-tag-clue',
-                'KEY CONTACT':             'journal-tag-clue',
-                'NEXT STEP':               'journal-tag-clue',
-                'CHOICE AHEAD':            'journal-tag-clue',
-                'UPCOMING':                'journal-tag-clue',
-                'INCOMING ITEM':           'journal-tag-clue',
-                'INTEL GATHERED':          'journal-tag-result',
-                'CONFIRMED':               'journal-tag-result',
-                'CREDIBILITY ESTABLISHED': 'journal-tag-result',
-                'COVER CONFIRMED':         'journal-tag-result',
-                'UNDERCOVER READY':        'journal-tag-result',
-                'READY':                   'journal-tag-result',
-                'IMPROVED OFFER':          'journal-tag-result',
-                'CIA INFORMED':            'journal-tag-result',
-                'BACKUP CALLED':           'journal-tag-result',
-                'WILDCARD':                'journal-tag-story',
-                'MOMENT OF TRUTH':         'journal-tag-story',
-                'DECISION POINT':          'journal-tag-story',
-                'BLUFF ATTEMPTED':         'journal-tag-story',
-                'BLUFF RESULT':            'journal-tag-story',
-            };
-
-            gameState.notebook.forEach((entry, index) => {
-                const entryDiv = document.createElement('div');
-                entryDiv.className = 'notebook-entry';
-                const entryNumber = String(index + 1).padStart(2, '0');
-
-                // Parse "CATEGORY — Subject" from title
-                const dashIdx = entry.title.indexOf(' \u2014 ');
-                let category = null;
-                let subject = entry.title;
-                if (dashIdx !== -1) {
-                    const prefix = entry.title.slice(0, dashIdx);
-                    if (TAG_CLASSES[prefix] !== undefined || prefix === 'NOTE') {
-                        category = prefix;
-                        subject = entry.title.slice(dashIdx + 3);
-                    }
-                }
-
-                const tagClass = category ? (TAG_CLASSES[category] || 'journal-tag-note') : '';
-                const tagHTML = category
-                    ? `<span class="journal-tag ${tagClass}">${category}</span>`
-                    : '';
-
-                // Format timestamp as readable date + time
-                const date = new Date(entry.timestamp);
-                const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-
-                entryDiv.innerHTML = `
-                    <div class="journal-entry-header">
-                        ${tagHTML}
-                        <span class="journal-entry-num">#${entryNumber}</span>
-                        <span class="journal-entry-date">${dateStr} \u00b7 ${timeStr}</span>
-                    </div>
-                    <div class="notebook-entry-title">${subject}</div>
-                    <div class="notebook-entry-body">${entry.content}</div>
-                `;
-                entriesDiv.appendChild(entryDiv);
-            });
+            this._paginate();
+            // Open on the most recent entries (last spread) rather than
+            // scrolled to the oldest entry at the top, as before.
+            this._pageIndex = this._lastAlignedStart();
         }
-
-        overlay.classList.remove('hidden');
+        this._render();
     }
 };
 
@@ -6517,10 +6679,17 @@ const SCENES = {
             },
             {
                 speaker: 'MOM',
-                // Matches her actual spawn slot below (onShow adds her at
-                // 'right-2', not 'right') so the default zone-slot bubble
-                // anchors next to where she actually renders.
+                characterId: 'mom',
                 position: 'right-2',
+                // DEFAULT_SPEECH_BUBBLE_SLOTS['right-2'] sits almost on top of
+                // ['right'] (left:1040 vs left:1080 in reference space) --
+                // fine for widely-separated zones like left/right, but it
+                // meant the generic zone-slot bubble landed on/near Jonah's
+                // usual spot instead of Mom's actual position. Opt into
+                // character-relative placement (_positionDialogueNearCharacter)
+                // instead, so the bubble tracks her real on-screen position
+                // and points its tail at her regardless of slot geometry.
+                layoutMode: 'character',
                 text: "If either of you used this much energy on school, we'd be rich by now!",
                 // Wait for Mom's slide-in animation to finish before the speech bubble pops in.
                 bubbleDelay: 900,
@@ -9657,6 +9826,16 @@ function setupUIHandlers() {
         SFXGenerator.playButtonClick();
         document.getElementById('notebook-overlay').classList.add('hidden');
     });
+
+    // Notebook page navigation
+    document.getElementById('notebook-prev').addEventListener('click', () => {
+        SFXGenerator.playButtonClick();
+        notebook.prevPage();
+    });
+    document.getElementById('notebook-next').addEventListener('click', () => {
+        SFXGenerator.playButtonClick();
+        notebook.nextPage();
+    });
     
     // Pause button
     document.getElementById('btn-pause').addEventListener('click', () => {
@@ -9840,6 +10019,7 @@ function hbRecalculateViewportLayout() {
         positioningSystem.recalculateAll();
         Dev.tools.applyForCurrentScene();
         sceneRenderer.repositionActiveDialogue();
+        notebook.repaginateIfOpen();
         if (DEBUG) {
             const result = hbValidateLayout();
             if (result?.violations?.length) {
