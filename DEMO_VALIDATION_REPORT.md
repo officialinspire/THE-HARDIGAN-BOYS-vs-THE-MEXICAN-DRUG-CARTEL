@@ -1,8 +1,8 @@
 # Demo Validation Report
 
-Generated: 2026-08-01T23:17:08.654Z
+Generated: 2026-08-02T03:04:37.011Z
 Scenes scanned: 22
-Duration: 977ms
+Duration: 2154ms
 
 ## Totals
 
