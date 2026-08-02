@@ -3917,7 +3917,15 @@ const dialoguePager = {
     _finalizePageAction(dialogueBox, sceneRendererRef, isLastPage) {
         if (!isLastPage) return;
 
-        const entry = this.state.entry;
+        // typeText()'s onFinish fires asynchronously — by the time it does,
+        // a newer dialogue entry (or a scene transition, via clearScene())
+        // can already have called reset() and nulled this.state. Same guard
+        // _onActionClick() uses just above; skipping stale state here is
+        // correct, not a bug to paper over — whatever this callback would
+        // have rendered no longer belongs to the active dialogue.
+        const s = this.state;
+        if (!s) return;
+        const entry = s.entry;
         const continueBtn = document.getElementById('dialogue-continue');
 
         if (entry.choices && entry.choices.length > 0) {
