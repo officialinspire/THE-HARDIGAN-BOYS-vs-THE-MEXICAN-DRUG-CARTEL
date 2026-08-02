@@ -7373,7 +7373,16 @@ const SCENES = {
                         position: 'left',
                         next: () => {
                             sceneRenderer.showDialogue({
-                                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                                // Shortened speaker label (full name is
+                                // 'ANDREAS "THE BUTCHER" MENDOZA', see
+                                // scene.characters below) — the full name
+                                // wraps to 3 lines in the compact-landscape
+                                // dialogue header, overflowing the bubble.
+                                // characterId keeps sprite/speaker-highlight
+                                // resolution correct despite the shortened
+                                // label (see _ensureSpeakerPresent()).
+                                speaker: 'MENDOZA',
+                                characterId: 'cartel_boss',
                                 text: "(long pause, then laughs) FBI. In my safehouse. Handing me a badge. Either you're very brave or completely insane.",
                                 position: 'right',
                                 next: () => {
@@ -7385,7 +7394,8 @@ const SCENES = {
                                             addJournalOnce('badge_bluff_result', 'BLUFF RESULT — Mendoza Is Watching', 'The badge bluff didn\'t scare him, but it changed the dynamic. Mendoza is now treating you as more of a wildcard than a pawn. This might affect his final offer.');
                                             gameState.flags.DOUBLE_CROSSED_SOMEONE = true;
                                             sceneRenderer.showDialogue({
-                                                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                                                speaker: 'MENDOZA',
+                                                characterId: 'cartel_boss',
                                                 text: "Sit down. Let's talk like people who might both survive tonight.",
                                                 position: 'right',
                                                 next: 'NEXT_DIALOGUE'
@@ -7402,7 +7412,8 @@ const SCENES = {
 
         dialogue: [
             {
-                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                speaker: 'MENDOZA',
+                characterId: 'cartel_boss',
                 text: "So. Two suburban boys with the one USB everyone wants.",
                 position: 'right',
                 next: 'NEXT_DIALOGUE'
@@ -7426,7 +7437,8 @@ const SCENES = {
                 next: 'NEXT_DIALOGUE'
             },
             {
-                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                speaker: 'MENDOZA',
+                characterId: 'cartel_boss',
                 text: "One shipment. Domestic delivery address that won't raise flags. In return, the Rivera family is untouched. Permanently.",
                 position: 'right',
                 next: 'NEXT_DIALOGUE'
@@ -8016,7 +8028,10 @@ const SCENES = {
                         position: 'left',
                         next: () => {
                             sceneRenderer.showDialogue({
-                                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                                // Shortened speaker label — see the S7A note
+                                // on the first MENDOZA line for why.
+                                speaker: 'MENDOZA',
+                                characterId: 'cartel_boss',
                                 text: "Smart boy. Now — choose.",
                                 position: 'right-2',
                                 next: () => {
@@ -8073,7 +8088,8 @@ const SCENES = {
                         position: 'left',
                         next: () => {
                             sceneRenderer.showDialogue({
-                                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                                speaker: 'MENDOZA',
+                                characterId: 'cartel_boss',
                                 text: "(very quietly) Where did you get that.",
                                 position: 'right-2',
                                 next: () => {
@@ -8116,7 +8132,8 @@ const SCENES = {
                 next: 'NEXT_DIALOGUE'
             },
             {
-                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                speaker: 'MENDOZA',
+                characterId: 'cartel_boss',
                 text: "I admire the audacity. Walking in here like you have leverage.",
                 position: 'right-2',
                 next: 'NEXT_DIALOGUE'
@@ -8134,7 +8151,8 @@ const SCENES = {
                 next: 'NEXT_DIALOGUE'
             },
             {
-                speaker: 'ANDREAS "THE BUTCHER" MENDOZA',
+                speaker: 'MENDOZA',
+                characterId: 'cartel_boss',
                 text: "So who gets the USB, boys? Choose before someone chooses for you.",
                 position: 'right-2',
                 next: 'NEXT_DIALOGUE'
