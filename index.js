@@ -6282,9 +6282,6 @@ const SCENES = {
                             "*click* There we go. Peak entertainment: the news yelling about cartels." :
                             "*click* And... off it goes. Back to existential silence.",
                         position: 'right',
-                        bubbleLayout: gameState.lighting.tvOn
-                            ? { left: 1085, top: 380, width: 704, height: 438 }
-                            : undefined,
                         next: 'NEXT_DIALOGUE'
                     });
 
@@ -6334,13 +6331,11 @@ const SCENES = {
                             speaker: 'JONAH',
                             text: "Uh. Hank? There's like... a lot of lights outside.",
                             position: 'right',
-                            bubbleLayout: { left: 1016, top: 348, width: 836, height: 429 },
                             next: () => {
                                 sceneRenderer.showDialogue({
                                     speaker: 'HANK',
                                     text: "Relax, it's probably just your DoorDash finally escaping ICE detention.",
                                     position: 'left',
-                                    bubbleLayout: { left: 820, top: 412, width: 704, height: 438 },
                                     next: () => {
                                         sceneRenderer.loadScene('S2_ICE_RAID_WINDOW');
                                     }
@@ -6374,9 +6369,6 @@ const SCENES = {
                             "*click* There. Mood lighting for the collapse of the republic." :
                             "*click* Lights off. Very noir. Very ominous.",
                         position: 'left',
-                        bubbleLayout: gameState.lighting.lampOn
-                            ? { left: 806, top: 378, width: 704, height: 438 }
-                            : undefined,
                         next: 'NEXT_DIALOGUE'
                     });
 
@@ -6419,21 +6411,21 @@ const SCENES = {
                 speaker: 'HANK',
                 text: "I'm telling you, Jonah, everything connects. Private prisons, avocado prices, and your For You Page.",
                 position: 'left',
-                bubbleLayout: { left: 857, top: 329, width: 704, height: 438 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'JONAH',
                 text: "You say this every time we run out of chips, dude.",
                 position: 'right',
-                bubbleLayout: { left: 1099, top: 311, width: 704, height: 438 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'MOM',
+                // Matches her actual spawn slot below (onShow adds her at
+                // 'right-2', not 'right') so the default zone-slot bubble
+                // anchors next to where she actually renders.
+                position: 'right-2',
                 text: "If either of you used this much energy on school, we'd be rich by now!",
-                position: 'right',
-                bubbleLayout: { left: 700, top: 286, width: 704, height: 438 },
                 // Wait for Mom's slide-in animation to finish before the speech bubble pops in.
                 bubbleDelay: 900,
                 next: () => {
