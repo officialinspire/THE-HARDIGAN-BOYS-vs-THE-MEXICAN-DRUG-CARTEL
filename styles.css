@@ -711,8 +711,10 @@ body.main-menu #scene-title {
     flex-shrink: 0;
     overflow: hidden;
     -webkit-overflow-scrolling: auto;
-    hyphens: auto;
-    word-break: break-word;
+    /* Whole-word wrapping only -- see the base #dialogue-text rule's
+       comment for why hyphens/word-break are deliberately off here. */
+    hyphens: none;
+    word-break: normal;
     overflow-wrap: break-word;
     white-space: normal;
 }
@@ -1036,10 +1038,18 @@ body.main-menu #scene-title {
     width: 100%;
     text-align: center;
     text-wrap: pretty;
-    word-wrap: break-word;
+    /* Comic-book bubbles should always wrap at whole word boundaries --
+       hyphens:auto and word-break:break-word both let the browser split a
+       word mid-syllable ("en-ergy") the moment it doesn't quite fit the
+       current line, which reads as broken/sloppy rather than a deliberate
+       line break. word-break:normal keeps wraps at spaces only;
+       overflow-wrap:break-word is kept purely as a last-resort safety net
+       for a single word wider than the whole bubble (which dialoguePager's
+       fit-based pagination should never actually produce in practice). */
+    word-wrap: normal;
     overflow-wrap: break-word;
-    word-break: break-word;
-    hyphens: auto;
+    word-break: normal;
+    hyphens: none;
     white-space: normal;
     position: relative;
 }
