@@ -1427,11 +1427,21 @@ body.main-menu #scene-title {
 }
 
 /* ===== NOTEBOOK UI - FULLY RESPONSIVE ===== */
+/* width and height are always set to the SAME min()-of-constraints value
+   (never independently) so .notebook-ui stays a perfect square, matching
+   notebook-menu-open.png's native 1024x1024 art. #notebook-text-overlay
+   and .notebook-page are positioned with plain percentages against this
+   box on the assumption that it exactly equals the visible (object-fit:
+   contain) book art -- if width/height were allowed to diverge from a 1:1
+   ratio, object-fit:contain would letterbox the image inside a
+   non-square box, and every percentage-based position below would be
+   measured against empty letterbox space instead of the actual drawn
+   page, so text could overflow past the book edges (worst at very
+   short/wide viewports, e.g. phone landscape). */
 .notebook-ui {
     position: relative;
-    width: min(90%, 1000px);
-    height: min(85%, 700px);
-    max-height: 85vh;
+    width: min(90%, 1000px, 85vh);
+    height: min(90%, 1000px, 85vh);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -1465,7 +1475,18 @@ body.main-menu #scene-title {
 }
 
 .notebook-page {
-    flex: 1 1 50%;
+    /* flex-grow/shrink are 0 (not 1 1) deliberately: with grow/shrink
+       enabled, each column's actual rendered width can shift by a few px
+       depending on what its SIBLING column's content needs (flexbox
+       resolves widths across all flex items together), which made a
+       page's width -- and therefore how much text fits -- vary slightly
+       depending on what was displayed at the time, so notebookPager's
+       offscreen-clone measurement (synced from one column at pagination
+       time) could disagree with the width the page actually rendered at
+       when a different spread was shown later. A hard 0 0 50% locks both
+       columns to exactly half the row, independent of content, so the
+       measured width is always the rendered width. */
+    flex: 0 0 50%;
     min-width: 0;
     height: 100%;
     overflow-y: auto;
@@ -1479,8 +1500,8 @@ body.main-menu #scene-title {
 
 @media (max-width: 768px) {
     .notebook-ui {
-        width: 95%;
-        height: 90%;
+        width: min(95%, 90vh);
+        height: min(95%, 90vh);
     }
 
     #notebook-text-overlay {
@@ -1507,8 +1528,8 @@ body.main-menu #scene-title {
 
 @media (max-width: 480px) {
     .notebook-ui {
-        width: 98%;
-        height: 95%;
+        width: min(98%, 95vh);
+        height: min(98%, 95vh);
     }
 
     #notebook-text-overlay {
@@ -1524,6 +1545,12 @@ body.main-menu #scene-title {
     padding: 14px 0 14px 0;
     border-bottom: 2px dashed rgba(0, 0, 0, 0.18);
     position: relative;
+    /* .notebook-page is a column flexbox, so .notebook-entry is a flex
+       item -- without this, flexbox's default min-width:auto keeps it from
+       shrinking below an unbroken word's natural width (e.g. a long entry
+       title), so the word overflows past the page edge instead of
+       wrapping even though word-break:break-word is set below. */
+    min-width: 0;
 }
 
 .notebook-entry::before {
@@ -1559,6 +1586,18 @@ body.main-menu #scene-title {
     color: rgba(139, 0, 0, 0.7);
 }
 
+/* Shown instead of the full header on a fragment that continues an entry
+   too long to fit a single page (see notebookPager._splitEntryToFitting). */
+.notebook-entry-continued {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    font-style: italic;
+    color: #888;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+
 .notebook-entry-body {
     color: #222;
     line-height: 1.9;
@@ -1592,8 +1631,20 @@ body.main-menu #scene-title {
     font-size: 10px;
     color: #999;
     font-style: italic;
-    margin-left: auto;
-    white-space: nowrap;
+    /* flex-basis:100% forces this onto its own line unconditionally,
+       rather than only wrapping when the ~130px date string happens not
+       to fit next to the tag/number on a narrow column. A conditional
+       wrap right at that width threshold made .journal-entry-header's
+       line count -- and so its height -- come out different between
+       notebookPager's offscreen measurement clone and the live page for
+       the exact same content (sub-pixel width differences between two
+       independent layout trees are enough to flip which side of the
+       threshold a borderline wrap lands on), which could make a page
+       judged as fitting actually overflow once rendered. Always breaking
+       here removes the threshold entirely, so both sides agree. */
+    flex: 1 0 100%;
+    white-space: normal;
+    max-width: 100%;
 }
 
 /* Category tags */
@@ -2592,6 +2643,38 @@ body.main-menu #scene-container {
         padding: 6px 10px;
     }
 
+    /* .notebook-ui is forced to a square (matches notebook-menu-open.png's
+       1024x1024 art -- see the block's own comment), so on a short
+       landscape viewport it's bounded by the SMALLER of width/height and
+       ends up much smaller here than the width-driven font-size clamps
+       above expect, leaving too little room per page for even the
+       tag/number/date/title header before any body text. Shrinking the
+       header pieces specifically (not just the general text-overlay
+       clamp, which is still sized for the wider, non-square case) keeps
+       the fixed per-entry overhead small enough that a page has real room
+       left for body text. */
+    .journal-tag {
+        font-size: 8px;
+        padding: 1px 4px;
+    }
+
+    .journal-entry-num {
+        font-size: 9px;
+    }
+
+    .journal-entry-date {
+        font-size: 8px;
+    }
+
+    .notebook-entry-title {
+        font-size: 12px;
+        margin-bottom: 4px;
+    }
+
+    .notebook-page {
+        gap: 10px;
+    }
+
 }
 
 @media (max-width: 1024px) and (orientation: landscape) {
@@ -2697,8 +2780,8 @@ body.main-menu #scene-container {
 }
 
 .notebook-ui {
-    width: min(96vw, 1220px);
-    height: min(94vh, 900px);
+    width: min(96vw, 1220px, 94vh, 900px);
+    height: min(96vw, 1220px, 94vh, 900px);
 }
 
 #notebook-text-overlay {
@@ -2740,8 +2823,8 @@ body.main-menu #scene-container {
     }
 
     .notebook-ui {
-        width: 98%;
-        height: 96%;
+        width: min(98%, 96vh);
+        height: min(98%, 96vh);
     }
 }
 
@@ -2908,8 +2991,8 @@ body.main-menu #scene-container {
     }
 
     .notebook-ui {
-        width: min(96vw, 760px) !important;
-        height: min(86vh, 700px) !important;
+        width: min(96vw, 760px, 86vh, 700px) !important;
+        height: min(96vw, 760px, 86vh, 700px) !important;
         margin-top: max(10px, env(safe-area-inset-top));
     }
 
@@ -2960,8 +3043,8 @@ body.main-menu #scene-container {
 
 @media (max-width: 640px) {
     .notebook-ui {
-        width: min(96vw, 480px) !important;
-        height: min(78vh, 500px) !important;
+        width: min(96vw, 480px, 78vh, 500px) !important;
+        height: min(96vw, 480px, 78vh, 500px) !important;
     }
 
     #notebook-text-overlay {

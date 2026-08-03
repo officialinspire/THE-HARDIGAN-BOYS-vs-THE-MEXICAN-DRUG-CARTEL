@@ -1,5 +1,28 @@
 # Development Notes
 
+## Cache-busting `styles.css`/`index.js`
+
+This repo has no build step — GitHub Pages serves it as static files
+exactly as committed (see README.md). Without something forcing a fresh
+fetch, both the GitHub Pages CDN and players' browsers can keep serving an
+old cached copy of `styles.css`/`index.js` for a while after a fix ships,
+so a tester can be looking at stale behavior with no way to tell.
+
+`index.html` loads both files with a `?v=<timestamp>` query string:
+
+```html
+<link rel="stylesheet" href="styles.css?v=202608022236">
+...
+<script src="index.js?v=202608022236" defer></script>
+```
+
+**Bump this value (both places, keep them matching) any time `index.js`
+or `styles.css` changes** — e.g. to the current `date +%Y%m%d%H%M` — so
+the new query string is a cache miss and forces a fresh download. A player
+who's still seeing old behavior after a fix should also do one manual hard
+refresh (Ctrl/Cmd+Shift+R, or clear site data for the page) to drop
+whatever they had cached from before this scheme was in place.
+
 ## Debug / Testing API (`window.__HB_DEBUG__`)
 
 A deterministic, debug-only API for automated testing and layout inspection.

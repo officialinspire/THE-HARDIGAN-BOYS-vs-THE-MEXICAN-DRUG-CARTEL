@@ -3050,7 +3050,8 @@ const notebook = {
         saveSystem.save();
     },
 
-    _buildEntryHTML(entry, index) {
+    /** The tag/number/date/title block shown once per entry (on its first fragment only if the entry has to be split across pages). */
+    _buildEntryHeaderHTML(entry, index) {
         const entryNumber = String(index + 1).padStart(2, '0');
 
         // Parse "CATEGORY — Subject" from title
@@ -3075,16 +3076,125 @@ const notebook = {
         const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
         return `
+            <div class="journal-entry-header">
+                ${tagHTML}
+                <span class="journal-entry-num">#${entryNumber}</span>
+                <span class="journal-entry-date">${dateStr} · ${timeStr}</span>
+            </div>
+            <div class="notebook-entry-title">${subject}</div>
+        `;
+    },
+
+    /** Wraps a header (or a "(continued)" marker) + a body-text chunk into one renderable entry block/fragment. */
+    _wrapEntryFragment(headerHTML, bodyText, isContinuation) {
+        return `
             <div class="notebook-entry">
-                <div class="journal-entry-header">
-                    ${tagHTML}
-                    <span class="journal-entry-num">#${entryNumber}</span>
-                    <span class="journal-entry-date">${dateStr} · ${timeStr}</span>
-                </div>
-                <div class="notebook-entry-title">${subject}</div>
-                <div class="notebook-entry-body">${entry.content}</div>
+                ${isContinuation ? '<div class="notebook-entry-continued">(continued)</div>' : headerHTML}
+                <div class="notebook-entry-body">${bodyText}</div>
             </div>
         `;
+    },
+
+    _buildEntryHTML(entry, index) {
+        return this._wrapEntryFragment(this._buildEntryHeaderHTML(entry, index), entry.content, false);
+    },
+
+    /**
+     * Splits one entry's body text across multiple page-fitting fragments,
+     * mirroring dialoguePager._paginate's paragraph/sentence/word-boundary
+     * technique. Only used when the whole entry doesn't fit on an empty
+     * page by itself (see _paginate) -- most entries are short enough to
+     * never hit this path, but on small/landscape viewports a longer,
+     * hand-authored clue can still exceed a single page's budget, and
+     * without this the entry used to be placed alone and left to silently
+     * overflow-scroll, which read as "cut off" text in the book.
+     */
+    _splitEntryToFitting(entry, index, clone, budgetPx) {
+        const headerHTML = this._buildEntryHeaderHTML(entry, index);
+
+        // hasEmitted flips true the moment the FIRST fragment is finalized,
+        // and every later fits() check reads it live -- not a value snapshot
+        // taken once per splitToWords() call. A continuation fragment only
+        // needs the short "(continued)" label instead of the full
+        // tag/number/date/title header, so it has much more budget left for
+        // body text; measuring against the wrong (much smaller, full-header)
+        // budget for every chunk produced within a single splitToWords()
+        // call -- as an earlier version of this did, by only updating
+        // "continued" after the caller finished processing that call's
+        // whole return value -- undercounted how much text actually fits
+        // per fragment and fragmented far more aggressively than necessary.
+        let hasEmitted = false;
+        const fitsFragment = (bodyText) => {
+            clone.innerHTML = this._wrapEntryFragment(headerHTML, bodyText, hasEmitted);
+            return clone.scrollHeight <= budgetPx + 0.5;
+        };
+        const fragments = [];
+        const emit = (bodyText) => {
+            fragments.push(this._wrapEntryFragment(headerHTML, bodyText, hasEmitted));
+            hasEmitted = true;
+        };
+
+        const txt = String(entry.content || '')
+            .replace(/[ \t]+/g, ' ')
+            .replace(/\n{3,}/g, '\n\n')
+            .replace(/ *\n */g, '\n')
+            .trim();
+
+        if (fitsFragment(txt)) {
+            return [this._wrapEntryFragment(headerHTML, txt, false)];
+        }
+
+        const paragraphs = txt.split(/\n{2,}/);
+        const sentenceUnits = [];
+        paragraphs.forEach((para, i) => {
+            const sentences = para.split(/(?<=[.!?])\s+/).filter(Boolean);
+            sentences.forEach((s, j) => sentenceUnits.push(j === 0 && i > 0 ? '\n\n' + s : s));
+        });
+        const units = sentenceUnits.length > 1 ? sentenceUnits : txt.split(' ');
+
+        // Emits every full chunk directly (updating hasEmitted as it goes)
+        // and returns only the still-accumulating leftover, so the caller
+        // can keep growing it against subsequent units.
+        const splitToWords = (unit) => {
+            const words = unit.split(' ');
+            let buf = '';
+            for (const w of words) {
+                const trial = buf ? `${buf} ${w}` : w;
+                if (fitsFragment(trial)) {
+                    buf = trial;
+                } else {
+                    if (buf) {
+                        emit(buf);
+                    }
+                    // A lone word that still doesn't fit the budget is a
+                    // floor/box-size mismatch splitting can't solve by
+                    // itself -- keep it anyway rather than looping forever.
+                    buf = w;
+                }
+            }
+            return buf;
+        };
+
+        let current = '';
+        for (const unit of units) {
+            const next = current ? `${current} ${unit}` : unit;
+            if (fitsFragment(next)) {
+                current = next;
+                continue;
+            }
+            if (current) {
+                emit(current);
+                current = '';
+            }
+            if (fitsFragment(unit)) {
+                current = unit;
+            } else {
+                current = splitToWords(unit);
+            }
+        }
+        if (current) emit(current);
+
+        return fragments.length ? fragments : [this._wrapEntryFragment(headerHTML, txt, false)];
     },
 
     // ===== offscreen measurement clone (mirrors dialoguePager's technique) =====
@@ -3108,25 +3218,58 @@ const notebook = {
     _syncMeasureClone(clone, livePage) {
         const cs = getComputedStyle(livePage);
         ['width', 'boxSizing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
-         'fontFamily', 'fontSize', 'lineHeight', 'rowGap', 'columnGap', 'gap'].forEach(p => {
+         'fontFamily', 'fontSize', 'rowGap', 'columnGap', 'gap'].forEach(p => {
             clone.style[p] = cs[p];
         });
+        // line-height is authored as a unitless ratio (e.g. 1.8) on
+        // #notebook-text-overlay, which is how CSS inheritance is supposed
+        // to work: each descendant (the ~9-15px tag/num/date/title spans,
+        // all smaller than the page's own ~14-20px font-size) recomputes
+        // its own line-height from that ratio against ITS OWN font-size.
+        // getComputedStyle() only ever reports the already-resolved px
+        // value for the element it was read from (e.g. "26px"), and
+        // copying that px value onto the clone root would make every
+        // descendant inherit that ONE fixed px number instead of
+        // recomputing per its own font-size -- overstating line-height for
+        // every smaller-font child and making the clone measure entries
+        // taller than they actually render live (this was the real cause
+        // of notebook pages that measured as "fits" during pagination but
+        // still overflowed once rendered, worst on the narrowest phone
+        // columns where the header wraps across several lines). Deriving
+        // the ratio back out (computed line-height / computed font-size)
+        // and setting THAT preserves correct per-descendant recomputation.
+        const rootLineHeightPx = parseFloat(cs.lineHeight);
+        const rootFontSizePx = parseFloat(cs.fontSize);
+        clone.style.lineHeight = (Number.isFinite(rootLineHeightPx) && Number.isFinite(rootFontSizePx) && rootFontSizePx > 0)
+            ? String(rootLineHeightPx / rootFontSizePx)
+            : cs.lineHeight;
         clone.style.display = 'flex';
         clone.style.flexDirection = 'column';
         clone.style.height = 'auto';
     },
 
     // ===== pagination =====
-    /** Packs gameState.notebook entries (whole, never split) into height-fitting pages against the live left page's real budget. */
+    /** Packs gameState.notebook entries into height-fitting pages against the live left page's real budget. Whole entries are kept together when they fit; an entry too tall for even an empty page (small/landscape viewports, a longer hand-authored clue) is split across fragment pages via _splitEntryToFitting instead of being left to silently overflow-scroll. */
     _paginate() {
         const livePage = document.getElementById('notebook-page-left');
         if (!livePage) { this._pages = []; return; }
 
         const clone = this._getMeasureClone();
         this._syncMeasureClone(clone, livePage);
-        const budgetPx = livePage.clientHeight;
-
-        const entryHTMLs = gameState.notebook.map((entry, i) => this._buildEntryHTML(entry, i));
+        // A safety margin, not just the raw measured height: the offscreen
+        // clone and the live page are two independent DOM trees, and
+        // where exactly a wrapped line breaks can round to a different
+        // point between them by a sub-pixel amount (e.g. Chromium's
+        // internal 1/64px layout snapping), which is enough to occasionally
+        // flip a borderline wrap and land one whole extra text line
+        // (~26-30px at this UI's font sizes) short. A flat percentage
+        // isn't enough margin on the smallest pages (e.g. 10% of a ~250px
+        // phone-landscape column is only ~25px, right at that threshold),
+        // so this reserves at least one full text line's worth, or 15% of
+        // the budget, whichever is larger -- negligible on a spacious
+        // desktop page, reliably enough on the tightest ones.
+        const ONE_LINE_PX = 30;
+        const budgetPx = livePage.clientHeight - Math.max(ONE_LINE_PX, livePage.clientHeight * 0.15);
 
         const fits = (htmlList) => {
             clone.innerHTML = htmlList.join('');
@@ -3135,19 +3278,30 @@ const notebook = {
 
         const pages = [];
         let current = [];
-        for (const html of entryHTMLs) {
+        gameState.notebook.forEach((entry, i) => {
+            const html = this._buildEntryHTML(entry, i);
             const trial = [...current, html];
             if (fits(trial)) {
                 current = trial;
-                continue;
+                return;
             }
-            if (current.length) pages.push(current);
-            // A single entry taller than an empty page can't be split
-            // further (notebook entries are short, hand-authored text) --
-            // place it alone; .notebook-page's overflow-y:auto is the
-            // safety net if it still doesn't fit.
-            current = [html];
-        }
+            if (current.length) {
+                pages.push(current);
+                current = [];
+            }
+            if (fits([html])) {
+                current = [html];
+                return;
+            }
+            const fragments = this._splitEntryToFitting(entry, i, clone, budgetPx);
+            fragments.forEach((frag, idx) => {
+                if (idx < fragments.length - 1) {
+                    pages.push([frag]);
+                } else {
+                    current = [frag];
+                }
+            });
+        });
         if (current.length) pages.push(current);
 
         this._pages = pages;
@@ -6088,16 +6242,28 @@ const sceneRenderer = {
      *
      *   1. narration/choice        -> centered narrative layout
      *   2. speech w/ bubbleLayout  -> authored native-coordinate rectangle
-     *   3. speech w/ a valid zone  -> DEFAULT_SPEECH_BUBBLE_SLOTS rectangle
-     *   4. layoutMode: 'character' -> character-relative placement (explicit opt-in)
+     *   3. speech w/ a resolvable character sprite -> character-relative placement
+     *   4. speech w/ a valid zone but no sprite     -> DEFAULT_SPEECH_BUBBLE_SLOTS rectangle
      *   5. (fallback)              -> top-center safe placement
      *
      * An authored bubbleLayout (tier 2) always wins over character-relative
-     * positioning — it is never re-anchored near a character. layoutDialogue()
-     * is a pure function of (dialogueEntry, current DOM/character state), so it
-     * is safe to call repeatedly (initial render, post-fit reflow, settle
-     * reflow, resize/orientation) without ever changing the resolved mode for
-     * a given entry. The resolved mode is recorded on dialogueBox.dataset.layoutMode.
+     * positioning — it is never re-anchored near a character. Tier 3 is the
+     * default (not an opt-in) precisely because DEFAULT_SPEECH_BUBBLE_SLOTS
+     * (tier 4) is a one-size-fits-all rectangle per zone: it assumes a
+     * uniform head height that doesn't hold across different character art,
+     * scales, and scenes, so a zone-slot bubble routinely renders
+     * disconnected from the character who's actually speaking (e.g. HANK's
+     * bubble landing near the top-left corner in S2 while his sprite stands
+     * lower on screen). Anchoring to the character's real rendered position
+     * is correct by construction and needs no per-scene tuning; the zone
+     * rectangle only still matters as a fallback when no matching character
+     * sprite is on screen (e.g. an offscreen/unspawned speaker). `dialogueEntry.
+     * layoutMode = 'character'` remains supported as an explicit no-op for
+     * existing data, but is no longer required to get this behavior.
+     * layoutDialogue() is a pure function of (dialogueEntry, current DOM/character
+     * state), so it is safe to call repeatedly (initial render, post-fit reflow,
+     * settle reflow, resize/orientation) without ever changing the resolved mode
+     * for a given entry. The resolved mode is recorded on dialogueBox.dataset.layoutMode.
      */
     layoutDialogue(dialogueBox, dialogueEntry, options = {}) {
         if (!dialogueBox || !dialogueEntry) return null;
@@ -6120,7 +6286,7 @@ const sceneRenderer = {
             mode = 'authored';
             this._positionDialogueInSlot(dialogueBox, zone, dialogueEntry);
             dialogueBox.classList.add('dialogue-anchored');
-        } else if (dialogueEntry.layoutMode === 'character') {
+        } else if (dialogueEntry.layoutMode === 'character' || this._resolveDialogueCharacter(zone, dialogueEntry)) {
             mode = 'character';
             this._positionDialogueNearCharacter(dialogueBox, zone, dialogueEntry);
             dialogueBox.classList.add('dialogue-anchored');
