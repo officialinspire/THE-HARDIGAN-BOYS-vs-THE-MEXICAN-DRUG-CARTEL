@@ -2378,8 +2378,7 @@ const assetLoader = {
             ...new Set([
                 ...sceneAssets,
                 './assets/menu_dialogue/dialogue-bubble-large-left.png',
-                './assets/menu_dialogue/dialogue-bubble-large-right.png',
-                './assets/ui/ui_main_menu_bg.png'
+                './assets/menu_dialogue/dialogue-bubble-large-right.png'
             ])
         ];
     },
@@ -6577,7 +6576,7 @@ const SCENES = {
     S0_MAIN_MENU: {
         id: 'S0_MAIN_MENU',
         title: '',
-        background: './assets/ui/ui_main_menu_bg.png',
+        background: './promo/title-intro-card.png',
         music: 'main-menu-theme.mp3',
         characters: [],
         hotspots: [],
@@ -6606,7 +6605,6 @@ const SCENES = {
             const container = document.getElementById('hotspot-layer');
             container.innerHTML = `
                 <div id="main-menu-content" data-layout-panel="menu-prompts">
-                    <h1 id="main-menu-title">THE HARDIGAN BOYS<br>VS.<br>THE MEXICAN DRUG CARTEL</h1>
                     <button class="menu-btn" id="btn-new-game">NEW GAME</button>
                     <button class="menu-btn" id="btn-continue-game">CONTINUE</button>
                     <button class="menu-btn" id="btn-options">OPTIONS</button>
