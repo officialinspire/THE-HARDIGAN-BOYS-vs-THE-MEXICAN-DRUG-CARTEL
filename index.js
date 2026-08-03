@@ -7754,6 +7754,35 @@ const SCENES = {
             addJournalOnce('status_s6', 'STATUS — CIA Contact: Ms. Gray', 'You\'re at the federal research annex. CIA analyst Ms. Gray has been waiting for someone with that USB. This is the biggest decision point so far: hand it over or stay independent.');
             if (inventory.has('neighbors_usb')) {
                 addJournalOnce('clue_s6_usb_gate', 'ACTION REQUIRED — Hand Over or Keep the USB', 'Ms. Gray is going to ask about the USB drive. When she does, open your INVENTORY and USE the NEIGHBORS USB to put it on the table. That triggers the choice: give it to the CIA or keep it and go to the cartel.');
+            } else if (!gameState.journalSeen['bridge_s6_no_usb']) {
+                // Players who stayed inside during the raid (S3A) never met
+                // Sofia and never got the USB -- without this, Ms. Gray's
+                // "that USB you have" line a few beats later presupposed an
+                // item this player was never given, and this scene's CIA-
+                // annex setting came out of nowhere. This phone call bridges
+                // both: it delivers the DEA-list/payment-ledger reveal
+                // secondhand (S5_SOFIA_INTEL dramatizes it firsthand for the
+                // other branch) and explains why Gray wants to meet them.
+                addJournalOnce('bridge_s6_no_usb', 'STATUS — A Call You Didn\'t Expect', 'Sofia called that night. Her dad hid a USB before ICE took him — a DEA informant list and a payment ledger naming U.S. officials. She already got it to a CIA analyst named Gray through another channel, but wants you two to go meet her anyway: you\'re not on anyone\'s radar.');
+                const originalIntro = this.dialogue[0];
+                this.dialogue[0] = {
+                    speaker: 'NARRATION',
+                    text: 'Your phone buzzes that night. Unknown number.',
+                    next: () => {
+                        chainDialogueLines([
+                            { speaker: 'NARRATION', text: 'Sofia (phone): "Hank? It\'s Sofia. Don\'t ask how I got this number."' },
+                            { speaker: 'HANK', text: "Sofia? We — we didn't even do anything. We just watched.", position: 'left' },
+                            { speaker: 'NARRATION', text: 'Sofia (phone): "I know. That\'s actually why I\'m calling."' },
+                            { speaker: 'NARRATION', text: 'Sofia (phone): "My dad hid a USB drive before ICE took him. I cracked it last night. A DEA informant list, and a payment ledger with U.S. officials on it. Someone used ICE to get it out of our house."' },
+                            { speaker: 'JONAH', text: "That's... a lot bigger than a rumor-mill thing.", position: 'left-2' },
+                            { speaker: 'NARRATION', text: 'Sofia (phone): "I already got the drive to a CIA analyst named Gray — someone I trust more than the people who are actually watching me right now."' },
+                            { speaker: 'NARRATION', text: 'Sofia (phone): "But she wants to meet people nobody\'s paying attention to. That\'s you two. Federal research annex, tomorrow. Ask for Gray."' },
+                            { speaker: 'HANK', text: "Why us? We stayed inside. We didn't help.", position: 'left' },
+                            { speaker: 'NARRATION', text: 'Sofia (phone): "Exactly. Nobody thinks you matter. Use that."' },
+                        ], () => sceneRenderer.showDialogue(originalIntro));
+                    }
+                };
+                this.dialogue[3].text = "Sofia already got that drive to me. Smart, actually — routing it through you two would've been the obvious move, which is exactly why nobody would've expected it.";
             }
         },
 
