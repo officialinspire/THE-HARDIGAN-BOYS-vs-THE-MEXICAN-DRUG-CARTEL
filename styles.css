@@ -1213,6 +1213,14 @@ body.main-menu #scene-title {
     box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.5);
     position: relative;
     overflow: hidden;
+    /* #dialogue-choices is a flex column with a constrained max-height on
+       short/narrow mobile viewports. Without flex-shrink:0, flexbox's
+       default shrink behavior squeezes each choice button down toward its
+       min-height floor even when 2-line wrapped text needs more room --
+       combined with overflow:hidden above, that clipped the second line
+       instead of letting the (already scrollable) choices panel handle
+       the overflow. */
+    flex-shrink: 0;
 }
 
 .dialogue-choice::before {
@@ -2909,11 +2917,15 @@ body.main-menu #scene-container {
         width: min(92vw, 620px);
     }
 
+    /* Previously up to 500px/72vw wide with generous padding -- on a phone
+       that's most of the screen, blocking the title-card art behind a
+       stack of 4 buttons. Shrunk width and padding so the art stays
+       visible around and between the buttons. */
     .menu-btn {
-        max-width: min(72vw, 500px);
-        margin: clamp(6px, 1.5vh, 10px) auto;
-        padding: clamp(9px, 1.8vh, 12px) clamp(16px, 2.6vw, 24px);
-        font-size: clamp(14px, 2.2vw, 18px);
+        max-width: min(46vw, 300px);
+        margin: clamp(4px, 1vh, 7px) auto;
+        padding: clamp(6px, 1.2vh, 9px) clamp(12px, 2vw, 18px);
+        font-size: clamp(12px, 1.8vw, 15px);
     }
 
 }
@@ -3718,4 +3730,47 @@ body.main-menu #scene-container {
 .status-toast.is-show {
     opacity: 1;
     transform: translateX(-50%) translateY(-6px);
+}
+
+/* ===== MOBILE NARRATIVE/CHOICE TEXT SIZE + WIDTH FIX =====
+   Two leftover legacy rules were winning over the intended mobile-landscape
+   sizing above (the --dlg-text-size variable system, see the ":root" block
+   earlier in this file):
+   1. "#dialogue-container.narrative-mode #dialogue-text, #dialogue-text
+      .choice-text { font-size: clamp(16px, 3vw, 24px) }" under a plain
+      max-width:1024px query has HIGHER specificity (2 IDs + class) than
+      the variable-driven "#dialogue-text { font-size: var(--dlg-text-size) }"
+      rule (1 ID) in the landscape-specific queries, so it always won
+      regardless of source order -- narration/choice-prompt text never
+      actually got the smaller mobile-landscape size and read as too large.
+   2. "#dialogue-box:not([data-layout-panel=\"speech-bubble\"])" was capped
+      at a flat ~200px width on short/narrow landscape phones (a leftover
+      from what looks like an old notification-toast sizing pass), forcing
+      narration/choice text to wrap into many short, cramped lines even
+      though the viewport had far more width available.
+   Both fixes are appended at the very end of the file and match (or use
+   an equally-specific selector to) the rules they override, so they win
+   by being last in source order rather than needing !important. */
+@media (max-width: 1024px) and (orientation: landscape) {
+    #dialogue-container.narrative-mode #dialogue-text,
+    #dialogue-text.choice-text {
+        font-size: var(--dlg-text-size);
+    }
+
+    #dialogue-box[data-layout-panel="narrative-box"] {
+        width: min(66vw, 560px);
+        max-width: 78vw;
+    }
+}
+
+@media (max-height: 500px) {
+    #dialogue-container.narrative-mode #dialogue-text,
+    #dialogue-text.choice-text {
+        font-size: var(--dlg-text-size);
+    }
+
+    #dialogue-box[data-layout-panel="narrative-box"] {
+        width: min(70vw, 520px);
+        max-width: 82vw;
+    }
 }
