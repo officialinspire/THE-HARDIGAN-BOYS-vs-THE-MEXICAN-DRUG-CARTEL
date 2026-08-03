@@ -1237,6 +1237,40 @@ body.main-menu #scene-title {
     }
 }
 
+/* Choice panel entrance: the panel pops in first, then each option
+   fades/slides in with a short stagger -- see _renderChoices() in
+   index.js, which (re)applies these classes on every choice render. */
+@keyframes choicesPanelPopIn {
+    0% { opacity: 0; transform: scale(0.85); }
+    60% { opacity: 1; transform: scale(1.035); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes dialogueChoiceFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+#dialogue-choices.choices-pop-in {
+    animation: choicesPanelPopIn 0.26s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.dialogue-choice.choice-item-in {
+    opacity: 0;
+    animation: dialogueChoiceFadeIn 0.22s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #dialogue-choices.choices-pop-in {
+        animation: none;
+    }
+
+    .dialogue-choice.choice-item-in {
+        opacity: 1;
+        animation: none;
+    }
+}
+
 #dialogue-continue {
     margin-top: clamp(4px, 1vw, 8px);
     padding: clamp(4px, 0.7vw, 7px) clamp(12px, 2.2vw, 20px);

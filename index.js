@@ -4317,9 +4317,20 @@ const dialoguePager = {
         const choicesDiv = document.getElementById('dialogue-choices');
         choicesDiv.innerHTML = '';
 
-        dialogueEntry.choices.forEach(choice => {
+        // Panel pop-in, then each option fades in with a short stagger (see
+        // the .choices-pop-in/.choice-item-in keyframes in styles.css).
+        // choicesDiv is a persistent DOM node reused across renders, so the
+        // class has to be removed and re-added with a reflow forced in
+        // between -- just adding it again on an element that already has it
+        // wouldn't restart the CSS animation.
+        choicesDiv.classList.remove('choices-pop-in');
+        void choicesDiv.offsetWidth;
+        choicesDiv.classList.add('choices-pop-in');
+
+        dialogueEntry.choices.forEach((choice, choiceIndex) => {
             const btn = document.createElement('button');
-            btn.className = 'dialogue-choice';
+            btn.className = 'dialogue-choice choice-item-in';
+            btn.style.animationDelay = `${0.16 + choiceIndex * 0.07}s`;
             btn.textContent = choice.text;
             let touchStartTime = 0;
             let touchStartPos = null;
@@ -7150,8 +7161,20 @@ const SCENES = {
                 next: 'NEXT_DIALOGUE'
             },
             {
+                speaker: 'HANK',
+                text: "Sofia's out there somewhere with no idea where they took her dad. I need to find out — I'm not just going to sit here.",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
                 speaker: 'MOM',
-                text: "Here. Take my hospital badge. Not because I want you involved — I don't — but if you're going to go poking around anyway, at least look like you belong somewhere.",
+                text: "(tired) I know that look. I'm not going to talk you out of it, am I.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'MOM',
+                text: "Here. Take my hospital badge. Not because I want you involved — I don't — but those facilities let medical staff through for detainee welfare checks. If anyone stops you, you're following up on a patient's family. Don't talk more than that.",
                 position: 'right',
                 next: () => {
                     // "Restricted areas or establish trust in official-looking
@@ -7211,28 +7234,24 @@ const SCENES = {
                 speaker: 'SOFIA',
                 text: "You shouldn't be here.",
                 position: 'right',
-                bubbleLayout: { left: 1137, top: 313, width: 737, height: 336 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'HANK',
                 text: "We saw ICE. We thought we could… help?",
                 position: 'left',
-                bubbleLayout: { left: 723, top: 265, width: 737, height: 336 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'SOFIA',
                 text: "Unless you have a helicopter and a non-extradition treaty, you're late.",
                 position: 'right',
-                bubbleLayout: { left: 1030, top: 244, width: 863, height: 312 },
                 next: 'NEXT_DIALOGUE'
             },
             {
                 speaker: 'SOFIA',
                 text: "Here. Take this USB drive. It has contacts, numbers... everything. My dad thought it would clear his name. Maybe you can use it.",
                 position: 'right',
-                bubbleLayout: { left: 1134, top: 199, width: 729, height: 293 },
                 next: () => {
                     inventory.add('neighbors_usb');
                     notebook.add('RIVERA USB', 'Contains sensitive contacts and information. Could clear the Riveras... or condemn them further.');
@@ -8275,6 +8294,37 @@ const SCENES = {
                 next: 'NEXT_DIALOGUE'
             },
             {
+                speaker: 'NARRATION',
+                text: "Hank's phone buzzes. Blocked number.",
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                // Establishes the airport meeting Jonah references a few
+                // lines into S7D ("show up to the meeting? At the
+                // airport?") and gives every path into S8_PRE_FINAL a named
+                // contact for Lupita/El Gato -- not just players who went
+                // through S7A_CARTEL_CONTACT and met her in person. Phone
+                // voice routed through NARRATION (no sprite on screen to
+                // highlight), matching the "Sofia (phone)" convention used
+                // in the S6_INTEL_ENTANGLEMENT no-USB bridge. See the S8
+                // onEnter() bridge for the player-never-met-her half of
+                // this fix.
+                speaker: 'NARRATION',
+                text: 'Lupita (phone): "Word travels fast in my line of work. That drive is more famous than either of you right now."',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'NARRATION',
+                text: 'Lupita (phone): "Everyone wants a sit-down. Tonight. The airport landing strip, off the access road. Come alone, come smart, and don\'t call the cops."',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'JONAH',
+                text: "...Did she just hang up? I think that was a summons, not an invitation.",
+                position: 'left-2',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
                 speaker: 'HANK',
                 text: "We need to move. Now. Before that car decides to move first.",
                 position: 'left',
@@ -8381,6 +8431,28 @@ const SCENES = {
         onEnter() {
             addJournalOnce('status_s8', 'STATUS — Everyone Wants a Piece', 'The airport landing strip. Lupita and El Gato are here. All factions are converging. CIA wants the USB buried, cartel wants it weaponized, Venezuela wants it gone. The warehouse showdown is tonight.');
             addJournalOnce('clue_s8_passport', 'UPCOMING — Confirm Your Cover', 'Before the warehouse, you\'ll brief with Ms. Gray. She\'ll set up your cover identity as "Marco Delgado." When she does — have your MYSTERIOUS PASSPORT ready in INVENTORY. You\'ll need to USE it to lock in the alias before going in.');
+
+            // Players who never went through S7A_CARTEL_CONTACT (no
+            // mysterious_passport -- granted unconditionally there) never
+            // met Lupita in person and have no idea who El Gato is at all.
+            // For them this scene's opening line ("You made it. I wasn't
+            // sure you would.") comes from two total strangers. Bridge it:
+            // the S7B_CARTEL_TARGETING phone call already named Lupita as
+            // the cartel's contact, so this just puts a face to the voice
+            // and introduces El Gato before he starts talking.
+            if (!inventory.has('mysterious_passport') && !gameState.journalSeen['bridge_s8_no_lupita']) {
+                addJournalOnce('bridge_s8_no_lupita', 'STATUS — Putting Faces to Names', 'The woman from the phone call steps out of one of the cars: Lupita. The wiry, watchful man beside her is new — El Gato. Neither one waits for an introduction.');
+                const originalIntro = this.dialogue[0];
+                this.dialogue[0] = {
+                    speaker: 'NARRATION',
+                    text: "A woman peels off from one of the idling cars. The voice from the phone, now with a face — Lupita.",
+                    next: () => {
+                        chainDialogueLines([
+                            { speaker: 'NARRATION', text: "Beside her, a wiry man watches the two of you without blinking. Nobody bothers introducing him. Hank clocks him anyway: El Gato." },
+                        ], () => sceneRenderer.showDialogue(originalIntro));
+                    }
+                };
+            }
         },
 
         dialogue: [
@@ -8471,14 +8543,29 @@ const SCENES = {
         music: 'Classified Silence.mp3',
 
         characters: [
-            { id: 'hank_disguise', name: 'HANK', sprite: 'char_hank_in_disguise-right.png', position: 'left' },
+            { id: 'hank_disguise', name: 'HANK', sprite: 'char_hank_in_disguise-left.png', position: 'left' },
             { id: 'msgray', name: 'MS. GRAY', sprite: 'char_msgray_amused-right.png', position: 'right' }
         ],
 
         hotspots: [],
 
         onEnter() {
-            addJournalOnce('status_s8b', 'STATUS — The Undercover Briefing', 'One hour before the warehouse. Ms. Gray is sending Hank in as "Marco Delgado" — independent courier. Jonah stays outside. The USB is the key card to the ending. Don\'t lose it.');
+            // See S9_FINAL_WAREHOUSE_SHOWDOWN's onEnter() for the full
+            // explanation -- players who gave the USB to the CIA at S6, or
+            // who took the no-Sofia path where Sofia routed the drive
+            // straight to Ms. Gray, reach here holding neither
+            // neighbors_usb nor cartel_usb.
+            if (inventory.has('neighbors_usb') || inventory.has('cartel_usb')) {
+                addJournalOnce('status_s8b', 'STATUS — The Undercover Briefing', 'One hour before the warehouse. Ms. Gray is sending Hank in as "Marco Delgado" — independent courier. Jonah stays outside. The USB is the key card to the ending. Don\'t lose it.');
+            } else {
+                addJournalOnce('status_s8b', 'STATUS — The Undercover Briefing', 'One hour before the warehouse. Ms. Gray is sending Hank in as "Marco Delgado" — independent courier. Jonah stays outside. You\'re not carrying the drive anymore, but that doesn\'t mean you\'re not still in this.');
+                this.dialogue[9] = {
+                    speaker: 'MS. GRAY',
+                    text: "Go. You're not holding the drive anymore, so just get in, get a read on the room, and get out. Let me worry about the rest.",
+                    position: 'right',
+                    next: this.dialogue[9].next
+                };
+            }
             if (inventory.has('mysterious_passport')) {
                 addJournalOnce('clue_s8b_passport_gate', 'ACTION REQUIRED — Confirm Your Cover Identity', 'Ms. Gray needs you to confirm your alias before you go in. When she finishes the briefing, open your INVENTORY and USE the MYSTERIOUS PASSPORT to lock in the "Marco Delgado" cover. This step is required before heading to the warehouse.');
             }
@@ -8606,8 +8693,34 @@ const SCENES = {
         hotspots: [],
 
         onEnter() {
-            addJournalOnce('status_s9', 'FINAL SCENE — The Warehouse Showdown', 'Everyone showed up. CIA on the left. Cartel on the right. El Gato in the middle. And two suburban teenagers holding the USB that apparently runs the world. This is it.');
-            addJournalOnce('clue_s9_usb_final', 'ACTION REQUIRED — Use the USB to Force the Confrontation', 'When Mendoza asks who gets the USB, don\'t just answer — open INVENTORY and USE the NEIGHBORS USB (or CARTEL USB) to physically produce it. That\'s the moment that triggers the final choice. The whole room is waiting for you to make a move.');
+            // Players who gave the USB to the CIA at S6, or who took the
+            // no-Sofia path (S3A) where Sofia routed her dad's drive straight
+            // to Ms. Gray and Hank never physically held it, arrive here with
+            // neither neighbors_usb nor cartel_usb in inventory. The original
+            // unconditional text ("two suburban teenagers holding the USB")
+            // presupposed a drive that isn't there -- see the matching branch
+            // this.dialogue[1]/[5] mutation below and the existing hasUsb
+            // fallback further down in dialogue[6].next().
+            const hasUsbNow = inventory.has('neighbors_usb') || inventory.has('cartel_usb');
+            if (hasUsbNow) {
+                addJournalOnce('status_s9', 'FINAL SCENE — The Warehouse Showdown', 'Everyone showed up. CIA on the left. Cartel on the right. El Gato in the middle. And two suburban teenagers holding the USB that apparently runs the world. This is it.');
+                addJournalOnce('clue_s9_usb_final', 'ACTION REQUIRED — Use the USB to Force the Confrontation', 'When Mendoza asks who gets the USB, don\'t just answer — open INVENTORY and USE the NEIGHBORS USB (or CARTEL USB) to physically produce it. That\'s the moment that triggers the final choice. The whole room is waiting for you to make a move.');
+            } else {
+                addJournalOnce('status_s9', 'FINAL SCENE — The Warehouse Showdown', 'Everyone showed up. CIA on the left. Cartel on the right. El Gato in the middle. You handed the drive off before it ever got this far — so tonight isn\'t about producing it. It\'s about which side you\'re standing next to when the dust settles.');
+                addJournalOnce('clue_s9_no_usb_final', 'STATUS — Empty-Handed by Design', 'No USB in your pocket tonight. That decision already got made, back when you gave it up. Ms. Gray is about to ask you to pick a side anyway.');
+                this.dialogue[1] = {
+                    speaker: 'NARRATION',
+                    text: "Cartel on the right. CIA on the left. Two suburban teenagers in the middle, empty-handed — and everyone in the room already knows it.",
+                    next: 'NEXT_DIALOGUE'
+                };
+                this.dialogue[5] = {
+                    speaker: 'MENDOZA',
+                    characterId: 'cartel_boss',
+                    text: "No drive on you. Which means somebody already made this decision without asking the room. Interesting.",
+                    position: 'right-2',
+                    next: 'NEXT_DIALOGUE'
+                };
+            }
         },
 
         itemUses: {
