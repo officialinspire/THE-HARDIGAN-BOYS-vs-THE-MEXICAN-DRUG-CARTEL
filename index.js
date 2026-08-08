@@ -2622,6 +2622,23 @@ const saveSystem = {
     }
 };
 
+// ===== FIRST-TIME TUTORIAL STATE =====
+// Separate from saveSystem's save slot -- this persists across sessions AND
+// across new playthroughs (deleting/restarting a save should not replay the
+// onboarding beat). See S1_LIVING_ROOM_INTRO.onEnter() for where it's used.
+const tutorialState = {
+    STORAGE_KEY: 'hardigan_brothers_tutorial_seen',
+
+    hasSeenIntro() {
+        return localStorage.getItem(this.STORAGE_KEY) === 'true';
+    },
+
+    markIntroSeen() {
+        if (HB_FLAG_NO_SAVE) return; // keep deterministic test runs from persisting this too
+        localStorage.setItem(this.STORAGE_KEY, 'true');
+    }
+};
+
 // ===== LIGHTING EFFECTS SYSTEM =====
 const lightingEffects = {
     updateLighting() {
@@ -5554,12 +5571,26 @@ const sceneRenderer = {
         });
     },
 
+    // A hotspot counts as "explored" once its gameState.objectsClicked flag
+    // is set. Most hotspots flag themselves under their own id (see e.g. the
+    // 'lamp'/'notebook'/'window' hotspots in S1_LIVING_ROOM_INTRO); a few use
+    // a different flag name for their own reasons (S1's tv_remote flags
+    // itself as 'remote') -- those set hotspot.clickedFlag to override which
+    // key this checks, rather than this reaching into scene-specific naming.
+    _isHotspotExplored(hotspot) {
+        const flag = hotspot.clickedFlag || hotspot.id;
+        return !flag || gameState.objectsClicked.has(flag);
+    },
+
     loadHotspots(hotspots) {
         const hotspotLayer = document.getElementById('hotspot-layer');
 
         hotspots.forEach(hotspot => {
             const div = document.createElement('div');
             div.className = 'hotspot';
+            if (!this._isHotspotExplored(hotspot)) {
+                div.classList.add('hotspot--unexplored');
+            }
 
             // Scale minimum touch target to viewport — 44px at 1920, proportionally smaller at smaller viewports
             const rect = positioningSystem.getBackgroundRect();
@@ -5608,6 +5639,12 @@ const sceneRenderer = {
                     hotspot.onClick();
                 } else if (hotspot.target && SCENES[hotspot.target]) {
                     sceneRenderer.loadScene(hotspot.target);
+                }
+                // Stop the idle "clickable" pulse for this hotspot the instant
+                // it's been explored -- no reason to keep drawing attention to
+                // it once its teaching purpose (on this hotspot) is served.
+                if (this._isHotspotExplored(hotspot)) {
+                    div.classList.remove('hotspot--unexplored');
                 }
                 setTimeout(() => {
                     gameState.actionLock = false;
@@ -6693,6 +6730,7 @@ const SCENES = {
                 y: 802,
                 width: 138,
                 height: 54,
+                clickedFlag: 'remote', // this hotspot's onClick flags itself as 'remote', not 'tv_remote' -- see _isHotspotExplored()
                 onClick() {
                     gameState.objectsClicked.add('remote');
                     lightingEffects.toggleTV();
@@ -6880,6 +6918,31 @@ const SCENES = {
         onEnter() {
             // Journal: Act I status
             addJournalOnce('status_s1', 'ACT I — A Normal Night', 'Northern Virginia. Hank and Jonah are home. Something feels off outside. Explore the room before looking out the window — click the TV, lamp, notebook, and remote first. The window is the last stop.');
+
+            // First-time-only onboarding: swap in 3 short UI-teaching lines
+            // ahead of the scene's real opening narration, then hand off to
+            // it via chainDialogueLines(). Gated on tutorialState (a
+            // dedicated localStorage flag, not gameState.journalSeen/saves)
+            // so it plays exactly once per browser/device, even across a
+            // deleted save or a fresh playthrough. Splicing into dialogue[0]
+            // here (rather than a separate intro scene) follows the same
+            // `next`-as-function bridge pattern S6's originalIntro uses.
+            if (!tutorialState.hasSeenIntro()) {
+                const originalIntro = this.dialogue[0];
+                this.dialogue[0] = {
+                    speaker: 'NARRATION',
+                    text: "Tap the glowing objects around the room to interact with them -- try the TV, the remote, the lamp, and Hank's notebook.",
+                    next: () => {
+                        chainDialogueLines([
+                            { speaker: 'NARRATION', text: "Tap the dialogue box to continue reading a line, and tap an option to pick a choice." },
+                            { speaker: 'NARRATION', text: "Check out everything in the room before heading to the window -- Hank's not going anywhere until you have." }
+                        ], () => {
+                            tutorialState.markIntroSeen();
+                            sceneRenderer.showDialogue(originalIntro);
+                        });
+                    }
+                };
+            }
 
             // Initialize lighting - start with both off for dramatic effect
             gameState.lighting.lampOn = false;
