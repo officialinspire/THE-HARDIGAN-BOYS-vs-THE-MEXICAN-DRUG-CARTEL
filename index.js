@@ -248,7 +248,8 @@ const gameState = {
         LOYAL_TO_RIVERAS: false,
         OPPORTUNIST: false,
         SUSPICIOUS_TO_FEDS: false,
-        BURNER_USED_AT_FACILITY: false
+        BURNER_USED_AT_FACILITY: false,
+        CLOCKED_SURVEILLANCE_DETAIL: false
     },
     settings: {
         musicVolume: 70,
@@ -8262,7 +8263,98 @@ const SCENES = {
             { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' }
         ],
-        hotspots: [],
+
+        // Optional, order-dependent side beat: clocking the porch light first
+        // is what lets the second look at the surveillance operative pay off.
+        // Purely additive -- neither hotspot gates this scene's own dialogue
+        // progression (which auto-plays regardless, same as before), so
+        // skipping both is always safe and can't soft-lock the scene.
+        hotspots: [
+            {
+                id: 'porch_light',
+                label: 'Porch Light',
+                coordSystem: 'native',
+                x: 880, y: 420, width: 200, height: 380,
+                onClick() {
+                    gameState.objectsClicked.add('porch_light');
+                    notebook.add('STREET NOTE', 'The porch light flickers. For a second, the shadow across the street shifts — like whoever\'s in that car just leaned forward to see better.');
+                    // Clickable at any point during the scene's own scripted
+                    // dialogue, not gated behind a specific line -- see the
+                    // identical note on the fake_fbi_badge/moms_nurse_badge
+                    // itemUses handlers for why _closeDialogueThen() is
+                    // needed (showDialogue()'s "already showing" guard would
+                    // otherwise silently drop this whole chain while the
+                    // scene's own dialogue is on screen).
+                    sceneRenderer._closeDialogueThen(() => {
+                        sceneRenderer.showDialogue({
+                            speaker: 'JONAH',
+                            text: "(quiet) Don't stare at the house. Don't stare at the car either. Just... exist normally.",
+                            position: 'left-2',
+                            next: 'NEXT_DIALOGUE'
+                        });
+                    });
+                }
+            },
+            {
+                id: 'surveillance_operative',
+                label: 'The Car Across the Street',
+                coordSystem: 'native',
+                x: 1150, y: 200, width: 650, height: 700,
+                onClick() {
+                    if (!gameState.objectsClicked.has('porch_light')) {
+                        // Hasn't "gone through the motions" yet -- risking a
+                        // direct look this early gives away that they've
+                        // noticed. No flag, no payoff, just a stalling line.
+                        sceneRenderer._closeDialogueThen(() => {
+                            sceneRenderer.showDialogue({
+                                speaker: 'HANK',
+                                text: "Don't look yet. If we clock them staring back, they'll know we know.",
+                                position: 'left',
+                                next: 'NEXT_DIALOGUE'
+                            });
+                        });
+                        return;
+                    }
+
+                    if (gameState.flags.CLOCKED_SURVEILLANCE_DETAIL) {
+                        sceneRenderer._closeDialogueThen(() => {
+                            sceneRenderer.showDialogue({
+                                speaker: 'HANK',
+                                text: "Same guy. Still there. We've seen enough.",
+                                position: 'left',
+                                next: 'NEXT_DIALOGUE'
+                            });
+                        });
+                        return;
+                    }
+
+                    gameState.flags.CLOCKED_SURVEILLANCE_DETAIL = true;
+                    notebook.add('CLOCKED — Cartel Surveillance', 'A quick, careful glance was enough: the guy in the car has a cartel tattoo peeking past his collar, the same build as one of the henchmen from the cartel meet. This isn\'t a stakeout by strangers. They sent someone who\'s met you before.');
+                    sceneRenderer._closeDialogueThen(() => {
+                        sceneRenderer.showDialogue({
+                            speaker: 'HANK',
+                            text: "(barely moving his lips) Okay. Just got a look. I recognize him.",
+                            position: 'left',
+                            next: () => {
+                                sceneRenderer.showDialogue({
+                                    speaker: 'JONAH',
+                                    text: "Recognize him from where? Please don't say the cartel meeting.",
+                                    position: 'left-2',
+                                    next: () => {
+                                        sceneRenderer.showDialogue({
+                                            speaker: 'HANK',
+                                            text: "It's the cartel meeting. They didn't send a stranger to watch us. They sent someone who already knows our faces.",
+                                            position: 'left',
+                                            next: 'NEXT_DIALOGUE'
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                    });
+                }
+            }
+        ],
 
         itemUses: {
             burner_phone: {
@@ -8300,6 +8392,7 @@ const SCENES = {
         onEnter() {
             addJournalOnce('status_s7b', 'STATUS — Under Surveillance', 'The cartel knows. There\'s an unmarked car outside that\'s been there for an hour. You\'re being watched. If you have the BURNER PHONE, this is the time to USE it — call Ms. Gray for backup before things escalate.');
             addJournalOnce('clue_s7b_burner', 'ACTION AVAILABLE — Call for Backup', 'Open your INVENTORY and USE the BURNER PHONE to contact Ms. Gray while the surveillance car is still watching. Letting her know about the cartel\'s presence gives the CIA a heads-up before the airport meeting and may give you better support later.');
+            addJournalOnce('clue_s7b_porch_light', 'ACTION AVAILABLE — Play It Cool', 'Don\'t stare at the car outside. Click around the house first — check the PORCH LIGHT — before risking a direct look at whoever\'s watching.');
 
             // Surveillance operative slides in from right as soon as scene loads,
             // slightly larger than the default character cap (35%/55% of the
