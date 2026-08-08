@@ -506,6 +506,28 @@ body.main-menu #scene-container::after {
                 inset 0 0 20px rgba(255, 215, 0, 0.1);
 }
 
+/* Idle "this is clickable" affordance for touch devices, where :hover never
+   fires before the tap that already commits the click. Applied via
+   sceneRenderer.loadHotspots()/_isHotspotExplored() to hotspots the player
+   hasn't clicked yet in the current scene; removed the instant they click
+   it. Deliberately much softer than body.show-hotspots below -- that's a
+   dev overlay, this runs for real players. Respects ?noAnimations=1 via the
+   existing .hb-no-animations rule (no extra work needed here). */
+@keyframes hotspot-idle-pulse {
+    0%, 100% {
+        border-color: rgba(255, 215, 0, 0);
+        box-shadow: 0 0 0 rgba(255, 215, 0, 0);
+    }
+    50% {
+        border-color: rgba(255, 215, 0, 0.4);
+        box-shadow: 0 0 14px rgba(255, 215, 0, 0.25);
+    }
+}
+
+.hotspot--unexplored {
+    animation: hotspot-idle-pulse 2.4s ease-in-out infinite;
+}
+
 /* Debug label inside hotspots - hidden by default */
 .hotspot-debug-label {
     display: none;

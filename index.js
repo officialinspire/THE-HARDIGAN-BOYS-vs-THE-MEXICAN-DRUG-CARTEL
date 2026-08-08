@@ -61,33 +61,19 @@ const SFXGenerator = {
         if (!this._ensureAudioContext()) return;
         const osc = this.audioContext.createOscillator();
         const gain = this.audioContext.createGain();
-        
-        osc.connect(gain);
-        gain.connect(this.audioContext.destination);
-        
-        osc.frequency.setValueAtTime(800, this.audioContext.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(400, this.audioContext.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.3 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.1);
-        
-        osc.start(this.audioContext.currentTime);
-        osc.stop(this.audioContext.currentTime + 0.1);
-    },
-    
-    playDialogueAdvance() {
-        if (!this._ensureAudioContext()) return;
-        const osc = this.audioContext.createOscillator();
-        const gain = this.audioContext.createGain();
 
         osc.connect(gain);
         gain.connect(this.audioContext.destination);
 
-        osc.frequency.setValueAtTime(600, this.audioContext.currentTime);
-        gain.gain.setValueAtTime(0.2 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.05);
+        const jitter = 1 + (Math.random() - 0.5) * 0.08; // +/-4% so repeated taps (choices, hotspots) don't sound identical
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(700 * jitter, this.audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(380 * jitter, this.audioContext.currentTime + 0.11);
+        gain.gain.setValueAtTime(0.16 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.13);
 
         osc.start(this.audioContext.currentTime);
-        osc.stop(this.audioContext.currentTime + 0.05);
+        osc.stop(this.audioContext.currentTime + 0.13);
     },
 
     playContinueButton() {
@@ -98,31 +84,33 @@ const SFXGenerator = {
         osc.connect(gain);
         gain.connect(this.audioContext.destination);
 
+        const jitter = 1 + (Math.random() - 0.5) * 0.08; // +/-4% -- the single most frequently triggered SFX in the game
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(900, this.audioContext.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(1200, this.audioContext.currentTime + 0.08);
-        gain.gain.setValueAtTime(0.25 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.08);
+        osc.frequency.setValueAtTime(850 * jitter, this.audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1100 * jitter, this.audioContext.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.14 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.11);
 
         osc.start(this.audioContext.currentTime);
-        osc.stop(this.audioContext.currentTime + 0.08);
+        osc.stop(this.audioContext.currentTime + 0.11);
     },
 
     playDialoguePop() {
         if (!this._ensureAudioContext()) return;
         const now = this.audioContext.currentTime;
+        const jitter = 1 + (Math.random() - 0.5) * 0.08; // +/-4% -- fires once per new dialogue entry, avoids a metronome feel over a long playthrough
         const masterGain = this.audioContext.createGain();
-        masterGain.gain.setValueAtTime(0.22 * (gameState.settings.sfxVolume / 100), now);
-        masterGain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+        masterGain.gain.setValueAtTime(0.12 * (gameState.settings.sfxVolume / 100), now);
+        masterGain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
         masterGain.connect(this.audioContext.destination);
 
         const osc = this.audioContext.createOscillator();
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(420, now);
-        osc.frequency.exponentialRampToValueAtTime(760, now + 0.09);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(420 * jitter, now);
+        osc.frequency.exponentialRampToValueAtTime(680 * jitter, now + 0.11);
         osc.connect(masterGain);
         osc.start(now);
-        osc.stop(now + 0.14);
+        osc.stop(now + 0.18);
     },
 
     playDialogueWhooshClose() {
@@ -145,7 +133,7 @@ const SFXGenerator = {
         filter.Q.setValueAtTime(0.9, now);
 
         const gain = this.audioContext.createGain();
-        gain.gain.setValueAtTime(0.2 * (gameState.settings.sfxVolume / 100), now);
+        gain.gain.setValueAtTime(0.15 * (gameState.settings.sfxVolume / 100), now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
 
         source.connect(filter);
@@ -166,7 +154,7 @@ const SFXGenerator = {
 
         osc.frequency.setValueAtTime(600, this.audioContext.currentTime);
         osc.frequency.exponentialRampToValueAtTime(1000, this.audioContext.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.25 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
+        gain.gain.setValueAtTime(0.18 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.15);
 
         osc.start(this.audioContext.currentTime);
@@ -184,7 +172,7 @@ const SFXGenerator = {
         osc.type = 'square';
         osc.frequency.setValueAtTime(200, this.audioContext.currentTime);
         osc.frequency.exponentialRampToValueAtTime(100, this.audioContext.currentTime + 0.08);
-        gain.gain.setValueAtTime(0.15 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
+        gain.gain.setValueAtTime(0.12 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.08);
 
         osc.start(this.audioContext.currentTime);
@@ -202,7 +190,7 @@ const SFXGenerator = {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(300, this.audioContext.currentTime);
         osc.frequency.exponentialRampToValueAtTime(150, this.audioContext.currentTime + 0.12);
-        gain.gain.setValueAtTime(0.2 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
+        gain.gain.setValueAtTime(0.15 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.12);
 
         osc.start(this.audioContext.currentTime);
@@ -260,7 +248,8 @@ const gameState = {
         LOYAL_TO_RIVERAS: false,
         OPPORTUNIST: false,
         SUSPICIOUS_TO_FEDS: false,
-        BURNER_USED_AT_FACILITY: false
+        BURNER_USED_AT_FACILITY: false,
+        CLOCKED_SURVEILLANCE_DETAIL: false
     },
     settings: {
         musicVolume: 70,
@@ -2631,6 +2620,23 @@ const saveSystem = {
     
     deleteSave() {
         localStorage.removeItem(this.SAVE_KEY);
+    }
+};
+
+// ===== FIRST-TIME TUTORIAL STATE =====
+// Separate from saveSystem's save slot -- this persists across sessions AND
+// across new playthroughs (deleting/restarting a save should not replay the
+// onboarding beat). See S1_LIVING_ROOM_INTRO.onEnter() for where it's used.
+const tutorialState = {
+    STORAGE_KEY: 'hardigan_brothers_tutorial_seen',
+
+    hasSeenIntro() {
+        return localStorage.getItem(this.STORAGE_KEY) === 'true';
+    },
+
+    markIntroSeen() {
+        if (HB_FLAG_NO_SAVE) return; // keep deterministic test runs from persisting this too
+        localStorage.setItem(this.STORAGE_KEY, 'true');
     }
 };
 
@@ -5566,12 +5572,26 @@ const sceneRenderer = {
         });
     },
 
+    // A hotspot counts as "explored" once its gameState.objectsClicked flag
+    // is set. Most hotspots flag themselves under their own id (see e.g. the
+    // 'lamp'/'notebook'/'window' hotspots in S1_LIVING_ROOM_INTRO); a few use
+    // a different flag name for their own reasons (S1's tv_remote flags
+    // itself as 'remote') -- those set hotspot.clickedFlag to override which
+    // key this checks, rather than this reaching into scene-specific naming.
+    _isHotspotExplored(hotspot) {
+        const flag = hotspot.clickedFlag || hotspot.id;
+        return !flag || gameState.objectsClicked.has(flag);
+    },
+
     loadHotspots(hotspots) {
         const hotspotLayer = document.getElementById('hotspot-layer');
 
         hotspots.forEach(hotspot => {
             const div = document.createElement('div');
             div.className = 'hotspot';
+            if (!this._isHotspotExplored(hotspot)) {
+                div.classList.add('hotspot--unexplored');
+            }
 
             // Scale minimum touch target to viewport — 44px at 1920, proportionally smaller at smaller viewports
             const rect = positioningSystem.getBackgroundRect();
@@ -5620,6 +5640,12 @@ const sceneRenderer = {
                     hotspot.onClick();
                 } else if (hotspot.target && SCENES[hotspot.target]) {
                     sceneRenderer.loadScene(hotspot.target);
+                }
+                // Stop the idle "clickable" pulse for this hotspot the instant
+                // it's been explored -- no reason to keep drawing attention to
+                // it once its teaching purpose (on this hotspot) is served.
+                if (this._isHotspotExplored(hotspot)) {
+                    div.classList.remove('hotspot--unexplored');
                 }
                 setTimeout(() => {
                     gameState.actionLock = false;
@@ -6492,7 +6518,6 @@ const sceneRenderer = {
         dialogueBox.classList.remove('dialogue-exit', 'hidden');
         dialogueBox.classList.add('dialogue-enter');
         void dialogueBox.offsetWidth;
-        SFXGenerator.playDialogueAdvance();
         SFXGenerator.playDialoguePop();
 
         window.setTimeout(() => {
@@ -6706,6 +6731,7 @@ const SCENES = {
                 y: 802,
                 width: 138,
                 height: 54,
+                clickedFlag: 'remote', // this hotspot's onClick flags itself as 'remote', not 'tv_remote' -- see _isHotspotExplored()
                 onClick() {
                     gameState.objectsClicked.add('remote');
                     lightingEffects.toggleTV();
@@ -6893,6 +6919,31 @@ const SCENES = {
         onEnter() {
             // Journal: Act I status
             addJournalOnce('status_s1', 'ACT I — A Normal Night', 'Northern Virginia. Hank and Jonah are home. Something feels off outside. Explore the room before looking out the window — click the TV, lamp, notebook, and remote first. The window is the last stop.');
+
+            // First-time-only onboarding: swap in 3 short UI-teaching lines
+            // ahead of the scene's real opening narration, then hand off to
+            // it via chainDialogueLines(). Gated on tutorialState (a
+            // dedicated localStorage flag, not gameState.journalSeen/saves)
+            // so it plays exactly once per browser/device, even across a
+            // deleted save or a fresh playthrough. Splicing into dialogue[0]
+            // here (rather than a separate intro scene) follows the same
+            // `next`-as-function bridge pattern S6's originalIntro uses.
+            if (!tutorialState.hasSeenIntro()) {
+                const originalIntro = this.dialogue[0];
+                this.dialogue[0] = {
+                    speaker: 'NARRATION',
+                    text: "Tap the glowing objects around the room to interact with them -- try the TV, the remote, the lamp, and Hank's notebook.",
+                    next: () => {
+                        chainDialogueLines([
+                            { speaker: 'NARRATION', text: "Tap the dialogue box to continue reading a line, and tap an option to pick a choice." },
+                            { speaker: 'NARRATION', text: "Check out everything in the room before heading to the window -- Hank's not going anywhere until you have." }
+                        ], () => {
+                            tutorialState.markIntroSeen();
+                            sceneRenderer.showDialogue(originalIntro);
+                        });
+                    }
+                };
+            }
 
             // Initialize lighting - start with both off for dramatic effect
             gameState.lighting.lampOn = false;
@@ -8183,7 +8234,7 @@ const SCENES = {
                                     gameState.flags.ALLIED_WITH_ORTEGA = true;
                                     notebook.add('ORTEGA ALLIANCE', 'Ortega claims the Riveras were collateral. He wants the USB — offered to clear them in exchange.');
                                     notebook.add('CLUE — ORTEGA', 'Ortega has access to ICE targeting lists. He knew which house to flag. Follow the data trail.');
-                                    sceneRenderer.loadScene('S8_PRE_FINAL');
+                                    sceneRenderer.loadScene('S7C2_VENEZ_OPERATION_REVEAL');
                                 }
                             },
                             {
@@ -8201,6 +8252,122 @@ const SCENES = {
         ]
     },
 
+    // ===== S7C2: VENEZUELAN BACKROOM - THE OPERATION =====
+    // Reached only from S7C's "Agree to work with Ortega" choice. Same room,
+    // same conversation continuing a beat later -- background and music are
+    // deliberately identical to S7C_VENEZ_BACKROOM_ORTEGA (audioManager.
+    // playMusic() no-ops on an unchanged track, so there's no music cut).
+    // Previously, agreeing with Ortega jumped straight to S8_PRE_FINAL and
+    // the whole "Venezuela" thread was one screen of dialogue; this scene
+    // gives it a second beat and lets the player see, rather than just be
+    // told, what "the Venezuelans want it too" (S8_PRE_FINAL's own line)
+    // actually refers to.
+    S7C2_VENEZ_OPERATION_REVEAL: {
+        id: 'S7C2_VENEZ_OPERATION_REVEAL',
+        title: 'What Ortega\'s Really Running',
+        background: './assets/backgrounds/bg_venez_backroom.png',
+        music: 'Consulate Backroom.mp3',
+
+        characters: [
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking-left.png', position: 'left' },
+            { id: 'ortega', name: 'ORTEGA', sprite: 'char_ortega_neutral-right.png', position: 'right' }
+        ],
+
+        // Optional, non-gating side content -- same philosophy as S7B's
+        // porch_light/surveillance_operative pair: purely additive lore, the
+        // scripted dialogue below never waits on either being clicked.
+        hotspots: [
+            {
+                id: 'ledger',
+                label: 'Ledger on the Table',
+                coordSystem: 'native',
+                x: 960, y: 740, width: 160, height: 160,
+                onClick() {
+                    gameState.objectsClicked.add('ledger');
+                    notebook.add('VENEZUELAN LEDGER', 'A handwritten ledger on the coffee table — names, dates, and amounts that don\'t match any legitimate consulate budget. Ortega\'s "operation" has been running longer than one bad tip on the Riveras.');
+                    sceneRenderer._closeDialogueThen(() => {
+                        sceneRenderer.showDialogue({
+                            speaker: 'ORTEGA',
+                            text: "(catches you looking) Careful. Some pages in there have names you'd recognize from the news.",
+                            position: 'right',
+                            next: 'NEXT_DIALOGUE'
+                        });
+                    });
+                }
+            },
+            {
+                id: 'desk_phone',
+                label: 'Desk Phone',
+                coordSystem: 'native',
+                x: 1400, y: 500, width: 180, height: 200,
+                onClick() {
+                    gameState.objectsClicked.add('desk_phone');
+                    notebook.add('INTERCEPTED LINE', 'That desk phone has rung twice since you sat down. Ortega ignored it both times. Whoever\'s calling, he doesn\'t want you to know they exist yet.');
+                    sceneRenderer._closeDialogueThen(() => {
+                        sceneRenderer.showDialogue({
+                            speaker: 'HANK',
+                            text: "That phone's rung twice. You're not going to get that?",
+                            position: 'left',
+                            next: () => {
+                                sceneRenderer.showDialogue({
+                                    speaker: 'ORTEGA',
+                                    text: "Not while you're in the room. Some conversations you're not ready for.",
+                                    position: 'right',
+                                    next: 'NEXT_DIALOGUE'
+                                });
+                            }
+                        });
+                    });
+                }
+            }
+        ],
+
+        onEnter() {
+            addJournalOnce('status_s7c2', 'STATUS — Ortega Shows His Hand', 'Now that you\'ve agreed to help, Ortega isn\'t just talking anymore — he\'s showing you the actual operation running out of this back room. This is bigger than one flagged house.');
+            addJournalOnce('clue_s7c2_optional', 'OPTIONAL — Look Around the Room', 'Nothing here is required, but the LEDGER and the DESK PHONE are both worth a look while Ortega talks.');
+        },
+
+        dialogue: [
+            {
+                speaker: 'NARRATION',
+                text: "Ortega doesn't just talk in circles. He's got a real operation running out of this back room — and now that you've said yes, he stops hiding it.",
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'ORTEGA',
+                text: "You want to actually help? Then you should see what you're helping.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "That's... a lot more than a guy with a flag on the wall.",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'ORTEGA',
+                text: "The cartel moves product. The CIA moves paperwork. I move the truth — quietly, and only when it's useful to me. That USB is the most useful thing in this city right now.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'ORTEGA',
+                text: "You bring it to me, and I clear the Riveras, and this room forgets your faces. You go to anyone else first, and I stop being generous.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "(quiet, to himself) Everyone keeps saying 'quietly' like it's still an option.",
+                position: 'left',
+                next: () => {
+                    sceneRenderer.loadScene('S8_PRE_FINAL');
+                }
+            }
+        ]
+    },
+
     // ===== S7B: CARTEL TARGETING =====
     S7B_CARTEL_TARGETING: {
         id: 'S7B_CARTEL_TARGETING',
@@ -8212,7 +8379,98 @@ const SCENES = {
             { id: 'hank', name: 'HANK', sprite: 'char_hank_panicked-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_scared.png', position: 'left-2' }
         ],
-        hotspots: [],
+
+        // Optional, order-dependent side beat: clocking the porch light first
+        // is what lets the second look at the surveillance operative pay off.
+        // Purely additive -- neither hotspot gates this scene's own dialogue
+        // progression (which auto-plays regardless, same as before), so
+        // skipping both is always safe and can't soft-lock the scene.
+        hotspots: [
+            {
+                id: 'porch_light',
+                label: 'Porch Light',
+                coordSystem: 'native',
+                x: 880, y: 420, width: 200, height: 380,
+                onClick() {
+                    gameState.objectsClicked.add('porch_light');
+                    notebook.add('STREET NOTE', 'The porch light flickers. For a second, the shadow across the street shifts — like whoever\'s in that car just leaned forward to see better.');
+                    // Clickable at any point during the scene's own scripted
+                    // dialogue, not gated behind a specific line -- see the
+                    // identical note on the fake_fbi_badge/moms_nurse_badge
+                    // itemUses handlers for why _closeDialogueThen() is
+                    // needed (showDialogue()'s "already showing" guard would
+                    // otherwise silently drop this whole chain while the
+                    // scene's own dialogue is on screen).
+                    sceneRenderer._closeDialogueThen(() => {
+                        sceneRenderer.showDialogue({
+                            speaker: 'JONAH',
+                            text: "(quiet) Don't stare at the house. Don't stare at the car either. Just... exist normally.",
+                            position: 'left-2',
+                            next: 'NEXT_DIALOGUE'
+                        });
+                    });
+                }
+            },
+            {
+                id: 'surveillance_operative',
+                label: 'The Car Across the Street',
+                coordSystem: 'native',
+                x: 1150, y: 200, width: 650, height: 700,
+                onClick() {
+                    if (!gameState.objectsClicked.has('porch_light')) {
+                        // Hasn't "gone through the motions" yet -- risking a
+                        // direct look this early gives away that they've
+                        // noticed. No flag, no payoff, just a stalling line.
+                        sceneRenderer._closeDialogueThen(() => {
+                            sceneRenderer.showDialogue({
+                                speaker: 'HANK',
+                                text: "Don't look yet. If we clock them staring back, they'll know we know.",
+                                position: 'left',
+                                next: 'NEXT_DIALOGUE'
+                            });
+                        });
+                        return;
+                    }
+
+                    if (gameState.flags.CLOCKED_SURVEILLANCE_DETAIL) {
+                        sceneRenderer._closeDialogueThen(() => {
+                            sceneRenderer.showDialogue({
+                                speaker: 'HANK',
+                                text: "Same guy. Still there. We've seen enough.",
+                                position: 'left',
+                                next: 'NEXT_DIALOGUE'
+                            });
+                        });
+                        return;
+                    }
+
+                    gameState.flags.CLOCKED_SURVEILLANCE_DETAIL = true;
+                    notebook.add('CLOCKED — Cartel Surveillance', 'A quick, careful glance was enough: the guy in the car has a cartel tattoo peeking past his collar, the same build as one of the henchmen from the cartel meet. This isn\'t a stakeout by strangers. They sent someone who\'s met you before.');
+                    sceneRenderer._closeDialogueThen(() => {
+                        sceneRenderer.showDialogue({
+                            speaker: 'HANK',
+                            text: "(barely moving his lips) Okay. Just got a look. I recognize him.",
+                            position: 'left',
+                            next: () => {
+                                sceneRenderer.showDialogue({
+                                    speaker: 'JONAH',
+                                    text: "Recognize him from where? Please don't say the cartel meeting.",
+                                    position: 'left-2',
+                                    next: () => {
+                                        sceneRenderer.showDialogue({
+                                            speaker: 'HANK',
+                                            text: "It's the cartel meeting. They didn't send a stranger to watch us. They sent someone who already knows our faces.",
+                                            position: 'left',
+                                            next: 'NEXT_DIALOGUE'
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                    });
+                }
+            }
+        ],
 
         itemUses: {
             burner_phone: {
@@ -8250,6 +8508,7 @@ const SCENES = {
         onEnter() {
             addJournalOnce('status_s7b', 'STATUS — Under Surveillance', 'The cartel knows. There\'s an unmarked car outside that\'s been there for an hour. You\'re being watched. If you have the BURNER PHONE, this is the time to USE it — call Ms. Gray for backup before things escalate.');
             addJournalOnce('clue_s7b_burner', 'ACTION AVAILABLE — Call for Backup', 'Open your INVENTORY and USE the BURNER PHONE to contact Ms. Gray while the surveillance car is still watching. Letting her know about the cartel\'s presence gives the CIA a heads-up before the airport meeting and may give you better support later.');
+            addJournalOnce('clue_s7b_porch_light', 'ACTION AVAILABLE — Play It Cool', 'Don\'t stare at the car outside. Click around the house first — check the PORCH LIGHT — before risking a direct look at whoever\'s watching.');
 
             // Surveillance operative slides in from right as soon as scene loads,
             // slightly larger than the default character cap (35%/55% of the
