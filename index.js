@@ -8234,7 +8234,7 @@ const SCENES = {
                                     gameState.flags.ALLIED_WITH_ORTEGA = true;
                                     notebook.add('ORTEGA ALLIANCE', 'Ortega claims the Riveras were collateral. He wants the USB — offered to clear them in exchange.');
                                     notebook.add('CLUE — ORTEGA', 'Ortega has access to ICE targeting lists. He knew which house to flag. Follow the data trail.');
-                                    sceneRenderer.loadScene('S8_PRE_FINAL');
+                                    sceneRenderer.loadScene('S7C2_VENEZ_OPERATION_REVEAL');
                                 }
                             },
                             {
@@ -8247,6 +8247,122 @@ const SCENES = {
                             }
                         ]
                     });
+                }
+            }
+        ]
+    },
+
+    // ===== S7C2: VENEZUELAN BACKROOM - THE OPERATION =====
+    // Reached only from S7C's "Agree to work with Ortega" choice. Same room,
+    // same conversation continuing a beat later -- background and music are
+    // deliberately identical to S7C_VENEZ_BACKROOM_ORTEGA (audioManager.
+    // playMusic() no-ops on an unchanged track, so there's no music cut).
+    // Previously, agreeing with Ortega jumped straight to S8_PRE_FINAL and
+    // the whole "Venezuela" thread was one screen of dialogue; this scene
+    // gives it a second beat and lets the player see, rather than just be
+    // told, what "the Venezuelans want it too" (S8_PRE_FINAL's own line)
+    // actually refers to.
+    S7C2_VENEZ_OPERATION_REVEAL: {
+        id: 'S7C2_VENEZ_OPERATION_REVEAL',
+        title: 'What Ortega\'s Really Running',
+        background: './assets/backgrounds/bg_venez_backroom.png',
+        music: 'Consulate Backroom.mp3',
+
+        characters: [
+            { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking-left.png', position: 'left' },
+            { id: 'ortega', name: 'ORTEGA', sprite: 'char_ortega_neutral-right.png', position: 'right' }
+        ],
+
+        // Optional, non-gating side content -- same philosophy as S7B's
+        // porch_light/surveillance_operative pair: purely additive lore, the
+        // scripted dialogue below never waits on either being clicked.
+        hotspots: [
+            {
+                id: 'ledger',
+                label: 'Ledger on the Table',
+                coordSystem: 'native',
+                x: 960, y: 740, width: 160, height: 160,
+                onClick() {
+                    gameState.objectsClicked.add('ledger');
+                    notebook.add('VENEZUELAN LEDGER', 'A handwritten ledger on the coffee table — names, dates, and amounts that don\'t match any legitimate consulate budget. Ortega\'s "operation" has been running longer than one bad tip on the Riveras.');
+                    sceneRenderer._closeDialogueThen(() => {
+                        sceneRenderer.showDialogue({
+                            speaker: 'ORTEGA',
+                            text: "(catches you looking) Careful. Some pages in there have names you'd recognize from the news.",
+                            position: 'right',
+                            next: 'NEXT_DIALOGUE'
+                        });
+                    });
+                }
+            },
+            {
+                id: 'desk_phone',
+                label: 'Desk Phone',
+                coordSystem: 'native',
+                x: 1400, y: 500, width: 180, height: 200,
+                onClick() {
+                    gameState.objectsClicked.add('desk_phone');
+                    notebook.add('INTERCEPTED LINE', 'That desk phone has rung twice since you sat down. Ortega ignored it both times. Whoever\'s calling, he doesn\'t want you to know they exist yet.');
+                    sceneRenderer._closeDialogueThen(() => {
+                        sceneRenderer.showDialogue({
+                            speaker: 'HANK',
+                            text: "That phone's rung twice. You're not going to get that?",
+                            position: 'left',
+                            next: () => {
+                                sceneRenderer.showDialogue({
+                                    speaker: 'ORTEGA',
+                                    text: "Not while you're in the room. Some conversations you're not ready for.",
+                                    position: 'right',
+                                    next: 'NEXT_DIALOGUE'
+                                });
+                            }
+                        });
+                    });
+                }
+            }
+        ],
+
+        onEnter() {
+            addJournalOnce('status_s7c2', 'STATUS — Ortega Shows His Hand', 'Now that you\'ve agreed to help, Ortega isn\'t just talking anymore — he\'s showing you the actual operation running out of this back room. This is bigger than one flagged house.');
+            addJournalOnce('clue_s7c2_optional', 'OPTIONAL — Look Around the Room', 'Nothing here is required, but the LEDGER and the DESK PHONE are both worth a look while Ortega talks.');
+        },
+
+        dialogue: [
+            {
+                speaker: 'NARRATION',
+                text: "Ortega doesn't just talk in circles. He's got a real operation running out of this back room — and now that you've said yes, he stops hiding it.",
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'ORTEGA',
+                text: "You want to actually help? Then you should see what you're helping.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "That's... a lot more than a guy with a flag on the wall.",
+                position: 'left',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'ORTEGA',
+                text: "The cartel moves product. The CIA moves paperwork. I move the truth — quietly, and only when it's useful to me. That USB is the most useful thing in this city right now.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'ORTEGA',
+                text: "You bring it to me, and I clear the Riveras, and this room forgets your faces. You go to anyone else first, and I stop being generous.",
+                position: 'right',
+                next: 'NEXT_DIALOGUE'
+            },
+            {
+                speaker: 'HANK',
+                text: "(quiet, to himself) Everyone keeps saying 'quietly' like it's still an option.",
+                position: 'left',
+                next: () => {
+                    sceneRenderer.loadScene('S8_PRE_FINAL');
                 }
             }
         ]
