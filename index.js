@@ -61,33 +61,19 @@ const SFXGenerator = {
         if (!this._ensureAudioContext()) return;
         const osc = this.audioContext.createOscillator();
         const gain = this.audioContext.createGain();
-        
-        osc.connect(gain);
-        gain.connect(this.audioContext.destination);
-        
-        osc.frequency.setValueAtTime(800, this.audioContext.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(400, this.audioContext.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.3 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.1);
-        
-        osc.start(this.audioContext.currentTime);
-        osc.stop(this.audioContext.currentTime + 0.1);
-    },
-    
-    playDialogueAdvance() {
-        if (!this._ensureAudioContext()) return;
-        const osc = this.audioContext.createOscillator();
-        const gain = this.audioContext.createGain();
 
         osc.connect(gain);
         gain.connect(this.audioContext.destination);
 
-        osc.frequency.setValueAtTime(600, this.audioContext.currentTime);
-        gain.gain.setValueAtTime(0.2 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.05);
+        const jitter = 1 + (Math.random() - 0.5) * 0.08; // +/-4% so repeated taps (choices, hotspots) don't sound identical
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(700 * jitter, this.audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(380 * jitter, this.audioContext.currentTime + 0.11);
+        gain.gain.setValueAtTime(0.16 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.13);
 
         osc.start(this.audioContext.currentTime);
-        osc.stop(this.audioContext.currentTime + 0.05);
+        osc.stop(this.audioContext.currentTime + 0.13);
     },
 
     playContinueButton() {
@@ -98,31 +84,33 @@ const SFXGenerator = {
         osc.connect(gain);
         gain.connect(this.audioContext.destination);
 
+        const jitter = 1 + (Math.random() - 0.5) * 0.08; // +/-4% -- the single most frequently triggered SFX in the game
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(900, this.audioContext.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(1200, this.audioContext.currentTime + 0.08);
-        gain.gain.setValueAtTime(0.25 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.08);
+        osc.frequency.setValueAtTime(850 * jitter, this.audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1100 * jitter, this.audioContext.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.14 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.11);
 
         osc.start(this.audioContext.currentTime);
-        osc.stop(this.audioContext.currentTime + 0.08);
+        osc.stop(this.audioContext.currentTime + 0.11);
     },
 
     playDialoguePop() {
         if (!this._ensureAudioContext()) return;
         const now = this.audioContext.currentTime;
+        const jitter = 1 + (Math.random() - 0.5) * 0.08; // +/-4% -- fires once per new dialogue entry, avoids a metronome feel over a long playthrough
         const masterGain = this.audioContext.createGain();
-        masterGain.gain.setValueAtTime(0.22 * (gameState.settings.sfxVolume / 100), now);
-        masterGain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+        masterGain.gain.setValueAtTime(0.12 * (gameState.settings.sfxVolume / 100), now);
+        masterGain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
         masterGain.connect(this.audioContext.destination);
 
         const osc = this.audioContext.createOscillator();
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(420, now);
-        osc.frequency.exponentialRampToValueAtTime(760, now + 0.09);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(420 * jitter, now);
+        osc.frequency.exponentialRampToValueAtTime(680 * jitter, now + 0.11);
         osc.connect(masterGain);
         osc.start(now);
-        osc.stop(now + 0.14);
+        osc.stop(now + 0.18);
     },
 
     playDialogueWhooshClose() {
@@ -145,7 +133,7 @@ const SFXGenerator = {
         filter.Q.setValueAtTime(0.9, now);
 
         const gain = this.audioContext.createGain();
-        gain.gain.setValueAtTime(0.2 * (gameState.settings.sfxVolume / 100), now);
+        gain.gain.setValueAtTime(0.15 * (gameState.settings.sfxVolume / 100), now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
 
         source.connect(filter);
@@ -166,7 +154,7 @@ const SFXGenerator = {
 
         osc.frequency.setValueAtTime(600, this.audioContext.currentTime);
         osc.frequency.exponentialRampToValueAtTime(1000, this.audioContext.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.25 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
+        gain.gain.setValueAtTime(0.18 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.15);
 
         osc.start(this.audioContext.currentTime);
@@ -184,7 +172,7 @@ const SFXGenerator = {
         osc.type = 'square';
         osc.frequency.setValueAtTime(200, this.audioContext.currentTime);
         osc.frequency.exponentialRampToValueAtTime(100, this.audioContext.currentTime + 0.08);
-        gain.gain.setValueAtTime(0.15 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
+        gain.gain.setValueAtTime(0.12 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.08);
 
         osc.start(this.audioContext.currentTime);
@@ -202,7 +190,7 @@ const SFXGenerator = {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(300, this.audioContext.currentTime);
         osc.frequency.exponentialRampToValueAtTime(150, this.audioContext.currentTime + 0.12);
-        gain.gain.setValueAtTime(0.2 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
+        gain.gain.setValueAtTime(0.15 * (gameState.settings.sfxVolume / 100), this.audioContext.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.12);
 
         osc.start(this.audioContext.currentTime);
@@ -6492,7 +6480,6 @@ const sceneRenderer = {
         dialogueBox.classList.remove('dialogue-exit', 'hidden');
         dialogueBox.classList.add('dialogue-enter');
         void dialogueBox.offsetWidth;
-        SFXGenerator.playDialogueAdvance();
         SFXGenerator.playDialoguePop();
 
         window.setTimeout(() => {
