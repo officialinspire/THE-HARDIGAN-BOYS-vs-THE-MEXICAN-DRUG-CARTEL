@@ -2,7 +2,7 @@
 
 A branching, point-and-click narrative game about two suburban brothers who get pulled into an ICE raid, a cartel, and a CIA handler over the course of one very bad week. Built as a single-page, zero-dependency HTML5/CSS/JavaScript app — no framework, no build step.
 
-**Status:** stable public demo. See `DEMO_READINESS.md` for the current release recommendation and test evidence, and `KNOWN_ISSUES.md` for non-blocking known issues.
+**Status:** public browser demo, designed for landscape play on phones. See `MOBILE_RELEASE.md` for the November 2026 release checks and analytics setup. `DEMO_READINESS.md` records the earlier August audit.
 
 ## Playing the game
 

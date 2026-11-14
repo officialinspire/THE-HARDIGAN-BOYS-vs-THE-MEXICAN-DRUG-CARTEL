@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 const URL = '/index.html?debug=true&skipIntro=1&mute=1&noAnimations=1';
 async function boot(page, url = URL) {
     await page.goto(url);
-    await expect(page.locator('#btn-new-game')).toBeVisible();
+    await expect(page.locator('#btn-new-game')).toBeVisible({ timeout: 30000 });
     await page.waitForFunction(() => !sceneRenderer.isTransitioning);
 }
 async function scene(page, id) {

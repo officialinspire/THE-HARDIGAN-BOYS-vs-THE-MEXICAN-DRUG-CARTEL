@@ -241,12 +241,15 @@ const gameStorage = {
 
 const gameAnalytics = {
     capture(event, properties = {}) {
-        try { window.HBAnalytics?.capture(event, properties); } catch (_) {}
+        try { window.HBAnalytics?.capture(event, { run_id: gameState.analyticsRun?.id || null, ...properties }); } catch (_) {}
     }
 };
 
 // Scene onEnter hooks customize dialogue for the active route. Always start
 // from the authored entries so a second run cannot inherit the previous route.
+function createRunId() {
+    return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 const authoredSceneDialogue = new Map();
 function cloneDialogue(value) {
     if (Array.isArray(value)) return value.map(cloneDialogue);
@@ -259,6 +262,7 @@ const SETTINGS_STORAGE_KEY = 'HB_SETTINGS_V1';
 // ===== GLOBAL GAME STATE =====
 const gameState = {
     currentSceneId: 'S0_MAIN_MENU',
+    analyticsRun: { id: null, completed: false },
     inventory: [],
     notebook: [],
     journalSeen: {},
@@ -2630,7 +2634,8 @@ const saveSystem = {
             journalSeen: gameState.journalSeen,
             storyProgress: gameState.storyProgress,
             flags: gameState.flags,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            analyticsRun: gameState.analyticsRun
         };
         const persisted = gameStorage.setItem(this.SAVE_KEY, JSON.stringify(saveData));
         if (!persisted && !this.warnedAboutStorage) {
@@ -2644,7 +2649,7 @@ const saveSystem = {
     readSave() {
         try {
             const data = JSON.parse(gameStorage.getItem(this.SAVE_KEY));
-            if (!data || !SCENES[data.currentSceneId] || data.currentSceneId === 'S0_MAIN_MENU') return null;
+            if (!data || typeof data.currentSceneId !== 'string' || !Object.hasOwn(SCENES, data.currentSceneId) || data.currentSceneId === 'S0_MAIN_MENU') return null;
             if (!Array.isArray(data.inventory) || !data.inventory.every(x => typeof x === 'string')) return null;
             if (!Array.isArray(data.notebook) || !data.notebook.every(x => x && typeof x.title === 'string' && typeof x.content === 'string')) return null;
             if (!data.flags || typeof data.flags !== 'object' || Array.isArray(data.flags)) return null;
@@ -2655,6 +2660,10 @@ const saveSystem = {
     load() {
         const data = this.readSave();
         if (!data) return null;
+        gameState.analyticsRun = {
+            id: typeof data.analyticsRun?.id === 'string' ? data.analyticsRun.id : createRunId(),
+            completed: data.analyticsRun?.completed === true || data.currentSceneId.startsWith('E_')
+        };
         gameState.inventory = data.inventory;
         gameState.notebook = data.notebook;
         gameState.journalSeen = data.journalSeen && typeof data.journalSeen === 'object' ? data.journalSeen : {};
@@ -5359,12 +5368,15 @@ const sceneRenderer = {
 
             // Ensure background loads before fading in
             await new Promise(resolve => {
-                if (bg.complete) {
+                if (bg.complete) { resolve(); return; }
+                const timer = setTimeout(() => {
+                    bg.onload = bg.onerror = null;
+                    gameAnalytics.capture('error_encountered', { error_category: 'background_timeout', scene_id: sceneId });
                     resolve();
-                } else {
-                    bg.onload = () => resolve();
-                    bg.onerror = () => resolve(); // Continue even if image fails
-                }
+                }, 12000);
+                const finish = () => { clearTimeout(timer); bg.onload = bg.onerror = null; resolve(); };
+                bg.onload = finish;
+                bg.onerror = finish; // Continue even if image fails
             });
 
             // Add cinematic zoom-in on background
@@ -5463,7 +5475,8 @@ const sceneRenderer = {
                 }
             } else {
                 gameAnalytics.capture('game_progress', { progress_type: 'scene', scene_id: sceneId });
-                if (sceneId.startsWith('E_')) {
+                if (sceneId.startsWith('E_') && !gameState.analyticsRun.completed) {
+                    gameState.analyticsRun.completed = true;
                     gameAnalytics.capture('game_completed', { ending_id: sceneId });
                 }
             }
@@ -6703,6 +6716,8 @@ const SCENES = {
 
 
             document.getElementById('btn-new-game').addEventListener('click', () => {
+                if (sceneRenderer.isTransitioning) return;
+                gameState.analyticsRun = { id: createRunId(), completed: false };
                 SFXGenerator.playButtonClick();
                 gameState.inventory = [];
                 gameState.notebook = [];
@@ -6727,6 +6742,7 @@ const SCENES = {
                 continueBtn.disabled = true;
             } else {
                 continueBtn.addEventListener('click', () => {
+                    if (sceneRenderer.isTransitioning) return;
                     SFXGenerator.playButtonClick();
                     const savedSceneId = saveSystem.load();
                     if (savedSceneId) {
