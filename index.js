@@ -218,6 +218,42 @@ const HB_FLAG_MUTE = HB_URL_PARAMS.get('mute') === '1';
 const HB_FLAG_NO_ANIMATIONS = HB_URL_PARAMS.get('noAnimations') === '1';
 const HB_FLAG_NO_SAVE = HB_URL_PARAMS.get('noSave') === '1';
 
+// Private browsing / full storage must never prevent a playable session.
+const gameStorage = {
+    memory: new Map(),
+    persistent: true,
+    getItem(key) {
+        if (this.memory.has(key)) return this.memory.get(key);
+        try { return window.localStorage.getItem(key); }
+        catch (_) { this.persistent = false; return null; }
+    },
+    setItem(key, value) {
+        this.memory.set(key, String(value));
+        try { window.localStorage.setItem(key, value); return true; }
+        catch (_) { this.persistent = false; return false; }
+    },
+    removeItem(key) {
+        this.memory.set(key, null);
+        try { window.localStorage.removeItem(key); }
+        catch (_) { this.persistent = false; }
+    }
+};
+
+const gameAnalytics = {
+    capture(event, properties = {}) {
+        try { window.HBAnalytics?.capture(event, properties); } catch (_) {}
+    }
+};
+
+// Scene onEnter hooks customize dialogue for the active route. Always start
+// from the authored entries so a second run cannot inherit the previous route.
+const authoredSceneDialogue = new Map();
+function cloneDialogue(value) {
+    if (Array.isArray(value)) return value.map(cloneDialogue);
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, cloneDialogue(v)]));
+    return value; // retain authored next/action functions
+}
+
 const SETTINGS_STORAGE_KEY = 'HB_SETTINGS_V1';
 
 // ===== GLOBAL GAME STATE =====
@@ -273,6 +309,9 @@ const gameState = {
 const errorLogger = {
     log(context, error, meta = {}) {
         console.error(`[${context}]`, error, meta);
+        if (!/orientation-lock|audio-|fullscreen/.test(context)) {
+            gameAnalytics.capture('error_encountered', { error_category: context });
+        }
     }
 };
 
@@ -595,7 +634,7 @@ const Dev = {
 
         loadAllPatches() {
             try {
-                const raw = localStorage.getItem(Dev.storageKeys.patches);
+                const raw = gameStorage.getItem(Dev.storageKeys.patches);
                 return raw ? JSON.parse(raw) : {};
             } catch (error) {
                 errorLogger.log('dev-hotspot-load-patches', error);
@@ -604,7 +643,7 @@ const Dev = {
         },
 
         saveAllPatches(patches) {
-            localStorage.setItem(Dev.storageKeys.patches, JSON.stringify(patches));
+            gameStorage.setItem(Dev.storageKeys.patches, JSON.stringify(patches));
         },
 
         getScenePatch(sceneId) {
@@ -1154,7 +1193,7 @@ const Dev = {
 
         loadLayouts() {
             try {
-                const raw = localStorage.getItem(Dev.storageKeys.layouts);
+                const raw = gameStorage.getItem(Dev.storageKeys.layouts);
                 const parsed = raw ? JSON.parse(raw) : {};
                 return { desktop: parsed.desktop || {}, mobile: parsed.mobile || {} };
             } catch (error) {
@@ -1164,7 +1203,7 @@ const Dev = {
         },
 
         saveLayouts(layouts) {
-            localStorage.setItem(Dev.storageKeys.layouts, JSON.stringify(layouts));
+            gameStorage.setItem(Dev.storageKeys.layouts, JSON.stringify(layouts));
         },
 
         getCurrentLayouts() {
@@ -1639,9 +1678,9 @@ const Dev = {
     },
 
     init() {
-        this.enabled = localStorage.getItem(this.storageKeys.enabled) === 'true';
-        this.toolsEnabled = localStorage.getItem(this.storageKeys.toolsEnabled) === 'true';
-        this.activeTool = localStorage.getItem(this.storageKeys.activeTool) || null;
+        this.enabled = gameStorage.getItem(this.storageKeys.enabled) === 'true';
+        this.toolsEnabled = gameStorage.getItem(this.storageKeys.toolsEnabled) === 'true';
+        this.activeTool = gameStorage.getItem(this.storageKeys.activeTool) || null;
         this.syncSession();
 
         const modal = document.getElementById('devHubModal');
@@ -1782,8 +1821,8 @@ const Dev = {
                         this.hotspots.exportFixReport();
                     }
                     if (event.currentTarget.dataset.devAction === 'clear-dev-storage') {
-                        localStorage.removeItem(this.storageKeys.patches);
-                        localStorage.removeItem(this.storageKeys.layouts);
+                        gameStorage.removeItem(this.storageKeys.patches);
+                        gameStorage.removeItem(this.storageKeys.layouts);
                         this.hotspots.undoByScene.clear();
                         sceneRenderer.refreshCurrentHotspots();
                         this.layout.resetLayouts();
@@ -1877,7 +1916,7 @@ const Dev = {
 
     setEnabled(value) {
         this.enabled = Boolean(value);
-        localStorage.setItem(this.storageKeys.enabled, String(this.enabled));
+        gameStorage.setItem(this.storageKeys.enabled, String(this.enabled));
         this.syncSession();
         this.ui.updateFloatingButton();
         this.updateStatus();
@@ -1885,7 +1924,7 @@ const Dev = {
 
     setToolsEnabled(value) {
         this.toolsEnabled = Boolean(value);
-        localStorage.setItem(this.storageKeys.toolsEnabled, String(this.toolsEnabled));
+        gameStorage.setItem(this.storageKeys.toolsEnabled, String(this.toolsEnabled));
         const toggle = document.getElementById('dev-tools-enabled-toggle');
         if (toggle) {
             toggle.checked = this.toolsEnabled;
@@ -1902,9 +1941,9 @@ const Dev = {
         const normalizedTool = tool || null;
         this.activeTool = normalizedTool;
         if (this.activeTool) {
-            localStorage.setItem(this.storageKeys.activeTool, this.activeTool);
+            gameStorage.setItem(this.storageKeys.activeTool, this.activeTool);
         } else {
-            localStorage.removeItem(this.storageKeys.activeTool);
+            gameStorage.removeItem(this.storageKeys.activeTool);
         }
         if (!this.trace.isActive()) {
             this.trace.hideHighlight();
@@ -2378,11 +2417,18 @@ const assetLoader = {
 
         await new Promise((resolve) => {
             const img = new Image();
+            const timer = setTimeout(() => {
+                img.onload = img.onerror = null;
+                gameAnalytics.capture('error_encountered', { error_category: 'asset_timeout' });
+                resolve(); // Slow/offline requests must not hold boot indefinitely.
+            }, options.timeoutMs || 12000);
             img.onload = () => {
+                clearTimeout(timer);
                 this.loadedAssets.add(src);
                 resolve();
             };
             img.onerror = () => {
+                clearTimeout(timer);
                 // logErrors:false calls (lazyLoadSceneAssets' parallel
                 // sprite-candidate warm-up, next-scene background prefetch)
                 // are speculative/best-effort — an individual candidate
@@ -2575,7 +2621,7 @@ const saveSystem = {
     
     save() {
         // ?noSave=1 — used by automated tests (see HB_FLAG_NO_SAVE) so a
-        // full playthrough of scene transitions never touches localStorage.
+        // full playthrough of scene transitions never touches gameStorage.
         if (HB_FLAG_NO_SAVE) return true;
         const saveData = {
             currentSceneId: gameState.currentSceneId,
@@ -2586,41 +2632,43 @@ const saveSystem = {
             flags: gameState.flags,
             timestamp: Date.now()
         };
-        localStorage.setItem(this.SAVE_KEY, JSON.stringify(saveData));
+        const persisted = gameStorage.setItem(this.SAVE_KEY, JSON.stringify(saveData));
+        if (!persisted && !this.warnedAboutStorage) {
+            this.warnedAboutStorage = true;
+            showStatusToast('Browser storage unavailable. Progress lasts only while this tab stays open.', 6000);
+        }
         if (DEBUG) console.log('Game saved');
         return true;
     },
     
+    readSave() {
+        try {
+            const data = JSON.parse(gameStorage.getItem(this.SAVE_KEY));
+            if (!data || !SCENES[data.currentSceneId] || data.currentSceneId === 'S0_MAIN_MENU') return null;
+            if (!Array.isArray(data.inventory) || !data.inventory.every(x => typeof x === 'string')) return null;
+            if (!Array.isArray(data.notebook) || !data.notebook.every(x => x && typeof x.title === 'string' && typeof x.content === 'string')) return null;
+            if (!data.flags || typeof data.flags !== 'object' || Array.isArray(data.flags)) return null;
+            return data;
+        } catch (_) { return null; }
+    },
+
     load() {
-        const saveData = localStorage.getItem(this.SAVE_KEY);
-        if (saveData) {
-            try {
-                const data = JSON.parse(saveData);
-                gameState.inventory = data.inventory || [];
-                gameState.notebook = data.notebook || [];
-                gameState.journalSeen = data.journalSeen || {};
-                gameState.storyProgress = {
-                    ...gameState.storyProgress,
-                    ...(data.storyProgress || {})
-                };
-                gameState.flags = { ...gameState.flags, ...data.flags };
-                if (DEBUG) console.log('Game loaded');
-                return data.currentSceneId || null;
-            } catch (err) {
-                console.error('Failed to load save:', err);
-                return null;
-            }
+        const data = this.readSave();
+        if (!data) return null;
+        gameState.inventory = data.inventory;
+        gameState.notebook = data.notebook;
+        gameState.journalSeen = data.journalSeen && typeof data.journalSeen === 'object' ? data.journalSeen : {};
+        gameState.storyProgress = { ...gameState.storyProgress, ...(data.storyProgress || {}) };
+        for (const key of Object.keys(gameState.flags)) {
+            gameState.flags[key] = data.flags[key] === true;
         }
-        return null;
+        return data.currentSceneId;
     },
-    
-    hasSave() {
-        return localStorage.getItem(this.SAVE_KEY) !== null;
-    },
-    
-    deleteSave() {
-        localStorage.removeItem(this.SAVE_KEY);
-    }
+
+    hasSave() { return !!this.readSave(); },
+
+    deleteSave() { gameStorage.removeItem(this.SAVE_KEY); }
+
 };
 
 // ===== FIRST-TIME TUTORIAL STATE =====
@@ -2631,12 +2679,12 @@ const tutorialState = {
     STORAGE_KEY: 'hardigan_brothers_tutorial_seen',
 
     hasSeenIntro() {
-        return localStorage.getItem(this.STORAGE_KEY) === 'true';
+        return gameStorage.getItem(this.STORAGE_KEY) === 'true';
     },
 
     markIntroSeen() {
         if (HB_FLAG_NO_SAVE) return; // keep deterministic test runs from persisting this too
-        localStorage.setItem(this.STORAGE_KEY, 'true');
+        gameStorage.setItem(this.STORAGE_KEY, 'true');
     }
 };
 
@@ -2817,6 +2865,7 @@ const inventory = {
     add(itemId) {
         if (!gameState.inventory.includes(itemId)) {
             gameState.inventory.push(itemId);
+            gameAnalytics.capture('game_progress', { progress_type: 'item_acquired', item_id: itemId, scene_id: gameState.currentSceneId });
             console.log(`Added to inventory: ${itemId}`);
 
             const hintContent = ITEM_JOURNAL_HINTS[itemId];
@@ -2984,6 +3033,7 @@ function handleItemUse(itemId) {
     const useHandler = currentScene.itemUses && currentScene.itemUses[itemId];
     if (useHandler && typeof useHandler.action === 'function') {
         SFXGenerator.playButtonClick();
+        gameAnalytics.capture('game_progress', { progress_type: 'item_used', item_id: itemId, scene_id: gameState.currentSceneId });
         useHandler.action();
     } else {
         showStatusToast(`Can't use that here right now.`, 2200);
@@ -4345,6 +4395,7 @@ const dialoguePager = {
                 gameState.actionLock = true;
                 gameState.dialogueLock = false;
                 SFXGenerator.playButtonClick();
+                gameAnalytics.capture('game_progress', { progress_type: 'choice', scene_id: gameState.currentSceneId, choice_index: choiceIndex });
                 if (choice.action) choice.action();
                 // Release on a short delay, like the item/hotspot click
                 // handlers — releasing synchronously right after a
@@ -5244,6 +5295,7 @@ const sceneRenderer = {
             return;
         }
 
+        scene.dialogue = cloneDialogue(authoredSceneDialogue.get(sceneId) || scene.dialogue);
         document.body.classList.toggle('main-menu', sceneId === 'S0_MAIN_MENU');
         if (sceneId === 'S0_MAIN_MENU') {
             document.getElementById('scene-title').textContent = '';
@@ -5402,6 +5454,18 @@ const sceneRenderer = {
             // Fire transition complete callback
             if (this.onTransitionComplete) {
                 try { this.onTransitionComplete(sceneId); } catch (e) { errorLogger.log('onTransitionComplete', e, { sceneId }); }
+            }
+
+            if (sceneId === 'S0_MAIN_MENU') {
+                if (!this.analyticsOpened) {
+                    this.analyticsOpened = true;
+                    gameAnalytics.capture('game_opened');
+                }
+            } else {
+                gameAnalytics.capture('game_progress', { progress_type: 'scene', scene_id: sceneId });
+                if (sceneId.startsWith('E_')) {
+                    gameAnalytics.capture('game_completed', { ending_id: sceneId });
+                }
             }
 
             // Loading the main menu itself is never a resume point, and
@@ -6653,6 +6717,7 @@ const SCENES = {
                     gameState.flags[key] = false;
                 }
                 saveSystem.deleteSave();
+                gameAnalytics.capture('game_started', { mode: 'story' });
                 document.body.classList.remove('main-menu');
                 sceneRenderer.loadScene('S1_LIVING_ROOM_INTRO');
             });
@@ -6665,6 +6730,7 @@ const SCENES = {
                     SFXGenerator.playButtonClick();
                     const savedSceneId = saveSystem.load();
                     if (savedSceneId) {
+                        gameAnalytics.capture('game_resumed', { resume_type: 'save', scene_id: savedSceneId });
                         document.body.classList.remove('main-menu');
                         sceneRenderer.loadScene(savedSceneId);
                     }
@@ -6840,8 +6906,9 @@ const SCENES = {
                 coordSystem: 'native',
                 x: 458, y: 722, width: 119, height: 76,
                 onClick() {
+                    // A resumed save may already own it; inspecting it still counts.
+                    gameState.objectsClicked.add('notebook');
                     if (!inventory.has('conspiracy_notebook')) {
-                        gameState.objectsClicked.add('notebook');
                         inventory.add('conspiracy_notebook');
                         notebook.add('THE NOTEBOOK', 'Hank\'s conspiracy theories and "research". Everything connects, apparently.');
                         sceneRenderer.showDialogue({
@@ -10337,7 +10404,7 @@ const demoValidator = {
 // ===== SETTINGS PERSISTENCE =====
 function loadSettingsFromStorage() {
     try {
-        const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+        const raw = gameStorage.getItem(SETTINGS_STORAGE_KEY);
         if (!raw) return;
         const parsed = JSON.parse(raw);
         if (typeof parsed !== 'object' || parsed === null) return;
@@ -10357,7 +10424,7 @@ function loadSettingsFromStorage() {
 
 function saveSettingsToStorage() {
     try {
-        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(gameState.settings));
+        gameStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(gameState.settings));
     } catch (e) {
         // Storage unavailable — silently ignore
     }
@@ -10406,10 +10473,12 @@ function setupUIHandlers() {
     document.getElementById('btn-pause').addEventListener('click', () => {
         SFXGenerator.playButtonClick();
         document.getElementById('pause-menu').classList.remove('hidden');
+        gameAnalytics.capture('game_paused', { scene_id: gameState.currentSceneId });
         audioManager.playMusic('game-menu-theme.mp3');
     });
     
     const closePauseMenu = () => {
+        gameAnalytics.capture('game_resumed', { resume_type: 'pause', scene_id: gameState.currentSceneId });
         document.getElementById('pause-menu').classList.add('hidden');
         const currentScene = SCENES[gameState.currentSceneId];
         if (currentScene && currentScene.music) {
@@ -10435,7 +10504,7 @@ function setupUIHandlers() {
     document.getElementById('btn-save').addEventListener('click', () => {
         SFXGenerator.playButtonClick();
         if (saveSystem.save()) {
-            uiModal.show({ title: 'Saved', bodyText: 'Game saved successfully!' });
+            uiModal.show({ title: 'Saved', bodyText: gameStorage.persistent ? 'Game saved successfully!' : 'Progress is available in this tab only. Your browser is blocking saved data; closing or reloading may lose progress.' });
         }
     });
     
@@ -10651,6 +10720,7 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
 
     // Normalize scene data before the first scene loads.
     sceneIntegrity.validateAndNormalize();
+    Object.entries(SCENES).forEach(([id, scene]) => authoredSceneDialogue.set(id, cloneDialogue(scene.dialogue)));
 
     Dev.kernel.initOnce();
 
@@ -10659,8 +10729,8 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
     }
 
     // Clear stale dev patches now that coordinates are baked into source
-    try { localStorage.removeItem('DEV_PATCHES'); } catch(e) {}
-    try { localStorage.removeItem('DEV_LAYOUTS'); } catch(e) {}
+    try { gameStorage.removeItem('DEV_PATCHES'); } catch(e) {}
+    try { gameStorage.removeItem('DEV_LAYOUTS'); } catch(e) {}
 
     // Setup UI handlers
     setupUIHandlers();
@@ -10705,12 +10775,15 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
 
         introScreen.classList.remove('hidden');
 
+        let introWatchdog;
         // One-shot handler: fade out intro then load main menu
         const finishIntro = (() => {
             let done = false;
             return () => {
                 if (done) return;
                 done = true;
+                clearTimeout(introWatchdog);
+                document.removeEventListener('keydown', finishIntro);
                 introScreen.classList.add('fading-out');
                 setTimeout(() => {
                     introScreen.classList.add('hidden');
@@ -10722,6 +10795,8 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
             };
         })();
 
+        introWatchdog = setTimeout(finishIntro, 12000);
+        introVideo.addEventListener('error', finishIntro, { once: true });
         introVideo.addEventListener('ended', finishIntro, { once: true });
         skipBtn.addEventListener('click', finishIntro, { once: true });
 

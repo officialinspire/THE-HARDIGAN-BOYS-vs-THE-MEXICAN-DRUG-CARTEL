@@ -1,0 +1,28 @@
+name: Mobile release checks
+on:
+  push:
+    branches: [main, codex/hardigan-mobile-release]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node --check index.js && node --check analytics.js
+      - run: npm run test:layout -- --workers=3
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mobile-release-results
+          path: test-results/
+          retention-days: 14
