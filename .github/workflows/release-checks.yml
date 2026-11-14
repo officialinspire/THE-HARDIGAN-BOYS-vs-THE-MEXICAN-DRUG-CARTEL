@@ -2,8 +2,13 @@ name: Mobile release checks
 on:
   push:
     branches: [main, codex/hardigan-mobile-release]
+    paths-ignore: ['**.md']
   pull_request:
+    paths-ignore: ['**.md']
   workflow_dispatch:
+concurrency:
+  group: mobile-release-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:

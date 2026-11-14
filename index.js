@@ -3034,6 +3034,10 @@ function showItemInfo(itemId) {
 }
 
 function handleItemUse(itemId) {
+    if (gameState.dialogueLock || sceneRenderer.isTransitioning) {
+        showStatusToast('Finish the dialogue before using an item.', 2200);
+        return;
+    }
     const currentScene = SCENES[gameState.currentSceneId];
     if (!currentScene) {
         showStatusToast("Can't use that right now.");
@@ -5872,14 +5876,6 @@ const sceneRenderer = {
 
     async showDialogue(dialogueEntry) {
         try {
-            this._bindDialogueTapHandlers();
-            gameState.currentDialogueEntry = dialogueEntry;
-            this._setSpeakingCharacter(dialogueEntry?.speaker, dialogueEntry?.characterId);
-            // Pagination state resets completely for every new entry — see
-            // dialoguePager.reset() (also called from _closeDialogueThen()
-            // and clearScene() for the close/scene-transition cases).
-            dialoguePager.reset();
-
             // Block dialogue during scene transitions
             if (this.isTransitioning) {
                 console.log('Scene transition in progress, blocking dialogue');
@@ -5892,6 +5888,12 @@ const sceneRenderer = {
                 return;
             }
 
+            // Only an accepted dialogue request may replace the current pager.
+            // Tapping another hotspot during a line must not erase its Continue action.
+            this._bindDialogueTapHandlers();
+            gameState.currentDialogueEntry = dialogueEntry;
+            this._setSpeakingCharacter(dialogueEntry?.speaker, dialogueEntry?.characterId);
+            dialoguePager.reset();
             gameState.dialogueLock = true;
 
             // Identifies *this* call's eventual double-rAF settle pass (see

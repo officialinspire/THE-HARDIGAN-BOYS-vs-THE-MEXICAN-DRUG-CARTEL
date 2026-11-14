@@ -115,7 +115,11 @@ for (const [label, ending, helped] of [
         }, helped);
         await scene(page, 'S9_FINAL_WAREHOUSE_SHOWDOWN');
         await page.waitForTimeout(700);
-        await page.evaluate(() => handleItemUse('neighbors_usb'));
+        await page.evaluate(() => {
+            // Final-choice fixture replaces the scene's opening dialogue.
+            gameState.dialogueLock = false;
+            handleItemUse('neighbors_usb');
+        });
         for (let step = 0; step < 15; step++) {
             if (await page.getByRole('button', { name: label, exact: true }).isVisible()) break;
             await page.evaluate(() => window.__HB_DEBUG__.finishTyping());
@@ -161,4 +165,74 @@ test('debug/test sessions do not send analytics by default', async ({ page }) =>
     await page.locator('#btn-new-game').click();
     await page.waitForFunction(() => gameState.currentSceneId === 'S1_LIVING_ROOM_INTRO' && !sceneRenderer.isTransitioning);
     expect(requests).toBe(0);
+});
+
+test('touch controls complete the opening room and a story branch on a phone', async ({ browser }, info) => {
+    test.skip(info.project.name !== 'iphone-se-landscape-667x375');
+    test.setTimeout(120000);
+    const context = await browser.newContext({
+        viewport: { width: 667, height: 375 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2
+    });
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.addInitScript(() => localStorage.setItem('hardigan_brothers_tutorial_seen', 'true'));
+    try {
+        await boot(page);
+        await page.locator('#btn-new-game').tap();
+        await page.waitForFunction(() => gameState.currentSceneId === 'S1_LIVING_ROOM_INTRO' && !sceneRenderer.isTransitioning);
+        await page.waitForTimeout(700);
+        async function readDialogueUntilIdle(sceneId) {
+            for (let step = 0; step < 50; step++) {
+                const state = await page.evaluate(() => ({
+                    scene: gameState.currentSceneId, busy: sceneRenderer.isTransitioning,
+                    hidden: document.getElementById('dialogue-box').classList.contains('hidden'),
+                    typing: sceneRenderer.isTyping,
+                    choices: document.querySelectorAll('#dialogue-choices .dialogue-choice').length
+                }));
+                if (state.scene !== sceneId || (!state.busy && state.hidden) || state.choices) return;
+                if (!state.busy) {
+                    if (state.typing) await page.locator('#dialogue-box').tap();
+                    else if (await page.locator('#dialogue-continue').isVisible()) await page.locator('#dialogue-continue').tap();
+                }
+                await page.waitForTimeout(350);
+            }
+            throw new Error(`Dialogue did not settle in ${sceneId}`);
+        }
+        await readDialogueUntilIdle('S1_LIVING_ROOM_INTRO');
+        for (const id of ['tv_remote', 'television', 'lamp', 'notebook', 'window']) {
+            await page.locator(`[data-hotspot-id="${id}"]`).tap();
+            await page.waitForTimeout(350);
+            await readDialogueUntilIdle('S1_LIVING_ROOM_INTRO');
+        }
+        await page.waitForFunction(() => gameState.currentSceneId === 'S2_ICE_RAID_WINDOW' && !sceneRenderer.isTransitioning);
+        await page.waitForTimeout(700);
+        await readDialogueUntilIdle('S2_ICE_RAID_WINDOW');
+        await page.getByRole('button', { name: /sneak/i }).tap();
+        await page.waitForFunction(() => gameState.currentSceneId === 'S3B_RIVERA_BACKYARD' && !sceneRenderer.isTransitioning);
+        await page.locator('#btn-pause').tap();
+        await expect(page.locator('#pause-menu')).toBeVisible();
+        await page.locator('#btn-resume').tap();
+        await expect(page.locator('#pause-menu')).toBeHidden();
+        expect(errors).toEqual([]);
+        await page.screenshot({ path: info.outputPath('phone-touch-story.png') });
+    } finally { await context.close(); }
+});
+
+test('a rejected dialogue request cannot erase the active Continue action', async ({ page }) => {
+    await boot(page);
+    await page.locator('#btn-new-game').click();
+    await page.waitForFunction(() => gameState.currentSceneId === 'S1_LIVING_ROOM_INTRO' && !sceneRenderer.isTransitioning);
+    await page.waitForFunction(() => gameState.dialogueLock && dialoguePager.state !== null);
+    const result = await page.evaluate(async () => {
+        const entry = gameState.currentDialogueEntry;
+        const pager = dialoguePager.state;
+        await sceneRenderer.showDialogue({ speaker: 'NARRATION', text: 'Must not replace the active line.' });
+        return { sameEntry: gameState.currentDialogueEntry === entry, samePager: dialoguePager.state === pager };
+    });
+    expect(result).toEqual({ sameEntry: true, samePager: true });
+    await page.evaluate(() => window.__HB_DEBUG__.finishTyping());
+    await expect(page.locator('#dialogue-continue')).toBeVisible();
+    await page.locator('#dialogue-continue').click();
+    await page.waitForFunction(() => dialoguePager.state !== null);
 });

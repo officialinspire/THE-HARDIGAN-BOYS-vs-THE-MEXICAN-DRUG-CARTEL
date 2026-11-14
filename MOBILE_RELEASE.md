@@ -9,13 +9,13 @@ Status: browser regression checks pending on PR #195. Do not treat the historica
 - Storage denial and quota failures fall back to memory. Players can keep playing and receive a notice that closing/reloading the tab may lose progress. Manual Save also explains this limit.
 - Invalid/corrupt save slots disable Continue; New Game remains available. Valid existing saves still load.
 - Critical image preloads, scene backgrounds, and the studio intro have bounded waits, so a stalled request cannot permanently hold the loading/transition screen.
-- Repeated New Game/Continue taps during transitions are ignored.
+- Repeated New Game/Continue taps during transitions are ignored. A rejected dialogue request no longer erases the active pagination/Continue state; item use waits until the current dialogue finishes.
 
 ## Mobile support and validation scope
 
 The game intentionally requests landscape orientation and displays a rotate prompt in portrait. The automated matrix covers 667×375, 740×360, 844×390, 915×412, 1024×768, 1366×768, and 1920×1080; release tests also rotate 390×844 into landscape.
 
-The existing layout suite checks representative narration, short/long speech, choices, required assets, and accessible continue/choice controls. Additional release tests cover all-scene asset validation, save/reload/continue, blocked storage, corrupt saves, replay state, loading/intro stalls, four final ending choices, analytics attribution/SDK failure, and exclusion of test traffic.
+The existing layout suite checks representative narration, short/long speech, choices, required assets, and accessible continue/choice controls. Additional release tests cover all-scene asset validation, save/reload/continue, blocked storage, corrupt saves, replay state, loading/intro stalls, four final ending choices, analytics attribution/SDK failure, exclusion of test traffic, and a touch-enabled phone walkthrough of the opening room and first story branch.
 
 Ending tests explicitly seed the final-scene inventory and flags, then exercise item-use and choice handlers. They are not full route walkthroughs. Chromium viewport emulation is not physical iOS Safari or Android testing. A real-device touch/audio spot-check remains advisable before a large promotion. No offline-install/PWA support is claimed.
 
