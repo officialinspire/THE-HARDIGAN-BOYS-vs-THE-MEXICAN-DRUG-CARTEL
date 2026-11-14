@@ -1,6 +1,14 @@
 # Mobile release — November 14, 2026
 
-Status: browser regression checks pending on PR #195. Do not treat the historical August readiness report as current release evidence.
+Status: **READY for the landscape browser demo release.**
+
+Verified game/test commit: `b7324fefcb813ff856839944a9aa8cbe61552ae6`.
+
+[GitHub Actions release gate](https://github.com/officialinspire/THE-HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL/actions/runs/43642907078): **207 passed, 150 not-applicable cases skipped, zero failures** across seven viewport sizes. The separate touch walkthrough also passed. The all-scene validator completed with zero error findings. The skips cover dialogue types absent from a scene and checks intentionally scoped to a representative viewport.
+
+The layout suite now waits for boot's real menu before jumping, and verifies the requested scene ID before inspecting it. This prevents a boot-time menu transition from replacing the scene being tested. Touch tests wait through delayed speech entrances and respect the existing touch debounce.
+
+The historical August readiness report remains an earlier audit; use this report and the linked run for current evidence.
 
 ## Player-facing fixes
 
