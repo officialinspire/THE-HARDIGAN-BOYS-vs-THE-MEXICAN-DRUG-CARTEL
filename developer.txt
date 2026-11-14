@@ -1,0 +1,776 @@
+===== developer.txt =====
+TITLE: THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL
+VERSION: 0.1 – CONCEPT + NARRATIVE + ASSET SPEC
+
+LORE / TONE OVERVIEW
+--------------------
+A dark-comedy, South Park / Adult Swim–style **point-and-click slideshow adventure** where:
+- The **Hardigan Brothers** (HANK and JONAH) are wannabe teen detectives in Northern Virginia.
+- Their chill, undocumented neighbors are suddenly raided by ICE.
+- The brothers’ choices pull them into a spiraling mess with:
+  - A Mexican drug cartel faction
+  - US Feds (ICE, FBI, CIA, shadow “Special Projects” unit)
+  - Venezuelan political players loyal to Maduro
+  - Colombian smugglers and a gang called “Tren de Agua”
+
+The game satirizes:
+- US immigration policy and ICE optics
+- The War on Drugs
+- Cable-news brain rot
+- TikTok geopolitics “experts”
+- Conspiracy culture
+
+We’re mocking systems, institutions, and media hysteria — **not** entire nationalities or everyday people.
+
+---------------------------------------------------------------------------------
+TARGET PLAYTIME 
+---------------------------------------------------------------------------------
+~30 minutes for a single playthrough, with multiple branches and endings.
+Average route: 10–14 scenes.
+
+---------------------------------------------------------------------------------
+GAMEPLAY LOOP (index.js) 
+---------------------------------------------------------------------------------
+
+1. Player chooses:
+   - NEW GAME
+   - CONTINUE (load from saved JSON)
+2. Each “scene” is a **slideshow-style card** with:
+   - Background art
+   - Characters (slide-in/slide-out)
+   - Clickable hot spots:
+     - Objects (keys, phones, laptops, doors)
+     - Environmental toggles (lights, windows, TV, etc.)
+     - NPCs (trigger dialogue bubbles)
+   - Dialogue boxes (comic-style speech bubbles)
+   - Each scene fades in from black and fades out to black when transitioning between scenes or from start game or to end game. 
+3. Player chooses dialogue options / actions.  
+4. Choices:
+   - Update FLAGS (e.g., HELPED_ICE, HELPED_NEIGHBORS, CARTEL_ALLY, etc.).
+   - Unlock or block later branches.
+5. Inventory items unlock new interactions.
+6. Endings depend on key flag combinations.
+
+----------------------------------------------------------------------------------
+TECH + IMPLEMENTATION NOTES
+----------------------------------------------------------------------------------
+FRONTEND: (index.html styles.css)
+- Stack (suggested): HTML5 + CSS + vanilla JS (or lightweight framework if desired).
+- Scenes defined in JSON (SCENE_ID, assets, hotspots, dialogue, transitions).
+- Use CSS transitions for:
+  - Character slide-in/out (transform/opacity)
+  - Light toggles (layer masks / brightness filters)
+  - Screen shake (for explosions, raids, etc.)
+
+STATE MANAGEMENT: (index.js) 
+- Global state object:
+  - currentSceneId
+  - inventory: [ "house_key", "neighbors_usb", ... ]
+  - flags: { HELPED_ICE: true/false, HELPED_NEIGHBORS: true/false, CARTEL_ALLY: false, ... }
+- Save system:
+  - LocalStorage JSON snapshot: { currentSceneId, inventory, flags, timestamp }.
+  - CONTINUE loads last snapshot.
+
+-----------------------------------------------------------------------------------
+UI / UX SPECS (Directory Path for Assets: ...\HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL\assets\ui ) 
+-----------------------------------------------------------------------------------
+
+MAIN MENU:
+- [ASSET-UI-MAIN-BG] Dark, comedic crime-board background.
+- Buttons:
+  - NEW GAME
+  - CONTINUE (disabled/grey if no save exists)
+  - OPTIONS (sound, text speed, language later)
+- Title text: “THE HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL”
+- Background Music: main-menu-theme.mp3
+
+IN-GAME HUD:
+- Top-left: Scene title (small, neon-caption style).
+- Bottom:
+  - Inventory button (opens overlay grid of items).
+  - Settings icon.
+- Dialogue driven by speech bubbles next to characters in each scene 
+- Background Music: game-menu-theme.mp3
+- Sfx: 
+
+INTERACTION:
+- Click hotspots highlight on hover (CSS glow outline).
+- Click triggers:
+  - Dialogue
+  - Inventory pickup
+  - Flag changes
+  - Scene transition
+-Sfx: 
+
+-----------------------------------------------------------------------------------
+CHARACTER LIST (WITH CORE ASSETS) (Directory Path for Assets: ...\HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL\assets\characters )
+-----------------------------------------------------------------------------------
+
+HANK HARDIGAN (Older brother, ~17)
+- Personality: Cynical, thinks he’s a genius detective, watches too much YouTube geopolitics.
+- Key traits: sarcastic, secretly anxious, “I did my own research” guy.
+- Needed sprites:
+  - char_hank_neutral.png
+  - char_hank_smirk.png
+  - char_hank_panicked.png
+  - char_hank_angry.png
+  - char_hank_thinking.png (hand on chin)
+  - char_hank_in_disguise.png (cheap sunglasses + thrift store suit)
+
+JONAH HARDIGAN (Younger brother, ~15)
+- Personality: Golden retriever energy; chaos gremlin; TikTok-poisoned brain.
+- Needed sprites:
+  - char_jonah_neutral.png
+  - char_jonah_excited.png
+  - char_jonah_scared.png
+  - char_jonah_confused.png
+  - char_jonah_influencer_mode.png (holding phone, ring light reflection)
+
+MRS. HARDIGAN (Mom)
+- Personality: Overworked nurse; doomscrolling; constantly worried about bills and “the algorithm.”
+- Needed sprites:
+  - char_mom_tired.png
+  - char_mom_angry.png
+  - char_mom_worried.png
+  - char_mom_nurse_scrubs.png
+
+NEIGHBOR FAMILY (The Riveras – fictional Mexican family, normal people)
+
+- CARLOS RIVERA (Dad)
+  - char_carlos_normal.png (chill dad)
+  - char_carlos_detained.png (hands behind back, worried)
+
+- LUISA RIVERA (Mom)
+  - char_luisa_worried.png
+  - char_luisa_pleading.png
+
+- SOFIA RIVERA (Teen daughter, around Hank’s age, sharp & sarcastic)
+  - char_sofia_neutral.png
+  - char_sofia_sarcastic.png
+  - char_sofia_determined.png
+  - char_sofia_hacker_hoodie.png
+  - char_sofia_annoyed.png
+  - char_sofia_upset.png
+
+ICE AGENTS
+
+- AGENT SMITH (face of ICE in game)
+  - char_ice_smith_neutral.png
+  - char_ice_smith_stern.png
+  - char_ice_smith_smirk.png
+  - char_ice_smith_happy.png
+
+- GENERIC ICE AGENTS (background)
+  - char_ice_generic_1.png
+  - char_ice_generic_2.png
+
+FEDERAL / INTEL CHARACTERS
+
+- CIA HANDLER “Ms. Gray”
+  - char_msgray_neutral.png
+  - char_msgray_amused.png
+  - char_msgray_threatening.png
+  - char_msgray_displeased.png
+
+- “SPECIAL PROJECTS” OPERATOR (hoodie, night vision goggles)
+  - char_specialops_masked.png
+  - char_specialops_masked_neutral.png
+
+CARTEL CHARACTERS (CRIMINALS – NOT REPRESENTING ALL MEXICANS)
+
+- CARTEL BOSS “EL LICENCIADO”
+  - char_cartel_boss_neutral.png 
+  - char_cartel_boss_amused.png
+  - char_cartel_boss_menacing.png
+
+- CARTEL HENCHMEN
+  - char_cartel_henchman_1.png (masked)
+  - char_cartel_henchman_2.png
+
+VENEZUELAN FACTION
+
+- “COMRADE ORTEGA” (political operator)
+  - char_ortega_neutral.png
+  - char_ortega_ranting.png
+  - char_ortega_suspicious.png
+
+COLOMBIAN SMUGGLERS / TREN DE AGUA
+
+- “LUPITA” – logistical brains
+  - char_lupita_calm.png
+  - char_lupita_smirk.png
+  - char_lupita_annoyed.png 
+
+- “EL GATO” – quiet, catlike enforcer
+  - char_elgato_neutral.png
+  - char_elgato_intense.png
+
+NEWS ANCHORS / MEDIA
+
+- Cable News Talking Head (generic)
+  - char_news_anchor_shocked.png
+  - char_news_anchor_serious.png
+
+-----------------------------------------------------------------------------------
+BACKGROUND / SCENE ASSETS (Directory Path for Image Assets: ...\HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL\assets\backgrounds ) (Directory Path for Background Music Assets: ...\HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL\audio\ )
+-----------------------------------------------------------------------------------
+List by LAYERED scenes (each scene can re-use layers).
+
+1) HARDIGAN LIVING ROOM – NIGHT (S1_LIVING_ROOM_INTRO – “Another Normal Night” / S3A_FRONT_YARD_FROM_DISTANCE – “Good Citizens”)
+- bg_hardigan_livingroom_night.png
+- Background Music: Hardigan Noir Tension.mp3
+- Actions: 
+     -CLICKABLES:
+     -CLICK [TV]:
+        - TV cycles channels:
+          - News anchor: “Breaking: Another ‘totally under control’ border situation…”
+          - True crime doc voiceover.
+          - Cartoon.
+          -JONAH: “Wow, we’ve speedrun from ‘late capitalism’ to ‘late episode of Cops’.”
+     -CLICK [LAMP]:
+         - Light toggles; use fx_light_on/fx_light_off overlay.
+         - HANK: “Mood lighting for the collapse of the republic.”
+     -CLICK [COFFEE_TABLE_NOTEBOOK]:
+         - Player picks up item: conspiracy_notebook.
+         - System: “Item acquired: HANK’S CONSPIRACY NOTEBOOK.”
+         - HANK: “My masterpiece. I color-coded the coups.”
+     -CLICK [WINDOW]:
+         - Camera pans slightly; fx_police_lights flicker.
+         - JONAH: “Uh. Hank?”
+         - HANK: “Relax, it’s probably just your DoorDash finally escaping ICE detention.”
+
+- Overlays:
+  - fx_police_lights.png (outside window flicker)
+  - fx_tv_static.png
+
+----------------------------------------------
+
+2) RIVERA HOUSE FRONT YARD / STREET - NIGHT (S2_ICE_RAID_WINDOW – “The Raid”)  
+- bg_street_suburb_raid_night.png
+- Background Music: Dark Police Intensity.mp3
+- Actions: 
+      - CLICKABLES:
+      - [RIVERA_HOUSE_DOOR] – zoom focus.
+      - [ICE_VAN] – dialogue comment.
+      - [PHONE_ON_TABLE] – inside living room (to call someone later).
+      - [MOM] – appears after a beat.
+-CHOICE TRIGGER:
+- Highlight two main hotspots:
+  - [FOLLOW_MOM_BACK] – listen to her → leaning toward HELP_ICE.
+  - [SNEAK_BACK_DOOR] – ignore her and sneak out → HELP_NEIGHBORS.
+
+PLAYER CHOICE:
+1) CHOICE A – “Listen to Mom (Stay Out of It… For Now)”
+   - Click [FOLLOW_MOM_BACK] or dialogue option:
+     - HANK: “Okay, okay. It’s probably nothing.”
+     - FLAG: HELPED_ICE = true (softly set, they didn’t oppose it).
+     - Go to S3A_FRONT_YARD_FROM_DISTANCE.
+
+2) CHOICE B – “Sneak Out and Help the Riveras”
+   - Click [SNEAK_BACK_DOOR] or choose rebellious dialogue.
+   - FLAG: HELPED_NEIGHBORS = true.
+   - Acquire off-screen: house_key auto (if not already).
+   - Go to S3B_RIVERA_BACKYARD.
+
+----------------------------------------------
+
+3) HARDIGAN FRONT YARD / STREET – NIGHT / HARDIGAN HOUSE LIVING ROOM AT NIGHT  (S3A_FRONT_YARD_FROM_DISTANCE – “Good Citizens”)
+- bg_street_suburb_hardigan_house.png 
+- Background Music: 
+- Actions: 
+        -CLICKABLES: 
+
+
+- bg_hardigan_livingroom_night_03.png (curtains pulled back)
+- Background Music: 
+- Actions:
+        - CLICKABLES:
+        - [TV] – now shows live raid coverage.
+        - [PHONE] – call tip-line / call dad / do nothing. 
+
+-Overlays: 
+  - lighting for house window (create ambiance in the game background) 
+
+CHOICE:
+1) Call ICE “to cooperate / give info”  
+   - FLAG: HELPED_ICE = true, WORKING_WITH_CIA = soft possible later.
+   - Leads to S4A1_ICE_FOLLOWUP.
+
+2) Refuse to call; silently watch.
+   - Set internal flag: DISILLUSIONED = true.
+   - Leads to S4A2_GUILT_AND_GOSSIP.
+
+----------------------------------------------
+
+4 ) RIVERIA FRONT YARD / STREET - NIGHT (S2_ICE_RAID_WINDOW – “The Raid”) 
+- bg_street_suburb_raid_night.png
+- Background Music: ...\HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL\audio\Covert Investigation.mp3  
+- Actions: 
+     -CLICKABLES:
+     - [RIVERA_HOUSE_DOOR] – zoom focus.
+     - [ICE_VAN] – dialogue comment.
+     - [PHONE_ON_TABLE] – inside living room (to call someone later).
+     - [MOM] – appears after a beat.
+
+- Overlays:
+  - fx_police_lights.png
+  - fx_raid_flash.png
+  - lighting for street light 
+
+- bg_rivera_backyard_night.png
+- Background Music: The Raid Escape.mp3
+- Actions: 
+      - CLICKABLES:
+      - [BACK_DOOR] – knock or pick lock.
+      - [TRASH_BIN] – hide.
+      - [WINDOW] – peek; see family chaos inside.
+      - [SOFIA_SHADOW] – will appear after window interaction.
+
+OBJECTIVES:
+- Click [WINDOW] → see Carlos being cuffed.
+- Click [BACK_DOOR]:
+  - If player chooses “knock”: Sofia opens. 
+
+CHOICE:
+- PROMISE:
+  - Option: “We’ll use this to clear his name.”
+  - FLAG: HELPED_NEIGHBORS = true, LOYAL_TO_RIVERAS = true.
+- HESITATE:
+  - Option: “We’ll… see what’s on it.”
+  - FLAG: HELPED_NEIGHBORS = true, OPPORTUNIST = true.
+
+NEXT:
+- Escape backyard → S4B_SCHOOL_AFTERSHOCK.
+
+-------------------------------------------
+
+5) RIVERA HOUSE INTERIOR
+- bg_rivera_livingroom_chaos.png (raid)
+- Background Music: ...\HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL\audio\Muted Aftermath.mp3 
+- Actions: 
+
+- Overlays: 
+   - lighting for table lamp in living room 
+
+
+- bg_rivera_livingroom_empty.png (later, after raid) 
+- Background Music: ...\HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL\audio\Muted Aftermath.mp3 
+- Actions: 
+
+- Overlays: 
+   - lighting for table lamp in living room 
+
+--------------------------------------------
+
+6) HARDIGAN LIVING ROOM DAY (S4A1_ICE_FOLLOWUP – “Friendly Federal Harassment”)
+- bg_hardigan_livingroom_day.png (next morning)
+- Background Music: 
+- ACTIONS: 
+       - CLICKABLES:
+       - [FRONT_DOOR] – open, ICE at doorstep.
+       - [AGENT_BADGE] – inspect.
+       - [MOM] – reaction.
+
+CHOICE:
+1) Cooperate fully:
+   - Give them “general info about neighbors.”
+   - FLAG: WORKING_WITH_CIA = true (later they get passed up the food chain).
+   - ICE gives them a burner phone:
+     - item_burner_phone acquired.
+     - AGENT SMITH: “If you see anything else… cartel, suspicious cash, socialism… you text this number.”
+   - → S5_SCHOOL_GOSSIP.
+
+2) Backpedal:
+   - HANK: “I think… we overreacted.”
+   - AGENT SMITH: “Overreacting is literally our job.”
+   - Less trust from ICE; FLAG: SUSPICIOUS_TO_FEDS = true.
+   - → S5_SCHOOL_GOSSIP.
+
+---------------------------------------------
+
+7) ICE DETENTION PROCESSING ROOM
+- bg_ice_processing_room.png 
+- Background Music: ...\HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL\audio\Bureaucratic Cold.mp3" 
+- Actions: 
+
+--------------------------------------------
+
+8) SCHOOL HALLWAY (S4A2_GUILT_AND_GOSSIP – “We Just Watched” / S4B_SCHOOL_AFTERSHOCK – “Hashtag Deportation Drama”)
+- bg_school_hallway_day.png
+- Background Music: 
+- Actions: 
+
+S4A2_GUILT_AND_GOSSIP – “We Just Watched”
+
+SCENE PURPOSE:
+- Establish school gossip and rumors about the Riveras.
+- Show media narrative diverging from reality.
+- Set up CIA interest or cartel targeting. 
+
+S4B_SCHOOL_AFTERSHOCK – “Hashtag Deportation Drama”
+
+CLICKABLES:
+- [POSTER_BOARD] – see news clippings.
+- [STUDENT_GROUP_1] – gossip.
+- [LOCKER] – get flash of neighbors’ absence.
+- [PHONE] – trending hashtag. 
+
+If HELPED_NEIGHBORS:
+- SOFIA appears later in the scene:
+  - char_sofia_determined.png
+  - SOFIA: “You still have the drive?”
+  - HANK: “Yeah. Feels like holding a grenade filled with subpoenas.”
+  - SOFIA: “Good. Because you’re not the only ones who want it.”
+
+BRANCH SETUP:
+- CIA Ms. Gray contacts them (if WORKING_WITH_CIA true).
+- Cartel scouts start following them (if OPPORTUNIST or NEIGHBORS_USB obtained).
+
+--------------------------------------------
+
+9) CARTEL SAFE HOUSE – NIGHT (S7A_CARTEL_CONTACT – “Business Opportunity”)
+- bg_cartel_safehouse_night.png
+- Background Music: ...\HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL\audio\Safehouse Ambience.mp3 
+- Triggered if:
+         - HELPED_NEIGHBORS = true
+         - Kept NEIGHBORS_USB
+         - OPPORTUNIST or similar flag 
+
+- Actions:
+
+CHOICE:
+1) Take cartel deal:
+   - CARTEL offers:
+     - Protection for Riveras in exchange for using USB to re-route shipments.
+   - FLAG: TOOK_CARTEL_DEAL = true.
+   - → Later leads to CHAOTIC / MORAL MESS endings.
+
+2) Pretend to cooperate but secretly plan to betray:
+   - FLAGS: TOOK_CARTEL_DEAL = true, SECRETLY_AGAINST_CARTEL = true.
+   - → Complex branching in final showdown.
+
+3) Refuse:
+   - CARTEL sees them as a threat.
+   - FLAG: CARTEL_TARGET = true.
+   - → S9_FINAL_WAREHOUSE_SHOWDOWN more violent/tense. 
+       
+
+- Overlays: 
+   - Add neon lighting effect to the neon light grim reaper and saint on the wall 
+
+---------------------------------------------
+
+10) CIA SAFE OFFICE (S6_INTEL_ENTANGLEMENT – “Ms. Gray Enters the Chat”)
+- bg_cia_office.png
+- Background Music: ...\HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL\audio\Classified Silence.mp3
+- Actions: 
+       - CLICKABLES:
+         - [MS_GRAY_FILE] – see redacted documents overlay (fx_document_overlay).
+         - [MAP] – shows cartel routes, Venezuela, Colombia arrows. 
+
+She reveals:
+- ICE may have overreached, but:
+- Riveras *are* connected to a larger supply network… or scapegoated as such.
+- The USB could prove:
+  - (A) they’re innocent OR
+  - (B) they’re small cogs in a big machine.
+
+CHOICES:
+1) Hand over NEIGHBORS_USB to CIA:
+   - FLAG: WORKING_WITH_CIA = true.
+   - Lose direct leverage with cartels but gain official route.
+   - → S7B_CARTEL_TARGETING (cartel angry; think bros snitched).
+
+2) Keep NEIGHBORS_USB:
+   - FLAG: INDEPENDENT_OPERATORS = true.
+   - Ms. Gray warns them: “If the cartel finds out you’re freelancing, they won’t send a LinkedIn invite.”
+   - → S7A_CARTEL_CONTACT or S7C_BLACKMARKET depending on prior flags.
+
+---------------------------------------------
+
+11) S7B_CARTEL_TARGETING – “Snitches with Sneakers”
+
+If USB given to CIA:
+- CARTEL intercepts communications, learns Hardigans handled the drive.
+- HANK & JONAH are now in crosshairs.
+
+---------------------------------------------
+
+12) S8_PRE_FINAL – “Everyone Wants a Piece”
+
+Staging scenes: travel, short montages (can be implemented as quick slideshow cards with minimal interactions).
+
+Possible variants:
+- Airport-type setting (cartel smuggling route).
+- River dock (Tren de Agua)
+- Venezuelan consulate backroom (Ortega ranting about imperialism, cartels, and crypto).
+
+Each variant should:
+- Give 1–2 key choices influencing who shows up in final scene.
+- Update flags like:
+  - ALLIED_WITH_ORTEGA
+  - ALLIED_WITH_LUPITA
+  - DOUBLE_CROSSED_SOMEONE
+
+---------------------------------------------- 
+
+12) S8_PRE_FINAL – “Everyone Wants a Piece” 
+
+- Airport 
+- bg_airport_cartel_landing_strip.png
+- Background Music: 
+- Actions: 
+
+
+Each variant should:
+- Give 1–2 key choices influencing who shows up in final scene.
+- Update flags like:
+  - ALLIED_WITH_ORTEGA
+  - ALLIED_WITH_LUPITA
+  - DOUBLE_CROSSED_SOMEONE
+
+----------------------------------------------
+
+13) ABANDONED WAREHOUSE (FINAL CONFRONTATION) (S9_FINAL_WAREHOUSE_SHOWDOWN – “Diplomacy, but Make It Stupid”)
+- bg_warehouse_night.png
+- Background Music: ...\HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL\audio\Warehouse Night Suspense.mp3  
+
+- Actions: 
+
+CLICKABLES:
+- [CRATE] – can hide, find weapons, or trigger explosion.
+- [CONTROL_PANEL] – turn off lights, cause chaos.
+- [MEGAPHONE] – talk to everyone at once.
+- [USB_ON_TABLE] – central MacGuffin.
+
+CORE DESIGN:
+- Multiple dialogue rounds where the player:
+  - Chooses who to side with publicly.
+  - Chooses whether to leak data to press.
+  - Chooses whether to destroy USB, copy it, or auction it.
+
+KEY CHOICES IN FINALE:
+1) Destroy USB:
+   - “No one gets to weaponize this.”
+   - CARTEL/ CIA/ everyone angry.
+   - Depending on allies, they might escape or get killed.
+
+2) Upload data to public:
+   - Use fx_mobile_notification, tv overlays, etc.
+   - Social media + press chaos.
+   - Could trigger CHAOTIC or IRONIC MEDIA ending.
+
+3) Secretly copy, then fake destroy:
+   - Keep leverage.
+   - Potential HAPPIER but morally gray ending.
+
+---------------------------------------------
+
+14) VENEZUELAN CONSULATE BACKROOM (S8_PRE_FINAL – “Everyone Wants a Piece”)
+- bg_venez_backroom.png 
+- Background Music: 
+
+Staging scenes: travel, short montages (can be implemented as quick slideshow cards with minimal interactions).
+
+Possible variants:
+- Airport-type setting (cartel smuggling route).
+- River dock (Tren de Agua)
+- Venezuelan consulate backroom (Ortega ranting about imperialism, cartels, and crypto).
+
+Each variant should:
+- Give 1–2 key choices influencing who shows up in final scene.
+- Update flags like:
+  - ALLIED_WITH_ORTEGA
+  - ALLIED_WITH_LUPITA
+  - DOUBLE_CROSSED_SOMEONE 
+
+- Actions: 
+
+---------------------------------------------
+
+15) COLOMBIAN RIVER DOCK (OPTIONAL CHAOTIC END) (S8_PRE_FINAL – “Everyone Wants a Piece”)
+- bg_river_dock_night.png (boats, crates)
+- Background Music: 
+
+Staging scenes: travel, short montages (can be implemented as quick slideshow cards with minimal interactions).
+
+Possible variants:
+- Airport-type setting (cartel smuggling route).
+- River dock (Tren de Agua)
+- Venezuelan consulate backroom (Ortega ranting about imperialism, cartels, and crypto).
+
+Each variant should:
+- Give 1–2 key choices influencing who shows up in final scene.
+- Update flags like:
+  - ALLIED_WITH_ORTEGA
+  - ALLIED_WITH_LUPITA
+  - DOUBLE_CROSSED_SOMEONE 
+
+- Actions:
+
+========================================================
+ENDINGS
+========================================================
+
+ENDING: E_HAPPY – “We Saved Who We Could”
+CONDITIONS (example):
+- HELPED_NEIGHBORS = true
+- CARTEL_DEFEATED = true (USB used to dismantle network, at least partly)
+- SAVED_NEIGHBORS = true
+- Didn’t sell out everyone totally.
+
+SCENE:
+- Back in suburban street, quieter.
+- Riveras’ house has lights on again (maybe on probation / witness protection – ambiguous).
+- TV: “Officials claim victory in narrowing a major trafficking pipeline. Critics note ‘collateral damage remains under investigation.’”
+- HANK: “So we kind of fixed something?”
+- JONAH: “We also got banned from like three federal buildings.”
+- RIVERA FAMILY BBQ cameo.
+- Tone: hopeful but still ironic.
+
+DALL-E PROMPT:
+- “Cartoon suburban street at sunset, neighbors barbecuing, kids playing, slightly hopeful mood, subtle satire.”
+
+ENDING: E_SAD – “People Become Statistics”
+CONDITIONS (example):
+- HELPED_ICE = true
+- HELPED_NEIGHBORS = false OR sold them out.
+- CARTEL survives mostly intact.
+- USB used only as PR tool.
+
+SCENE:
+- TV montage:
+  - Anchor: “A major anti-cartel operation yields ‘meaningful progress,’ officials say, as deportations quietly rise.”
+- Riveras’ house: dark, “FOR RENT” sign.
+- HANK: “We did everything ‘by the book’ and somehow it still sucks.”
+- JONAH: “So the book is the problem.”
+- Fade out with system text: “You stayed safe. Everyone else paid the cost.”
+
+ENDING: E_CHAOTIC – “Multilateral Dumbassery”
+CONDITIONS:
+- TOOK_CARTEL_DEAL = true
+- DOUBLE_CROSSED at least one faction
+- Public leak or explosion at warehouse
+
+SCENE:
+- News montage:
+  - Viral videos of the warehouse going up.
+  - CIA blaming Venezuelan extremists.
+  - Venezuelan state TV blaming “North American degenerates.”
+  - Cartel TikTok influencers clout-chasing the incident.
+- Hardigan Bros on a small boat with LUPITA / EL GATO heading… somewhere.
+  - JONAH: “Are we like… criminals now?”
+  - HANK: “We’re consultants. It just pays in bullets instead of benefits.”
+- Freeze-frame, 80s synth outro vibe.
+
+ENDING: E_IRONIC_MEDIA – “Everyone Has a Narrative”
+CONDITIONS:
+- Player heavily used media/social sharing options.
+- Final choice: upload everything to the cloud and become leakers.
+
+SCENE:
+- Split-screen montage:
+  - Right-wing pundit: “Proof of an immigrant crime wave!”
+  - Left-wing pundit: “Proof of ICE fascist overreach!”
+  - Conspiracy influencer: “Proof the lizard bankers staged all of it!”
+- Hardigans watching:
+  - HANK: “We leaked the truth and somehow it just turned into more content.”
+  - JONAH: “At least the comments are roasting everybody equally.”
+- System text: “You exposed everything. No one listened. But you did break the algorithm for a week.”
+
+----------------------------------------------------------------------------
+INTERACTIVE ITEM ASSETS (Directory Path for Assets: ...\HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL\assets\items ) (Item and Inventory Logic - index.js) 
+----------------------------------------------------------------------------
+- item_house_key.png
+- item_neighbors_usb.png
+- item_moms_nurse_badge.png
+- item_fake_fbi_badge.png
+- item_burner_phone.png
+- item_cartel_usb.png
+- item_mysterious_passport.png
+- item_tv_remote.png
+- item_flashlight.png
+- item_conspiracy_notebook.png
+
+---------------------------------------------------------------------------------
+EFFECTS / SPECIAL 
+---------------------------------------------------------------------------------
+- fx_police_lights.png
+- fx_muzzle_flash.png
+- fx_explosion_small.png
+- fx_screen_vignette.png (for “being watched” moments)
+- fx_document_overlay.png (for clicking on files/USB content)
+- fx_mobile_notification.png
+
+----------------------------------------------------------------------------------
+DIALOGUE BUBBLE ASSETS (Directory Path for Assets: ...\HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL\assets\menu_dialogue ) (styles.css index.js) 
+----------------------------------------------------------------------------------
+- bubble_left_small.png
+- bubble_left_medium.png
+- bubble_left_large.png
+- bubble_right_small.png
+- bubble_right_medium.png
+- bubble_right_large.png
+- bubble_system_narration.png (rectangular, top-center)
+
+----------------------------------------------------------------------------------
+BRANCHING STRUCTURE (HIGH-LEVEL) (index.js) 
+----------------------------------------------------------------------------------
+SCENE IDs (used in gamescript.txt):
+- S0_MAIN_MENU
+- S1_LIVING_ROOM_INTRO
+- S2_ICE_RAID_WINDOW
+- S3_FRONT_YARD_CHOICE
+  - Branch: HELP_ICE vs HELP_NEIGHBORS
+- S4A_HELP_ICE_PATH
+- S4B_HELP_NEIGHBORS_PATH
+- S5_SCHOOL_GOSSIP
+- S6_INTEL_ENTANGLEMENT (CIA / Feds)
+- S7A_CARTEL_CONTACT (if HELP_NEIGHBORS)
+- S7B_CARTEL_TARGETING (if HELP_ICE)
+- S8_AIRPORT_OR_DOCK (depending on choices)
+- S9_FINAL_WAREHOUSE_SHOWDOWN
+- ENDINGS:
+  - E_HAPPY (neighbors saved, cartel disrupted, bros alive)
+  - E_SAD (neighbors deported, cartel grows stronger)
+  - E_CHAOTIC (everyone in different alliances, situation absurd)
+  - E_IRONIC_MEDIA (Media spins everything wrong)
+
+-----------------------------------------------------------------------------------
+KEY FLAGS (All flags are noted in the notebook-menu which keeps track of player progress and story events) (index.js) 
+-----------------------------------------------------------------------------------
+- HELPED_ICE: bool
+- HELPED_NEIGHBORS: bool
+- TOOK_CARTEL_DEAL: bool
+- WORKING_WITH_CIA: bool
+- SOLD_EVERYONE_OUT: bool
+- SAVED_NEIGHBORS: bool
+- CARTEL_DEFEATED: bool
+
+-----------------------------------------------------------------------------------
+MENU BUTTONS AND UX/UI (Directory Path for Assets: ...\HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL\assets\ui ) (styles.css) (index.html) (index.js) 
+-----------------------------------------------------------------------------------
+
+1. notebook-menu (notebook-menu.png - icon in game canvas status header) (notebook-menu-open.png - container background image for when notebook-menu is open) (notebook-menu-pageflip.png - for when notebook-menu is open and player is flipping pages) 
+
+2. game-menu (smart-phone-game-main-menu.png) - BUTTONS: RESUME GAME button, SETTINGS button, SAVE GAME button, MAIN MENU button, ESC 
+
+3. inventory 
+
+-----------------------------------------------------------------------------------
+GAMEPLAY OBJECTIVES PER MAJOR BEAT
+-----------------------------------------------------------------------------------
+- INTRO:
+  - Learn click mechanics: lights, TV, window.
+  - Acquire items: conspiracy_notebook, house_key.
+  - See ICE raid across the street.
+- FIRST BIG CHOICE:
+  - Call ICE tip-line / cooperate OR
+  - Sneak out/backdoor to warn neighbors and grab neighbors_usb.
+- MIDGAME:
+  - Use inventory to gather leverage (USB files, photos, recorded calls).
+  - Pick alliances: cartel, CIA, or “third way” (protect neighbors, burn all sides).
+- CLIMAX:
+  - Multi-faction standoff at warehouse.
+  - Final branching dialogues and choice combos trigger ending states.
+

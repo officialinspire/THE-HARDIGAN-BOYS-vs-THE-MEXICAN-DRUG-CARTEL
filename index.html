@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>THE HARDIGAN BOYS vs THE MEXICAN DRUG CARTEL</title>
+    <meta name="description" content="A branching, point-and-click narrative game about two suburban brothers pulled into an ICE raid, a cartel, and a CIA handler over one very bad week.">
+    <link rel="canonical" href="https://officialinspire.github.io/THE-HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL/">
+
+    <!-- Open Graph / social sharing (Facebook, LinkedIn, Reddit, etc.) -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="The Hardigan Boys vs. The Mexican Drug Cartel">
+    <meta property="og:title" content="The Hardigan Boys vs. The Mexican Drug Cartel">
+    <meta property="og:description" content="A branching, point-and-click narrative game about two suburban brothers pulled into an ICE raid, a cartel, and a CIA handler over one very bad week.">
+    <meta property="og:url" content="https://officialinspire.github.io/THE-HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL/">
+    <meta property="og:image" content="https://officialinspire.github.io/THE-HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL/promo/hardigan-boys-vs-drug-cartel-promo-title-card.jpg">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+    <meta property="og:image:alt" content="The Hardigan Boys vs. The Mexican Drug Cartel - promo title card">
+
+    <!-- Twitter/X Card (also used as fallback by some other platforms) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="The Hardigan Boys vs. The Mexican Drug Cartel">
+    <meta name="twitter:description" content="A branching, point-and-click narrative game about two suburban brothers pulled into an ICE raid, a cartel, and a CIA handler over one very bad week.">
+    <meta name="twitter:image" content="https://officialinspire.github.io/THE-HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL/promo/hardigan-boys-vs-drug-cartel-promo-title-card.jpg">
+    <meta name="twitter:image:alt" content="The Hardigan Boys vs. The Mexican Drug Cartel - promo title card">
+
+    <!-- ?v= cache-busts styles.css/index.js against stale browser/CDN
+         caching -- this repo has no build step (GitHub Pages serves it
+         as-is), so without a changing query string, players can keep
+         getting an old cached JS/CSS bundle indefinitely after a fix
+         ships. BUMP THIS VALUE (e.g. to the current date/time) any time
+         index.js or styles.css changes. -->
+    <link rel="stylesheet" href="styles.css?v=20261114">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Bangers&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="loading-screen" aria-live="polite">
+        <div class="loading-content">
+            <h1>Loading Case Files...</h1>
+            <p id="loading-status">Preparing assets...</p>
+            <div id="loading-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div id="loading-progress-bar"></div>
+            </div>
+            <div id="loading-progress-text">0%</div>
+        </div>
+    </div>
+
+    <div id="orientation-overlay" class="hidden" aria-hidden="true">
+        <div class="orientation-message">Please rotate device</div>
+    </div>
+
+    <!-- Intro video screen (shows before main menu) -->
+    <div id="intro-video-screen" class="hidden" aria-label="Intro video">
+        <video id="intro-video" src="./inspiresoftwareintro.mp4" playsinline preload="auto" aria-hidden="true"></video>
+        <button id="intro-skip-btn" aria-label="Skip intro video">TAP TO SKIP</button>
+    </div>
+
+    <!-- Main game container -->
+    <div id="game-root">
+        <!-- Scene display area -->
+        <div id="scene-container">
+            <!-- Background image -->
+            <img id="scene-background" src="" alt="Scene background">
+            
+            <!-- Character layer for animated sprites -->
+            <div id="character-layer"></div>
+
+            <!-- Item layer for visible interactive items -->
+            <div id="item-layer"></div>
+
+            <!-- Hotspot layer for clickable regions -->
+            <div id="hotspot-layer"></div>
+            
+            <!-- In-game HUD -->
+            <div id="hud">
+                <!-- Top HUD buttons -->
+                <div id="hud-buttons">
+                    <button id="btn-inventory" class="hud-btn" title="Inventory">
+                        <span>📦</span>
+                    </button>
+                    <button id="btn-notebook" class="hud-btn" title="Notebook">
+                        <span>📓</span>
+                    </button>
+                    <button id="btn-pause" class="hud-btn" title="Menu">
+                        <span>📱</span>
+                    </button>
+                </div>
+                
+                <!-- Scene title -->
+                <div id="scene-title"></div>
+                
+                <!-- Dialogue box with bubble -->
+                <div id="dialogue-box" class="hidden" data-layout-panel="speech-bubble">
+                    <div id="dialogue-container">
+                        <img id="dialogue-bubble" src="" alt="Speech bubble">
+                        <div id="dialogue-content">
+                            <div id="dialogue-speaker"></div>
+                            <div id="dialogue-text"></div>
+                            <div id="action-container">
+                                <div id="dialogue-choices"></div>
+                                <button id="dialogue-continue" class="hidden">continue</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="status-toast" aria-live="polite" class="status-toast"></div>
+        </div>
+        
+        <!-- Inventory overlay -->
+        <div id="inventory-overlay" class="overlay hidden">
+            <div class="overlay-content">
+                <h2>INVENTORY</h2>
+                <div id="inventory-grid"></div>
+                <button class="overlay-close">Close</button>
+            </div>
+        </div>
+        
+        <!-- Notebook overlay with custom UI -->
+        <div id="notebook-overlay" class="overlay hidden">
+            <div class="notebook-ui">
+                <img id="notebook-bg" src="./assets/ui/notebook-menu-open.png" alt="Notebook">
+                <div id="notebook-text-overlay">
+                    <div id="notebook-page-left" class="notebook-page"></div>
+                    <div id="notebook-page-right" class="notebook-page"></div>
+                </div>
+                <button id="notebook-prev" class="notebook-nav-btn notebook-nav-prev" aria-label="Previous page">&#8249;</button>
+                <button id="notebook-next" class="notebook-nav-btn notebook-nav-next" aria-label="Next page">&#8250;</button>
+                <div id="notebook-page-indicator" class="notebook-page-indicator"></div>
+                <button id="notebook-close" class="notebook-close-btn">×</button>
+            </div>
+        </div>
+        
+        <!-- Pause menu -->
+        <div id="pause-menu" class="overlay hidden">
+            <div class="pause-menu-content">
+                <div class="phone-ui">
+                    <img src="./assets/ui/smart-phone-game-main-menu.png" alt="Phone Menu" class="phone-bg">
+                    <div class="phone-buttons">
+                        <button id="btn-resume">RESUME GAME</button>
+                        <button id="btn-save">SAVE GAME</button>
+                        <button id="btn-settings">SETTINGS</button>
+                        <button id="btn-main-menu">MAIN MENU</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Settings overlay -->
+        <div id="settings-overlay" class="overlay hidden">
+            <div class="overlay-content">
+                <h2>SETTINGS</h2>
+                <div class="settings-item">
+                    <label for="music-volume">Music Volume</label>
+                    <input type="range" id="music-volume" min="0" max="100" value="70">
+                    <span id="music-volume-display">70%</span>
+                </div>
+                <div class="settings-item">
+                    <label for="sfx-volume">SFX Volume</label>
+                    <input type="range" id="sfx-volume" min="0" max="100" value="80">
+                    <span id="sfx-volume-display">80%</span>
+                </div>
+                <div class="settings-item">
+                    <label>
+                        <input type="checkbox" id="show-hotspots" checked>
+                        Show Hotspot Outlines (Debug)
+                    </label>
+                </div>
+                <button class="overlay-close">Close</button>
+            </div>
+        </div>
+        
+        <!-- Modal overlay -->
+        <div id="modal-overlay" class="overlay hidden" role="dialog" aria-modal="true">
+            <div class="overlay-content modal-content">
+                <button class="overlay-close" id="modal-close">X</button>
+                <h2 id="modal-title"></h2>
+                <div id="modal-body"></div>
+                <div class="modal-actions">
+                    <button id="modal-use-btn" class="menu-btn hidden">USE ITEM</button>
+                    <button id="modal-ok" class="menu-btn">OK</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fade transition overlay -->
+        <div id="fade-overlay"></div>
+
+        <!-- Scene transition overlay -->
+        <div id="scene-transition-overlay" aria-hidden="true"></div>
+
+        <!-- Scene title FX overlay -->
+        <div id="scene-title-fx" aria-hidden="true"></div>
+
+        <!-- Dev Hub modal -->
+        <div id="devHubModal" class="hidden" aria-hidden="true">
+            <div id="devHubBackdrop" data-dev-close="true"></div>
+            <div id="devHubPanel" role="dialog" aria-modal="true" aria-labelledby="devHubTitle">
+                <h2 id="devHubTitle">Developer Mode</h2>
+                <label class="dev-tools-toggle" for="dev-tools-enabled-toggle">
+                    <input type="checkbox" id="dev-tools-enabled-toggle">
+                    Dev Tools Enabled
+                </label>
+                <div class="dev-hub-actions">
+                    <button type="button" class="dev-hub-btn" data-dev-action="hotspot-editor">Hotspot Editor</button>
+                    <button type="button" class="dev-hub-btn" data-dev-action="ui-layout-editor">UI Layout Editor</button>
+                    <button type="button" class="dev-hub-btn" data-dev-action="click-trace">Click Trace</button>
+                    <button type="button" class="dev-hub-btn" data-dev-action="bubble-slots-overlay">Bubble Slot Overlay</button>
+                    <button type="button" class="dev-hub-btn" data-dev-action="validate">Validate</button>
+                    <button type="button" class="dev-hub-btn" data-dev-action="export">Export</button>
+                    <button type="button" class="dev-hub-btn" data-dev-action="clear-dev-storage">Clear Dev Storage</button>
+                </div>
+                <div id="devHubStatus" aria-live="polite"></div>
+                <div class="dev-hub-quick-row">
+                    <label for="dev-scene-jump-input">Scene Jump</label>
+                    <input type="text" id="dev-scene-jump-input" placeholder="Enter scene id">
+                    <button type="button" id="dev-scene-jump-btn" class="dev-hub-btn">Jump</button>
+                    <button type="button" id="dev-run-validate-now" class="dev-hub-btn">Run Validate Now</button>
+                    <button type="button" id="dev-validate-all-scenes" class="dev-hub-btn">Validate All Scenes</button>
+                    <button type="button" id="dev-download-validation-json" class="dev-hub-btn">Download JSON Report</button>
+                </div>
+                <pre id="dev-validation-output" class="dev-validation-output" aria-live="polite">Validation report will appear here.</pre>
+                <div id="devTracePanel" class="dev-trace-panel hidden" aria-live="polite">
+                    <h3>Click Trace + Live Hotspot Edit (Last 10)</h3>
+                    <p>Drag hotspot boxes directly in-scene. Use corner handles to resize. Hold Shift + drag empty space to create a new hotspot.</p>
+                    <ul id="devTraceList"></ul>
+                </div>
+                <div class="dev-hub-footer">
+                    <button type="button" id="btn-exit-dev-mode" class="dev-hub-btn">Exit Dev Mode</button>
+                    <button type="button" id="btn-close-dev-hub" class="dev-hub-btn">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <button type="button" id="dev-floating-btn" class="hidden" aria-label="Open Developer Hub">DEV</button>
+    </div>
+    
+    <!-- Audio elements -->
+    <audio id="music-player" loop></audio>
+    <audio id="sfx-player"></audio>
+    
+    <script src="analytics.js?v=20261114" defer></script>
+    <script src="index.js?v=20261114" defer></script>
+</body>
+</html>

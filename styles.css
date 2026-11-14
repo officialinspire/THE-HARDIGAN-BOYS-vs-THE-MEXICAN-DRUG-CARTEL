@@ -1,0 +1,3798 @@
+/* ============================================
+   HARDIGAN BROTHERS vs THE MEXICAN DRUG CARTEL
+   RESPONSIVE DESIGN - ALL DEVICES SUPPORTED
+   ============================================ */
+
+/* ===== RESET & BASE ===== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    overflow: hidden;
+    font-family: 'Courier New', 'Consolas', monospace;
+    background: #000;
+    color: #e0e0e0;
+    /* Safe-area insets are applied per-element (HUD, dialogue box, buttons —
+       search for env(safe-area-inset) below), not here. #game-root is sized
+       from raw window.innerHeight/100dvh in JS/CSS; a blanket padding here
+       would double-count that same inset on top of every element's own
+       env() offset, silently eating extra height/width on notched phones
+       (most visible in landscape, where the notch lands on a side edge). */
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: auto;
+}
+
+html {
+    height: -webkit-fill-available;
+}
+
+button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    background: none;
+}
+
+/* ===== MINIMUM TOUCH TARGET SIZES (WCAG Compliance) ===== */
+.dialogue-choice,
+.hotspot,
+.scene-item,
+.inventory-item,
+.hud-btn,
+.menu-btn,
+.overlay-close,
+.phone-buttons button,
+.notebook-close-btn,
+button,
+[role="button"] {
+    min-width: 44px;
+    min-height: 44px;
+}
+
+/* Ensure hotspots have minimum clickable area even if positioned small */
+.hotspot {
+    min-width: 44px !important;
+    min-height: 44px !important;
+}
+
+/* Dialogue choices need padding for larger touch area */
+.dialogue-choice {
+    padding: 12px 20px;
+    min-height: 48px;
+    line-height: 1.4;
+}
+
+/* Scene items should be easily tappable */
+.scene-item {
+    padding: 8px;
+    min-width: 60px;
+    min-height: 60px;
+}
+
+button,
+[role="button"],
+.dialogue-choice,
+#dialogue-continue,
+.menu-btn,
+.overlay-close,
+.phone-buttons button,
+.notebook-close-btn,
+.hud-btn,
+.hotspot,
+.scene-item,
+.inventory-item {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(255, 215, 0, 0.25);
+}
+
+button:active,
+.hotspot:active,
+.scene-item:active,
+.dialogue-choice:active,
+#dialogue-continue:active,
+.menu-btn:active,
+.overlay-close:active,
+.phone-buttons button:active,
+.notebook-close-btn:active,
+.hud-btn:active {
+    filter: brightness(1.15);
+}
+
+/* Haptic-feel press states for mobile */
+@media (max-width: 1024px) {
+    .dialogue-choice:active,
+    .menu-btn:active,
+    .hud-btn:active,
+    #dialogue-continue:active {
+        transform: scale(0.95);
+        transition: transform 0.08s ease;
+    }
+
+    .hotspot:active {
+        background: rgba(255, 215, 0, 0.25);
+        transition: background 0.1s ease;
+    }
+}
+
+#loading-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 12000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at center, #171717 0%, #040404 70%);
+    padding: 20px;
+}
+
+#loading-screen.hidden {
+    display: none !important;
+}
+
+/* ===== INTRO VIDEO SCREEN ===== */
+#intro-video-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 11500;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    transition: opacity 0.4s ease;
+}
+
+#intro-video-screen.hidden {
+    display: none !important;
+}
+
+#intro-video-screen.fading-out {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#intro-video {
+    width: 100%;
+    height: 100%;
+    max-width: 100vw;
+    max-height: 100vh;
+    object-fit: contain;
+    display: block;
+}
+
+#intro-skip-btn {
+    position: absolute;
+    bottom: clamp(16px, 5%, 40px);
+    right: clamp(16px, 5%, 40px);
+    padding: 12px 24px;
+    min-width: 44px;
+    min-height: 44px;
+    background: rgba(0, 0, 0, 0.65);
+    color: #ffd700;
+    border: 2px solid #ffd700;
+    border-radius: 8px;
+    font-family: 'Courier New', 'Consolas', monospace;
+    font-size: clamp(12px, 3vw, 16px);
+    font-weight: bold;
+    letter-spacing: 1px;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(255, 215, 0, 0.25);
+    z-index: 11501;
+    opacity: 0;
+    animation: skip-btn-fadein 0.6s ease 1.5s forwards;
+}
+
+#intro-skip-btn:active {
+    background: rgba(255, 215, 0, 0.15);
+    transform: scale(0.97);
+}
+
+@keyframes skip-btn-fadein {
+    to { opacity: 1; }
+}
+
+.loading-content {
+    width: min(560px, 90vw);
+    text-align: center;
+    border: 2px solid #ffd700;
+    border-radius: 12px;
+    padding: 28px;
+    background: rgba(0, 0, 0, 0.88);
+}
+
+#loading-progress-track {
+    width: 100%;
+    height: 18px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 215, 0, 0.5);
+    overflow: hidden;
+    margin-top: 16px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#loading-progress-bar {
+    width: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #ffd700, #fff3a1);
+    transition: width 0.2s ease;
+}
+
+#loading-progress-text,
+#loading-status {
+    margin-top: 10px;
+    color: #f0f0f0;
+}
+
+#orientation-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 11000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.95);
+}
+
+#orientation-overlay.hidden {
+    display: none !important;
+}
+
+.orientation-message {
+    color: #ffd700;
+    border: 2px solid #ffd700;
+    border-radius: 14px;
+    padding: 24px;
+    font-size: clamp(18px, 5vw, 28px);
+    font-weight: bold;
+    text-align: center;
+}
+
+/* ===== GAME ROOT ===== */
+#game-root {
+    width: 100%;
+    height: var(--app-height, 100vh);
+    height: 100dvh; /* Modern browsers: dynamic viewport height */
+    min-height: var(--app-height, 100vh);
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(ellipse at center, #1a1a1a 0%, #000 100%);
+}
+
+/* ===== SCENE CONTAINER ===== */
+#scene-container {
+    width: 100%;
+    max-width: 1920px;
+    height: 100%;
+    max-height: var(--app-height, 100vh);
+    position: relative;
+    overflow: hidden;
+    background: #000;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.9);
+}
+
+/* Desktop: maintain 16:9 aspect ratio */
+@media (min-width: 1024px) {
+    #scene-container {
+        max-width: 1920px;
+        max-height: 1080px;
+        aspect-ratio: 16/9;
+    }
+}
+
+/* ===== BACKGROUND IMAGE ===== */
+
+/* Cinematic vignette overlay — always on, subtle */
+#scene-container::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 3; /* Above characters, below HUD */
+    pointer-events: none;
+    background: radial-gradient(
+        ellipse at center,
+        transparent 50%,
+        rgba(0, 0, 0, 0.15) 80%,
+        rgba(0, 0, 0, 0.4) 100%
+    );
+}
+
+/* Disable vignette on main menu */
+body.main-menu #scene-container::after {
+    display: none;
+}
+
+/* Mobile backgrounds were reading too dark; remove the vignette overlay on touch layouts. */
+@media (max-width: 1024px) {
+    #scene-container::after {
+        display: none;
+    }
+}
+
+#scene-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center;
+    z-index: 1;
+    transition: opacity 0.5s ease;
+    background: #000;
+}
+
+/* Scene entry: subtle zoom-in reveal */
+#scene-background {
+    transition: opacity 0.5s ease, transform 1.2s ease-out;
+}
+
+#scene-background.scene-entering {
+    transform: scale(1.03);
+    opacity: 0.95;
+}
+
+#scene-background.scene-entered {
+    transform: scale(1);
+    opacity: 1;
+}
+
+/* Mobile/tablet: keep a 16:9 gameplay frame across phone viewports */
+@media (max-width: 1024px) {
+    #scene-background {
+        object-fit: contain;
+        object-position: center;
+    }
+
+    #scene-container {
+        width: min(100vw, calc(var(--app-height, 100vh) * 16 / 9));
+        height: min(var(--app-height, 100vh), calc(100vw * 9 / 16));
+        max-width: 100vw;
+        max-height: var(--app-height, 100vh);
+    }
+}
+
+/* ===== CHARACTER LAYER ===== */
+#character-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 4;
+    pointer-events: none;
+}
+
+/*
+ * Character positioning is now calculated dynamically by positioningSystem in JS.
+ * Inline styles (pixel values) override these CSS class fallbacks.
+ * The CSS classes remain as fallbacks if JS hasn't run yet.
+ */
+.character-sprite {
+    position: absolute;
+    max-width: 35%;
+    max-height: 55%;
+    object-fit: contain;
+    transition: filter 180ms ease, transform 180ms ease, opacity 0.6s ease;
+    filter: drop-shadow(2px 4px 6px rgba(0, 0, 0, 0.8))
+            drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+    /* Per-character scale (addCharacter() sets this inline). Composed into
+       every transform below via calc/var so a scaled character never
+       fights the slide-in/visible animation's translateX. */
+    --char-scale: 1;
+}
+
+.character-sprite.is-speaking {
+    filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.55))
+            drop-shadow(0 0 16px rgba(255, 215, 0, 0.35));
+}
+
+/* Slide-in animations */
+.character-sprite.slide-in-left {
+    transform: translateX(-100%) scale(var(--char-scale));
+    opacity: 0;
+}
+
+.character-sprite.slide-in-right {
+    transform: translateX(100%) scale(var(--char-scale));
+    opacity: 0;
+}
+
+/* Visible state after slide-in completes */
+.character-sprite.visible {
+    transform: translateX(0) scale(var(--char-scale));
+    opacity: 1;
+}
+
+/* Center-zone characters need translateX(-50%) even when visible */
+.character-sprite.char-center.visible {
+    transform: translateX(-50%) scale(var(--char-scale));
+}
+
+/* Fallback position classes (overridden by inline pixel styles from positioningSystem) */
+.char-left {
+    left: 5%;
+    bottom: 0;
+}
+
+.char-left-2 {
+    left: 22%;
+    bottom: 0;
+}
+
+.char-center {
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+}
+
+.char-right {
+    right: 5%;
+    bottom: 0;
+}
+
+.char-right-2 {
+    right: 22%;
+    bottom: 0;
+}
+
+/* ===== ITEM LAYER ===== */
+#item-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.scene-item {
+    position: absolute;
+    pointer-events: auto;
+    transition: transform 0.3s ease, filter 0.3s ease;
+    cursor: pointer;
+}
+
+.scene-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.scene-item:hover {
+    transform: scale(1.1);
+    filter: brightness(1.2);
+}
+
+.scene-item.collected {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* ===== HOTSPOT LAYER ===== */
+#hotspot-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+}
+
+.hotspot {
+    position: absolute;
+    cursor: pointer;
+    border: 2px solid rgba(255, 215, 0, 0);
+    background: rgba(255, 215, 0, 0.05);
+    transition: all 0.3s ease;
+    border-radius: 4px;
+}
+
+.hotspot:hover {
+    border-color: rgba(255, 215, 0, 0.7);
+    background: rgba(255, 215, 0, 0.15);
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.4),
+                inset 0 0 20px rgba(255, 215, 0, 0.1);
+}
+
+/* Idle "this is clickable" affordance for touch devices, where :hover never
+   fires before the tap that already commits the click. Applied via
+   sceneRenderer.loadHotspots()/_isHotspotExplored() to hotspots the player
+   hasn't clicked yet in the current scene; removed the instant they click
+   it. Deliberately much softer than body.show-hotspots below -- that's a
+   dev overlay, this runs for real players. Respects ?noAnimations=1 via the
+   existing .hb-no-animations rule (no extra work needed here). */
+@keyframes hotspot-idle-pulse {
+    0%, 100% {
+        border-color: rgba(255, 215, 0, 0);
+        box-shadow: 0 0 0 rgba(255, 215, 0, 0);
+    }
+    50% {
+        border-color: rgba(255, 215, 0, 0.4);
+        box-shadow: 0 0 14px rgba(255, 215, 0, 0.25);
+    }
+}
+
+.hotspot--unexplored {
+    animation: hotspot-idle-pulse 2.4s ease-in-out infinite;
+}
+
+/* Debug label inside hotspots - hidden by default */
+.hotspot-debug-label {
+    display: none;
+    position: absolute;
+    top: -18px;
+    left: 0;
+    font-size: 10px;
+    font-family: monospace;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 1px 4px;
+    border-radius: 2px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10;
+    line-height: 1.4;
+}
+
+body.show-hotspots .hotspot {
+    border-color: rgba(255, 215, 0, 0.7);
+    background: rgba(255, 215, 0, 0.15);
+    box-shadow: inset 0 0 0 1px rgba(255, 215, 0, 0.3);
+}
+
+body.show-hotspots .hotspot-debug-label {
+    display: block;
+}
+
+/* ===== HUD ===== */
+#hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 4;
+    pointer-events: none;
+}
+
+#hud > * {
+    pointer-events: auto;
+}
+
+/* HUD Container - Unified top bar */
+#hud-buttons,
+#scene-title {
+    position: absolute;
+}
+
+/* Create a pseudo-element for the unified HUD background */
+#hud::before {
+    content: '';
+    position: absolute;
+    top: max(10px, env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(95%, 1920px);
+    height: 70px;
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.92) 0%, rgba(20, 20, 30, 0.95) 100%);
+    border: 3px solid #FFD700;
+    border-radius: 12px;
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.6),
+                inset 0 0 20px rgba(255, 215, 0, 0.1),
+                0 4px 12px rgba(0, 0, 0, 0.8);
+    pointer-events: none;
+    z-index: 1;
+}
+
+body.main-menu #hud::before,
+body.main-menu #hud-buttons,
+body.main-menu #scene-title {
+    display: none !important;
+}
+
+/* HUD Buttons - TOP RIGHT within container */
+#hud-buttons {
+    top: max(22px, calc(env(safe-area-inset-top) + 12px));
+    /* Anchor to the actual right edge of the #hud::before title bar
+       (width: min(95%, 1920px), centered), not the viewport edge. The bar
+       caps its width at 1920px, but a flat viewport-relative inset does
+       not -- on any wider viewport (and even at plain 1920x1080, since
+       95% < 1920px there) that mismatch pushed the icons out past the
+       bar's right edge into the empty margin beyond it. max() with the
+       previous safe-area term keeps notch clearance intact where needed. */
+    right: max(
+        max(30px, calc(env(safe-area-inset-right) + 10px)),
+        calc((100% - min(95%, 1920px)) / 2 + 14px)
+    );
+    display: flex;
+    gap: 15px;
+    z-index: 10;
+}
+
+.hud-btn {
+    width: 50px;
+    height: 50px;
+    background: rgba(20, 20, 25, 0.9);
+    border: 2px solid #444;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+    touch-action: manipulation;
+}
+
+.hud-btn:hover {
+    background: rgba(40, 40, 45, 0.95);
+    border-color: #ffd700;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.8),
+                0 0 15px rgba(255, 215, 0, 0.3);
+}
+
+/* Scene title - within HUD container, positioned more to the right */
+#scene-title {
+    top: max(30px, calc(env(safe-area-inset-top) + 20px));
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    font-size: clamp(14px, 3vw, 18px);
+    font-weight: bold;
+    color: #FFD700;
+    text-transform: uppercase;
+    text-shadow: 0 0 15px rgba(255, 215, 0, 0.9),
+                 2px 2px 6px rgba(0, 0, 0, 0.95);
+    letter-spacing: 2px;
+    opacity: 0;
+    max-width: 50%;
+    word-wrap: break-word;
+    z-index: 10;
+    padding: 8px 12px;
+    background: transparent;
+    border-radius: 6px;
+    text-align: center;
+    transition: opacity 0.6s ease, transform 0.6s ease, letter-spacing 0.6s ease;
+}
+
+#scene-title.title-visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* Dramatic entrance for scene titles */
+@keyframes titleReveal {
+    0% {
+        opacity: 0;
+        letter-spacing: 8px;
+        transform: translateX(-50%) translateY(10px);
+    }
+    60% {
+        opacity: 1;
+        letter-spacing: 3px;
+    }
+    100% {
+        opacity: 1;
+        letter-spacing: 2px;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+#scene-title.title-animate {
+    animation: titleReveal 0.8s ease-out forwards;
+}
+
+/* ===== DIALOGUE BOX - DYNAMIC POSITIONING ===== */
+#dialogue-box {
+    position: absolute;
+    width: clamp(300px, 36vw, 540px);
+    min-width: min(280px, 90vw);
+    max-width: calc(100% - 24px);
+    transition: opacity 0.24s ease, transform 0.24s ease;
+    pointer-events: auto;
+    z-index: 5;
+
+    /* Default: bottom of screen (for character dialogue) */
+    bottom: max(20px, env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    top: auto;
+}
+
+/* Narration mode: center screen (no characters) */
+#dialogue-box[data-mode="narration"] {
+    top: 50%;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+}
+
+/* --- SPEECH BUBBLE: stable comic size (matches example images) --- */
+#dialogue-box[data-layout-panel="speech-bubble"] {
+    width: clamp(320px, 40vw, 600px);
+    max-width: calc(100% - 24px);
+}
+#dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container {
+    height: auto;
+    min-height: clamp(160px, 22vh, 300px);
+    max-height: clamp(200px, 32vh, 380px);
+}
+#dialogue-box[data-layout-panel="speech-bubble"] #dialogue-content {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+#dialogue-box[data-layout-panel="speech-bubble"] #dialogue-text {
+    flex: 1;
+    /* Unprotected flex-shrink lets this get crushed below dialoguePager's
+       paginated content height whenever speaker+text+action-area's natural
+       size is tight against #dialogue-container's max-height — the same
+       crush risk narrative-mode #dialogue-text guards against below. */
+    flex-shrink: 0;
+    overflow: hidden;
+    -webkit-overflow-scrolling: auto;
+    /* Whole-word wrapping only -- see the base #dialogue-text rule's
+       comment for why hyphens/word-break are deliberately off here. */
+    hyphens: none;
+    word-break: normal;
+    overflow-wrap: break-word;
+    white-space: normal;
+}
+
+/* Mobile portrait: keep dialogue positioned above characters */
+@media (max-width: 768px) and (orientation: portrait) {
+    #dialogue-box {
+        bottom: auto;
+    }
+
+    #dialogue-box[data-mode="narration"] {
+        width: min(92vw, 520px);
+        max-width: min(92vw, 520px);
+    }
+
+    #dialogue-box[data-layout-panel="speech-bubble"] {
+        width: clamp(280px, 92vw, 520px);
+    }
+
+    #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container {
+        min-height: clamp(120px, 18vh, 220px);
+        max-height: min(42vh, 300px);
+    }
+
+    #dialogue-container.narrative-mode {
+        max-height: min(52vh, 340px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #dialogue-content {
+        padding: clamp(8px, 2vw, 14px) clamp(10px, 2.5vw, 18px) clamp(10px, 2.5vw, 16px);
+        justify-content: flex-start;
+    }
+
+    #dialogue-continue {
+        margin-top: 6px;
+        min-width: 120px;
+        font-size: 13px;
+        padding: 8px 14px;
+    }
+}
+
+/* Very small screens */
+@media (max-width: 480px) {
+    #dialogue-box:not([data-layout-panel="speech-bubble"]) {
+        bottom: auto;
+        width: clamp(100px, 26vw, 170px);
+    }
+}
+
+#dialogue-box.dialogue-enter {
+    animation: dialogueFadeInPop 0.25s cubic-bezier(0.2, 0.9, 0.24, 1) both;
+}
+
+#dialogue-box.dialogue-enter #dialogue-container {
+    animation: dialogueContainerPop 0.35s cubic-bezier(0.2, 0.9, 0.24, 1) both;
+}
+
+#dialogue-box.dialogue-exit {
+    animation: dialogueFadeOutWhoosh 0.22s ease-in both;
+}
+
+/* Position variant: left-aligned near left character */
+#dialogue-box.dialogue-left {
+    top: auto;
+    bottom: auto;
+    left: 15%;
+    right: auto;
+    transform: none;
+    animation: slideFromLeft 0.3s ease-out;
+}
+
+/* Position variant: right-aligned near right character */
+#dialogue-box.dialogue-right {
+    top: auto;
+    bottom: auto;
+    left: auto;
+    right: 15%;
+    transform: none;
+    animation: slideFromRight 0.3s ease-out;
+}
+
+/* Position variant: centered for narration/system/choices */
+#dialogue-box.dialogue-center {
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+    animation: fadeInCenter 0.3s ease-out;
+    width: clamp(240px, 32vw, 460px);
+    min-width: min(200px, 60vw);
+    max-width: 65vw;
+}
+
+@media (max-width: 640px) {
+    #dialogue-box.dialogue-center {
+        width: min(52vw, 220px);
+        min-width: min(150px, 48vw);
+    }
+}
+
+@media (min-width: 1600px) {
+    #dialogue-box {
+        max-width: 480px;
+    }
+
+    #dialogue-box.dialogue-center {
+        max-width: 560px;
+    }
+}
+
+#dialogue-box.dialogue-offscreen {
+    top: 16%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    transform: translateX(-50%);
+    animation: fadeInCenter 0.25s ease-out;
+}
+
+/* Slide-in animations */
+@keyframes slideFromLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-40px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideFromRight {
+    from {
+        opacity: 0;
+        transform: translateX(40px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes fadeInCenter {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+@keyframes dialogueFadeInPop {
+    0% {
+        opacity: 0;
+        filter: blur(2px);
+    }
+    100% {
+        opacity: 1;
+        filter: blur(0);
+    }
+}
+
+@keyframes dialogueContainerPop {
+    0% {
+        transform: scale(0.6);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.06);
+        opacity: 1;
+    }
+    75% {
+        transform: scale(0.97);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes dialogueFadeOutWhoosh {
+    0% {
+        opacity: 1;
+        filter: blur(0);
+    }
+    100% {
+        opacity: 0;
+        filter: blur(4px);
+    }
+}
+
+#dialogue-box.hidden {
+    opacity: 0;
+    pointer-events: none;
+    animation: none;
+}
+
+#dialogue-box.dialogue-positioning {
+    opacity: 0;
+    pointer-events: none;
+    transition: none;
+    animation: none;
+}
+
+#dialogue-container {
+    position: relative;
+    width: 100%;
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+    filter: drop-shadow(3px 3px 0px rgba(0, 0, 0, 0.5));
+}
+
+/* Narrative Container - Stylish box without speech bubble */
+#dialogue-container.narrative-mode {
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.94) 0%, rgba(15, 15, 25, 0.97) 100%);
+    border: 3px solid #FFD700;
+    border-radius: 4px;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.8),
+                0 0 20px rgba(255, 215, 0, 0.3),
+                4px 4px 0px rgba(0, 0, 0, 0.5);
+    padding: clamp(10px, 2vw, 22px);
+    min-height: auto;
+}
+
+#dialogue-container.narrative-mode::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle, rgba(255, 215, 0, 0.03) 1px, transparent 1px);
+    background-size: 4px 4px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+#dialogue-container.narrative-mode #dialogue-bubble {
+    display: none;
+}
+
+#dialogue-container.narrative-mode #dialogue-content {
+    position: relative;
+    z-index: 1;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: clamp(8px, 1.2vw, 14px);
+    min-height: 100%;
+    /* #dialogue-content is itself a flex item of #dialogue-container (also a
+       flex column) — without this it can be compressed below its content's
+       natural size the same way its own children can (see #dialogue-text
+       above), silently clipping even though the container has overflow-y:auto
+       to fall back on. */
+    flex-shrink: 0;
+}
+
+#dialogue-bubble {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    background: transparent;
+    opacity: 1;
+    image-rendering: auto;
+    filter: contrast(1.06) saturate(1.03);
+    backface-visibility: hidden;
+    transform: translateZ(0);
+    z-index: 0;
+    object-fit: fill;
+    pointer-events: none;
+}
+
+#dialogue-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(12px, 2.2vw, 24px) clamp(14px, 3vw, 30px) clamp(14px, 2.4vw, 26px);
+    min-height: 80px;
+    overflow: hidden;
+}
+
+#dialogue-speaker {
+    font-size: clamp(22px, 3.0vw, 34px);
+    font-weight: 900;
+    /* Deep poster-red (sampled from the title card's "MEXICAN DRUG
+       CARTEL" lettering) so the speaker's name reads as a distinct label
+       at a glance instead of blending into the body text below it, which
+       stays black -- both previously rendered in near-identical near-
+       black ink on the same cream bubble. */
+    color: #b22d14;
+    text-transform: uppercase;
+    margin-bottom: clamp(8px, 1.5vw, 12px);
+    letter-spacing: 2px;
+    font-family: 'Bangers', 'Impact', 'Arial Black', sans-serif;
+    line-height: 1.2;
+    width: 100%;
+    text-align: center;
+    /* See #dialogue-container.narrative-mode #dialogue-text — same flex
+       column, same crush risk under a tight compact-landscape container. */
+    flex-shrink: 0;
+    text-shadow: 2px 2px 0px rgba(255, 255, 255, 0.5),
+                 -1px -1px 0px rgba(0, 0, 0, 0.3);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+#dialogue-text {
+    font-size: clamp(18px, 2.4vw, 28px);
+    line-height: 1.52;
+    color: #000;
+    margin-bottom: clamp(8px, 1.5vw, 12px);
+    /* Comic Neue is a purpose-built, more polished redraw of Comic Sans
+       (better spacing/weight contrast) that still reads as hand-lettered
+       comic dialogue -- keeps the theme while looking less like a default
+       system font. Comic Sans MS/Trebuchet stay as fallbacks for the rare
+       environment where the web font fails to load. */
+    font-family: 'Comic Neue', 'Comic Sans MS', 'Trebuchet MS', sans-serif;
+    font-weight: 700;
+    overflow: hidden;
+    padding: clamp(6px, 1.2vw, 10px);
+    width: 100%;
+    text-align: center;
+    text-wrap: pretty;
+    /* Comic-book bubbles should always wrap at whole word boundaries --
+       hyphens:auto and word-break:break-word both let the browser split a
+       word mid-syllable ("en-ergy") the moment it doesn't quite fit the
+       current line, which reads as broken/sloppy rather than a deliberate
+       line break. word-break:normal keeps wraps at spaces only;
+       overflow-wrap:break-word is kept purely as a last-resort safety net
+       for a single word wider than the whole bubble (which dialoguePager's
+       fit-based pagination should never actually produce in practice). */
+    word-wrap: normal;
+    overflow-wrap: break-word;
+    word-break: normal;
+    hyphens: none;
+    white-space: normal;
+    position: relative;
+}
+
+#dialogue-container.narrative-mode #dialogue-text {
+    text-align: left;
+    line-height: 1.7;
+    margin-bottom: 0;
+    overflow: hidden;
+    padding-inline: clamp(6px, 1vw, 14px);
+    /* #dialogue-content is a flex column (speaker/text/choices) with no
+       flex-basis set on its children, so when their combined natural size
+       exceeds the container, flexbox's default shrink behavior compresses
+       whichever child has no floor — normally the text, down to near
+       nothing, well before it touches the choice buttons (which resist
+       shrinking because of their own min-height). Protect the text instead;
+       any leftover overflow is still reachable via the container's
+       overflow-y (see the compact-landscape rules below). */
+    flex-shrink: 0;
+}
+
+/* Mobile: adjust dialogue box positioning and spacing */
+@media (max-width: 768px) {
+    #dialogue-box.dialogue-left:not(.dialogue-anchored) {
+        left: 3%;
+    }
+
+    #dialogue-box.dialogue-right:not(.dialogue-anchored) {
+        right: 3%;
+    }
+
+    #dialogue-speaker {
+        font-size: clamp(15px, 2.0vw, 16px);
+    }
+
+    #dialogue-text {
+        font-size: clamp(14px, 1.8vw, 15px);
+        line-height: 1.2;
+    }
+}
+
+/* Very small phones */
+@media (max-width: 480px) {
+    #dialogue-box.dialogue-left {
+        left: 2%;
+    }
+
+    #dialogue-box.dialogue-right {
+        right: 2%;
+    }
+
+    #dialogue-container {
+        min-height: 36px;
+    }
+
+    #dialogue-speaker {
+        font-size: clamp(15px, 1.8vw, 16px);
+    }
+
+    #dialogue-text {
+        font-size: clamp(14px, 1.6vw, 15px);
+        overflow: hidden;
+    }
+}
+
+/* NARRATION STYLING - GOLD/YELLOW */
+#dialogue-speaker.narration {
+    font-family: 'Creepster', 'Comic Sans MS', cursive;
+    font-size: clamp(15px, 2.2vw, 22px);
+    color: #FFD700;
+    text-shadow: 2px 2px 6px rgba(0, 0, 0, 1),
+                 0 0 12px rgba(255, 215, 0, 0.9);
+    letter-spacing: 1.5px;
+}
+
+#dialogue-text.narration {
+    font-family: 'Comic Neue', 'Comic Sans MS', 'Trebuchet MS', sans-serif;
+    font-size: clamp(14px, 1.8vw, 17px);
+    color: #FFD700;
+    text-shadow: 2px 2px 6px rgba(0, 0, 0, 1),
+                 0 0 10px rgba(255, 215, 0, 0.7);
+    line-height: 1.4;
+    font-weight: 700;
+    padding: clamp(2px, 0.6vw, 6px);
+}
+
+/* CHOICE STYLING - YELLOW AND LARGER */
+#dialogue-speaker.choice-speaker {
+    font-family: 'Bangers', 'Impact', 'Arial Black', sans-serif;
+    font-size: clamp(15px, 3vw, 26px);
+    color: #FFD700;
+    text-shadow: 3px 3px 8px rgba(0, 0, 0, 1),
+                 0 0 16px rgba(255, 215, 0, 0.9);
+    letter-spacing: 2px;
+}
+
+#dialogue-text.choice-text {
+    font-family: 'Comic Neue', 'Comic Sans MS', 'Trebuchet MS', sans-serif;
+    font-size: clamp(14px, 2.2vw, 20px);
+    color: #FFD700;
+    text-shadow: 2px 2px 6px rgba(0, 0, 0, 1),
+                 0 0 12px rgba(255, 215, 0, 0.8);
+    line-height: 1.4;
+    font-weight: 800;
+    padding: clamp(2px, 1vw, 8px);
+}
+
+#dialogue-choices {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(8px, 2vw, 12px);
+    margin-top: clamp(12px, 2.5vw, 18px);
+    width: 100%;
+    align-items: center;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+
+.dialogue-choice {
+    background: linear-gradient(135deg, rgba(20, 20, 30, 0.96) 0%, rgba(10, 10, 20, 0.98) 100%);
+    border: 3px solid #555;
+    border-radius: 4px;
+    padding: 14px 22px;
+    margin: 8px 0;
+    min-height: 50px;
+    color: #e0e0e0;
+    font-size: 15px;
+    text-align: left;
+    transition: all 0.3s ease;
+    font-family: 'Bangers', 'Comic Sans MS', cursive;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1.4;
+    width: 100%;
+    max-width: 90%;
+    display: flex;
+    align-items: center;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(255, 215, 0, 0.3);
+    box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.5);
+    position: relative;
+    overflow: hidden;
+    /* #dialogue-choices is a flex column with a constrained max-height on
+       short/narrow mobile viewports. Without flex-shrink:0, flexbox's
+       default shrink behavior squeezes each choice button down toward its
+       min-height floor even when 2-line wrapped text needs more room --
+       combined with overflow:hidden above, that clipped the second line
+       instead of letting the (already scrollable) choices panel handle
+       the overflow. */
+    flex-shrink: 0;
+}
+
+.dialogue-choice::before {
+    content: '▸';
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #FFD700;
+    font-size: 18px;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.dialogue-choice:hover,
+.dialogue-choice:active {
+    border-color: #FFD700;
+    transform: translateX(6px);
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.4), 4px 4px 0px rgba(0, 0, 0, 0.5);
+    padding-left: 34px;
+}
+
+.dialogue-choice:hover::before,
+.dialogue-choice:active::before {
+    opacity: 1;
+    transform: translateY(-50%) translateX(4px);
+}
+
+@media (max-width: 768px) {
+    .dialogue-choice:hover {
+        transform: none;
+        padding-left: 12px;
+    }
+
+    .dialogue-choice:active {
+        transform: scale(0.97);
+        border-color: #FFD700;
+    }
+
+    .dialogue-choice::before {
+        display: none;
+    }
+}
+
+/* Choice panel entrance: the panel pops in first, then each option
+   fades/slides in with a short stagger -- see _renderChoices() in
+   index.js, which (re)applies these classes on every choice render. */
+@keyframes choicesPanelPopIn {
+    0% { opacity: 0; transform: scale(0.85); }
+    60% { opacity: 1; transform: scale(1.035); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes dialogueChoiceFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+#dialogue-choices.choices-pop-in {
+    animation: choicesPanelPopIn 0.26s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.dialogue-choice.choice-item-in {
+    opacity: 0;
+    animation: dialogueChoiceFadeIn 0.22s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #dialogue-choices.choices-pop-in {
+        animation: none;
+    }
+
+    .dialogue-choice.choice-item-in {
+        opacity: 1;
+        animation: none;
+    }
+}
+
+#dialogue-continue {
+    margin-top: clamp(4px, 1vw, 8px);
+    padding: clamp(4px, 0.7vw, 7px) clamp(12px, 2.2vw, 20px);
+    background: linear-gradient(180deg, rgba(18, 18, 24, 0.88) 0%, rgba(8, 8, 14, 0.94) 100%);
+    border: 1.5px solid rgba(255, 215, 0, 0.42);
+    border-radius: 12px;
+    color: #ffd86a;
+    font-size: clamp(12px, 1.6vw, 15px);
+    font-weight: 700;
+    transition: all 0.2s ease;
+    font-family: 'Bangers', 'Comic Sans MS', 'Trebuchet MS', sans-serif;
+    cursor: pointer;
+    touch-action: manipulation;
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    margin-right: auto;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    line-height: 1.2;
+    text-shadow: 0 0 8px rgba(255, 215, 0, 0.4), 1px 1px 0 rgba(0, 0, 0, 0.75);
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 215, 0, 0.12);
+    min-width: clamp(140px, 14vw, 190px);
+}
+
+#dialogue-continue:hover {
+    background: linear-gradient(180deg, rgba(30, 28, 16, 0.95) 0%, rgba(14, 12, 7, 0.98) 100%);
+    border-color: rgba(255, 215, 0, 0.75);
+    color: #ffe48a;
+    box-shadow: 0 0 18px rgba(255, 215, 0, 0.35), 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+
+#dialogue-continue:active {
+    transform: scale(0.95);
+}
+
+#dialogue-continue.hidden {
+    display: none;
+}
+
+/* Continue button in narrative/choice dark boxes */
+#dialogue-container.narrative-mode #dialogue-continue {
+    color: rgba(255, 215, 0, 0.7);
+    border-color: rgba(255, 215, 0, 0.3);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+#dialogue-container.narrative-mode #dialogue-continue:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #FFD700;
+    border-color: rgba(255, 215, 0, 0.5);
+}
+
+#dialogue-box[data-layout-panel="speech-bubble"]{ cursor:pointer; }
+#dialogue-box[data-layout-panel="speech-bubble"] *{ -webkit-tap-highlight-color: transparent; }
+
+/* ===== OVERLAYS ===== */
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(8px);
+    transition: opacity 0.3s ease;
+}
+
+.overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.overlay-content {
+    background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+    border: 3px solid #333;
+    border-radius: 15px;
+    padding: 40px;
+    max-width: 800px;
+    max-height: 80%;
+    overflow-y: auto;
+    box-shadow: 0 10px 50px rgba(0, 0, 0, 0.9),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    position: relative;
+}
+
+.overlay-content h2 {
+    color: #ffd700;
+    font-size: 28px;
+    margin-bottom: 25px;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    text-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+}
+
+.overlay-close {
+    display: block;
+    margin: 30px auto 0;
+    padding: 12px 40px;
+    background: rgba(40, 40, 50, 0.9);
+    border: 2px solid #555;
+    border-radius: 8px;
+    color: #e0e0e0;
+    font-size: 16px;
+    transition: all 0.3s ease;
+}
+
+.overlay-close:hover {
+    background: rgba(60, 60, 70, 0.9);
+    border-color: #ffd700;
+    color: #ffd700;
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+}
+
+/* ===== INVENTORY - RESPONSIVE GRID ===== */
+#inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(clamp(90px, 20vw, 120px), 1fr));
+    gap: clamp(10px, 2vw, 15px);
+    margin: clamp(15px, 3vw, 20px) 0;
+    min-height: clamp(150px, 30vh, 200px);
+    max-height: 60vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.inventory-item {
+    background: rgba(30, 30, 40, 0.9);
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    min-width: 80px;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+    z-index: 2;
+    pointer-events: auto;
+}
+
+@media (max-width: 768px) {
+    #inventory-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    #inventory-grid {
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        gap: 10px;
+    }
+}
+
+.inventory-item:hover,
+.inventory-item:active {
+    border-color: #FFD700;
+    background: rgba(40, 40, 50, 0.95);
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+}
+
+.inventory-item img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    margin-bottom: clamp(6px, 1.5vw, 10px);
+    background: transparent !important;
+    pointer-events: none;
+}
+
+.inventory-item-name {
+    font-size: clamp(10px, 2vw, 12px);
+    color: #aaa;
+    text-transform: uppercase;
+    word-wrap: break-word;
+    line-height: 1.2;
+}
+
+.inventory-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: #666;
+    font-style: italic;
+    padding: 40px;
+}
+
+/* ===== NOTEBOOK UI - FULLY RESPONSIVE ===== */
+/* width and height are always set to the SAME min()-of-constraints value
+   (never independently) so .notebook-ui stays a perfect square, matching
+   notebook-menu-open.png's native 1024x1024 art. #notebook-text-overlay
+   and .notebook-page are positioned with plain percentages against this
+   box on the assumption that it exactly equals the visible (object-fit:
+   contain) book art -- if width/height were allowed to diverge from a 1:1
+   ratio, object-fit:contain would letterbox the image inside a
+   non-square box, and every percentage-based position below would be
+   measured against empty letterbox space instead of the actual drawn
+   page, so text could overflow past the book edges (worst at very
+   short/wide viewports, e.g. phone landscape). */
+.notebook-ui {
+    position: relative;
+    width: min(90%, 1000px, 85vh);
+    height: min(90%, 1000px, 85vh);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#notebook-bg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Two-page "spread" layout: left/right page columns straddle the book's
+   drawn spine (fixed at 50% in notebook-menu-open.png), each independently
+   paginated by notebookPager so entries never run text across the spine.
+   --notebook-pages-per-view (1 or 2) tells the JS pager how many page
+   columns are simultaneously visible at the current breakpoint — 1 on
+   narrow phones (right column hidden, single page shown full-width). */
+#notebook-text-overlay {
+    position: absolute;
+    top: 10%;
+    left: 12%;
+    right: 12%;
+    bottom: 10%;
+    display: flex;
+    gap: clamp(20px, 5vw, 56px);
+    color: #1a1a1a;
+    font-family: 'Courier New', monospace;
+    font-size: clamp(12px, 2.5vw, 14px);
+    line-height: 1.8;
+    --notebook-pages-per-view: 2;
+}
+
+.notebook-page {
+    /* flex-grow/shrink are 0 (not 1 1) deliberately: with grow/shrink
+       enabled, each column's actual rendered width can shift by a few px
+       depending on what its SIBLING column's content needs (flexbox
+       resolves widths across all flex items together), which made a
+       page's width -- and therefore how much text fits -- vary slightly
+       depending on what was displayed at the time, so notebookPager's
+       offscreen-clone measurement (synced from one column at pagination
+       time) could disagree with the width the page actually rendered at
+       when a different spread was shown later. A hard 0 0 50% locks both
+       columns to exactly half the row, independent of content, so the
+       measured width is always the rendered width. */
+    flex: 0 0 50%;
+    min-width: 0;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: clamp(16px, 3.5vw, 40px) clamp(14px, 3vw, 30px);
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+@media (max-width: 768px) {
+    .notebook-ui {
+        width: min(95%, 90vh);
+        height: min(95%, 90vh);
+    }
+
+    #notebook-text-overlay {
+        left: 10%;
+        right: 10%;
+        top: 8%;
+        bottom: 8%;
+    }
+}
+
+@media (max-width: 640px) {
+    #notebook-text-overlay {
+        --notebook-pages-per-view: 1;
+    }
+
+    .notebook-page-right {
+        display: none;
+    }
+
+    .notebook-page {
+        flex: 1 1 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .notebook-ui {
+        width: min(98%, 95vh);
+        height: min(98%, 95vh);
+    }
+
+    #notebook-text-overlay {
+        left: 8%;
+        right: 8%;
+        top: 6%;
+        bottom: 6%;
+        line-height: 1.6;
+    }
+}
+
+.notebook-entry {
+    padding: 14px 0 14px 0;
+    border-bottom: 2px dashed rgba(0, 0, 0, 0.18);
+    position: relative;
+    /* .notebook-page is a column flexbox, so .notebook-entry is a flex
+       item -- without this, flexbox's default min-width:auto keeps it from
+       shrinking below an unbroken word's natural width (e.g. a long entry
+       title), so the word overflows past the page edge instead of
+       wrapping even though word-break:break-word is set below. */
+    min-width: 0;
+}
+
+.notebook-entry::before {
+    content: '';
+    display: block;
+    width: 4px;
+    height: 100%;
+    background: rgba(139, 0, 0, 0.6);
+    position: absolute;
+    left: -14px;
+    top: 0;
+    border-radius: 2px;
+}
+
+.notebook-entry-title {
+    font-weight: 900;
+    font-size: 15px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    color: #1a1a1a;
+    letter-spacing: 1.5px;
+    font-family: 'Courier New', monospace;
+    border-bottom: 1px solid rgba(0,0,0,0.12);
+    padding-bottom: 4px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    white-space: normal;
+}
+
+.notebook-entry-title::before {
+    content: '▸ ';
+    color: rgba(139, 0, 0, 0.7);
+}
+
+/* Shown instead of the full header on a fragment that continues an entry
+   too long to fit a single page (see notebookPager._splitEntryToFitting). */
+.notebook-entry-continued {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    font-style: italic;
+    color: #888;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+
+.notebook-entry-body {
+    color: #222;
+    line-height: 1.9;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    white-space: normal;
+    font-size: 13px;
+}
+
+/* ===== JOURNAL ENTRY MODE ===== */
+
+.journal-entry-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.journal-entry-num {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #888;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.journal-entry-date {
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    color: #999;
+    font-style: italic;
+    /* flex-basis:100% forces this onto its own line unconditionally,
+       rather than only wrapping when the ~130px date string happens not
+       to fit next to the tag/number on a narrow column. A conditional
+       wrap right at that width threshold made .journal-entry-header's
+       line count -- and so its height -- come out different between
+       notebookPager's offscreen measurement clone and the live page for
+       the exact same content (sub-pixel width differences between two
+       independent layout trees are enough to flip which side of the
+       threshold a borderline wrap lands on), which could make a page
+       judged as fitting actually overflow once rendered. Always breaking
+       here removes the threshold entirely, so both sides agree. */
+    flex: 1 0 100%;
+    white-space: normal;
+    max-width: 100%;
+}
+
+/* Category tags */
+.journal-tag {
+    display: inline-block;
+    font-family: 'Courier New', monospace;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.journal-tag-status {
+    background: rgba(30, 90, 160, 0.15);
+    color: #1e5aa0;
+    border: 1px solid rgba(30, 90, 160, 0.35);
+}
+
+.journal-tag-action {
+    background: rgba(180, 30, 30, 0.15);
+    color: #b41e1e;
+    border: 1px solid rgba(180, 30, 30, 0.35);
+}
+
+.journal-tag-clue {
+    background: rgba(160, 100, 0, 0.15);
+    color: #8a5c00;
+    border: 1px solid rgba(160, 100, 0, 0.35);
+}
+
+.journal-tag-result {
+    background: rgba(20, 120, 60, 0.15);
+    color: #14783c;
+    border: 1px solid rgba(20, 120, 60, 0.35);
+}
+
+.journal-tag-story {
+    background: rgba(100, 40, 160, 0.15);
+    color: #6428a0;
+    border: 1px solid rgba(100, 40, 160, 0.35);
+}
+
+.journal-tag-note {
+    background: rgba(80, 80, 80, 0.12);
+    color: #555;
+    border: 1px solid rgba(80, 80, 80, 0.25);
+}
+
+.notebook-close-btn {
+    position: absolute;
+    top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    width: clamp(38px, 8vw, 45px);
+    height: clamp(38px, 8vw, 45px);
+    background: rgba(0, 0, 0, 0.8);
+    border: 2px solid #ffd700;
+    border-radius: 50%;
+    color: #ffd700;
+    font-size: clamp(24px, 5vw, 30px);
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    line-height: 1;
+    padding-bottom: 3px;
+    touch-action: manipulation;
+    z-index: 10;
+}
+
+.notebook-close-btn:hover {
+    background: rgba(255, 215, 0, 0.3);
+    transform: scale(1.1);
+}
+
+.notebook-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: clamp(34px, 6vw, 46px);
+    height: clamp(34px, 6vw, 46px);
+    background: rgba(0, 0, 0, 0.75);
+    border: 2px solid #ffd700;
+    border-radius: 50%;
+    color: #ffd700;
+    font-size: clamp(18px, 3.5vw, 24px);
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    line-height: 1;
+    touch-action: manipulation;
+    z-index: 10;
+}
+
+.notebook-nav-btn:hover:not(:disabled) {
+    background: rgba(255, 215, 0, 0.3);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.notebook-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.notebook-nav-prev {
+    left: max(4px, env(safe-area-inset-left));
+}
+
+.notebook-nav-next {
+    right: max(4px, env(safe-area-inset-right));
+}
+
+.notebook-page-indicator {
+    position: absolute;
+    bottom: max(6px, env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Courier New', monospace;
+    font-size: clamp(10px, 2vw, 13px);
+    color: rgba(0, 0, 0, 0.55);
+    letter-spacing: 1px;
+    z-index: 10;
+    pointer-events: none;
+}
+
+/* ===== PAUSE MENU / PHONE UI ===== */
+.pause-menu-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* ===== PHONE PAUSE MENU — CONSOLIDATED ===== */
+.phone-ui {
+    position: relative;
+    width: min(75vw, 500px);
+    height: min(90vh, 850px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.phone-bg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.phone-buttons {
+    position: absolute;
+    z-index: 2;
+    /* Center the button column in the phone screen area */
+    top: 32%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 44%;
+    max-width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(8px, 2vh, 16px);
+}
+
+.phone-buttons button {
+    width: 100%;
+    min-height: 44px;
+    padding: clamp(10px, 1.8vh, 16px) clamp(12px, 2vw, 20px);
+    background: rgba(30, 30, 35, 0.85);
+    border: 2px solid #555;
+    border-radius: 10px;
+    color: #e0e0e0;
+    font-size: clamp(13px, 1.8vw, 18px);
+    font-weight: bold;
+    text-transform: uppercase;
+    transition: all 0.3s ease;
+    letter-spacing: 0.5px;
+}
+
+.phone-buttons button:hover {
+    background: rgba(50, 50, 55, 0.95);
+    border-color: #ffd700;
+    color: #ffd700;
+    transform: scale(1.03);
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+}
+
+@media (max-width: 768px) {
+    .phone-ui {
+        width: min(70vw, 320px);
+        height: min(82vh, 560px);
+    }
+
+    .phone-buttons {
+        width: 46%;
+        top: 33%;
+        gap: clamp(8px, 1.8vh, 14px);
+    }
+
+    .phone-buttons button {
+        font-size: clamp(11px, 2.5vw, 14px);
+        padding: clamp(7px, 1.2vh, 10px) clamp(8px, 2vw, 14px);
+        min-height: 38px;
+    }
+}
+
+@media (max-width: 480px) {
+    .phone-ui {
+        width: min(78vw, 280px);
+        height: min(78vh, 480px);
+    }
+
+    .phone-buttons {
+        width: 48%;
+        top: 34%;
+    }
+
+    .phone-buttons button {
+        font-size: clamp(10px, 2.8vw, 13px);
+        min-height: 36px;
+    }
+    
+    .phone-buttons button {
+        font-size: clamp(11px, 3vw, 14px);
+    }
+}
+/* ===== SETTINGS - RESPONSIVE ===== */
+.settings-item {
+    margin: clamp(18px, 4vw, 25px) 0;
+    display: flex;
+    align-items: center;
+    gap: clamp(10px, 2vw, 15px);
+    flex-wrap: wrap;
+}
+
+.settings-item label {
+    color: #ccc;
+    flex: 1;
+    min-width: 150px;
+    font-size: clamp(14px, 3vw, 16px);
+}
+
+@media (max-width: 480px) {
+    .settings-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .settings-item label {
+        width: 100%;
+    }
+}
+
+.settings-item input[type="range"] {
+    flex: 2;
+    height: 8px;
+    background: #333;
+    border-radius: 4px;
+    outline: none;
+}
+
+.settings-item input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #ffd700;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.settings-item input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: #ffd700;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+
+.settings-item span {
+    color: #ffd700;
+    min-width: clamp(40px, 8vw, 50px);
+    text-align: right;
+    font-size: clamp(13px, 2.5vw, 15px);
+}
+
+.settings-item input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+/* ===== FADE OVERLAY - BLACK TRANSITIONS ===== */
+#fade-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000000;
+    z-index: 50;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.7s ease-in-out;
+}
+
+#fade-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Loading spinner for scene transitions */
+#fade-overlay.loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.loading-spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid rgba(255, 215, 0, 0.2);
+    border-top-color: #FFD700;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ===== DEV HUB MODAL ===== */
+#devHubModal {
+    position: fixed;
+    inset: 0;
+    z-index: 13000;
+}
+
+#devHubModal.hidden {
+    display: none !important;
+}
+
+#devHubBackdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.78);
+}
+
+#devHubPanel {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(640px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    background: rgba(18, 18, 22, 0.95);
+    border: 2px solid #ffd700;
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+}
+
+#devHubTitle {
+    color: #ffd700;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+}
+
+.dev-tools-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.dev-hub-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.dev-hub-btn {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #666;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.07);
+    color: #f0f0f0;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.dev-hub-btn:hover {
+    border-color: #ffd700;
+    color: #ffd700;
+}
+
+.dev-hub-btn.active {
+    border-color: #ffd700;
+    background: rgba(255, 215, 0, 0.15);
+    color: #ffd700;
+}
+
+#devHubStatus {
+    font-size: 14px;
+    margin-bottom: 14px;
+    line-height: 1.5;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.dev-trace-panel {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 14px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.dev-trace-panel.hidden {
+    display: none;
+}
+
+.dev-trace-panel h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    color: #ffd700;
+}
+
+#devTraceList {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+#devTraceList li {
+    margin-bottom: 4px;
+}
+
+
+.dev-hub-quick-row {
+    display: grid;
+    grid-template-columns: auto 1fr 120px 170px;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.dev-hub-quick-row label {
+    font-size: 12px;
+    color: #ffd700;
+    text-transform: uppercase;
+}
+
+.dev-hub-quick-row input {
+    min-height: 36px;
+    border-radius: 8px;
+    border: 1px solid #666;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    padding: 0 10px;
+}
+
+.dev-validation-output {
+    margin: 8px 0 10px;
+    padding: 8px;
+    border: 1px solid rgba(0, 255, 208, 0.35);
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.5);
+    color: #d2fff5;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 11px;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    max-height: 170px;
+    overflow: auto;
+}
+
+.dev-hotspot-toggles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 12px;
+}
+
+.dev-hotspot-toggles label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.dev-hotspot-toggles input[type="number"] {
+    width: 70px;
+}
+
+.dev-hub-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+#dev-floating-btn {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 12950;
+    min-width: 56px;
+    min-height: 44px;
+    border-radius: 999px;
+    border: 1px solid #ffd700;
+    background: rgba(18, 18, 22, 0.9);
+    color: #ffd700;
+    font-weight: 700;
+    letter-spacing: 0.7px;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.5);
+}
+
+#dev-floating-btn.hidden {
+    display: none !important;
+}
+
+#dev-hit-highlight {
+    position: absolute;
+    z-index: 12500;
+    border: 2px solid #00ffd0;
+    background: rgba(0, 255, 208, 0.2);
+    box-shadow: 0 0 8px rgba(0, 255, 208, 0.65);
+    pointer-events: none;
+    display: none;
+}
+
+#dev-hit-highlight::after {
+    content: attr(data-label);
+    position: absolute;
+    left: 0;
+    top: -24px;
+    background: rgba(0, 0, 0, 0.9);
+    border: 1px solid #00ffd0;
+    color: #d2fff5;
+    font-size: 11px;
+    white-space: nowrap;
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+
+#dev-hotspot-editor-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 12490;
+    pointer-events: none;
+}
+
+#dev-hotspot-editor-layer.active {
+    pointer-events: auto;
+}
+
+#dev-hotspot-editor-layer.active.allow-click-through {
+    pointer-events: none;
+}
+
+.dev-hotspot-box {
+    position: absolute;
+    border: 2px dashed rgba(255, 215, 0, 0.95);
+    background: rgba(255, 215, 0, 0.12);
+    box-sizing: border-box;
+}
+
+.dev-hotspot-box.selected {
+    border-color: #00ffd0;
+    background: rgba(0, 255, 208, 0.18);
+}
+
+.dev-hotspot-label {
+    position: absolute;
+    left: 0;
+    top: -18px;
+    font-size: 11px;
+    background: rgba(0, 0, 0, 0.9);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    padding: 1px 4px;
+}
+
+.dev-hotspot-handle {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border: 1px solid #000;
+    background: #00ffd0;
+}
+
+.dev-hotspot-handle[data-corner="nw"] { left: -6px; top: -6px; cursor: nwse-resize; }
+.dev-hotspot-handle[data-corner="ne"] { right: -6px; top: -6px; cursor: nesw-resize; }
+.dev-hotspot-handle[data-corner="sw"] { left: -6px; bottom: -6px; cursor: nesw-resize; }
+.dev-hotspot-handle[data-corner="se"] { right: -6px; bottom: -6px; cursor: nwse-resize; }
+
+.dev-hotspot-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+#devHotspotMeta {
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+#devHotspotWarnings {
+    margin: 0;
+    padding-left: 16px;
+    font-size: 12px;
+}
+
+
+#action-container {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-top: auto;
+}
+
+#action-container #dialogue-choices {
+    flex: 0 1 100%;
+}
+
+/* An empty choices panel (continue-only entries) must not reserve a
+   full-width wrapped row — its flex-basis:100% would otherwise force
+   #dialogue-continue onto a second line and silently eat vertical space
+   the pagination budget never accounts for. */
+#action-container #dialogue-choices:empty {
+    display: none;
+}
+
+.dev-layout-target {
+    outline: 2px dashed #00ff88 !important;
+    outline-offset: 2px;
+    cursor: move;
+}
+
+.dev-layout-target::after {
+    content: attr(data-layout-panel);
+    position: absolute;
+    top: -18px;
+    left: 0;
+    font-size: 10px;
+    color: #00ff88;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 1px 6px;
+    border-radius: 3px;
+    pointer-events: none;
+    z-index: 9999;
+}
+
+.dev-layout-target.dev-layout-dragging {
+    opacity: 0.88;
+    will-change: transform;
+}
+
+.dev-layout-target.dev-layout-resizing {
+    opacity: 0.96;
+    will-change: width, height;
+}
+
+.dev-layout-handle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    z-index: 2;
+    cursor: grab;
+    user-select: none;
+    color: #d7fff8;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 2px 6px;
+    background: linear-gradient(180deg, rgba(0, 40, 60, 0.85), rgba(0, 25, 40, 0.65));
+    border-bottom: 1px solid rgba(0, 255, 208, 0.75);
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+
+.dev-layout-target .dev-layout-handle {
+    touch-action: none;
+}
+
+.dev-layout-resize-handle {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: rgba(0, 255, 208, 0.92);
+    border: 1px solid rgba(0, 0, 0, 0.85);
+    border-radius: 2px;
+    z-index: 3;
+}
+
+.dev-layout-resize-handle[data-resize="e"] {
+    right: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: ew-resize;
+}
+
+.dev-layout-resize-handle[data-resize="s"] {
+    left: 50%;
+    bottom: -8px;
+    transform: translateX(-50%);
+    cursor: ns-resize;
+}
+
+.dev-layout-resize-handle[data-resize="se"] {
+    right: -8px;
+    bottom: -8px;
+    cursor: nwse-resize;
+}
+
+/* ===== DEV BUBBLE SLOT OVERLAY ===== */
+.dev-bubble-slot-overlay {
+    position: absolute;
+    box-sizing: border-box;
+    border: 2px dashed rgba(255, 200, 50, 0.9);
+    background: rgba(255, 200, 50, 0.07);
+    pointer-events: none;
+    z-index: 9100;
+}
+
+.dev-bubble-slot-label {
+    position: absolute;
+    top: 5px;
+    left: 8px;
+    font: bold 12px monospace;
+    color: rgba(255, 200, 50, 0.95);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+    pointer-events: none;
+    white-space: nowrap;
+    letter-spacing: 0.03em;
+}
+
+/* ===== TRANSITION INTERACTION BLOCKING ===== */
+#scene-container.scene-transitioning #character-layer,
+#scene-container.scene-transitioning #item-layer,
+#scene-container.scene-transitioning #hotspot-layer,
+#scene-container.scene-transitioning #dialogue-box,
+#scene-container.scene-transitioning #hud-buttons {
+    pointer-events: none;
+}
+
+/* ===== MAIN MENU - FULLY RESPONSIVE ===== */
+body.main-menu #scene-container {
+    background-image: url('./promo/title-intro-card.png');
+    background-size: cover;
+    background-position: center;
+}
+
+/* title-intro-card.png already bakes the game title into the art (top
+   ~35% of the frame) -- the buttons anchor to the bottom of the frame
+   instead of dead-centering, so they sit over the room scene below the
+   title instead of overlapping it. */
+#main-menu-content {
+    position: absolute;
+    left: 50%;
+    bottom: 6%;
+    transform: translateX(-50%);
+    text-align: center;
+    z-index: 10;
+    width: 90%;
+    max-width: 650px;
+    padding: 0 10px;
+}
+
+.menu-btn {
+    display: block;
+    width: 100%;
+    max-width: 420px;
+    margin: clamp(12px, 3vw, 18px) auto;
+    padding: clamp(14px, 3vw, 20px) clamp(25px, 5vw, 40px);
+    background: rgba(20, 20, 25, 0.88);
+    border: 3px solid #555;
+    border-radius: 12px;
+    color: #e0e0e0;
+    font-size: clamp(18px, 4vw, 24px);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: clamp(1px, 0.3vw, 2px);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    touch-action: manipulation;
+    /* Visible by default -- e.g. the item-examine modal's OK/USE ITEM
+       buttons share this class but never receive .fade-in (that's a
+       main-menu-only choreography, scoped below). Without this, those
+       modal buttons would be permanently invisible via the opacity: 0
+       start-state meant only for the main menu's staggered reveal. */
+    opacity: 1;
+    transform: none;
+}
+
+/* Cinematic main-menu entrance: buttons start hidden and are neither
+   visible nor clickable until _executeSceneLoad()'s background reveal
+   finishes and onEnter()'s staggered timeout adds .fade-in per button
+   (see S0_MAIN_MENU.onEnter() in index.js). */
+#main-menu-content .menu-btn {
+    opacity: 0;
+    transform: translateY(20px);
+}
+
+#main-menu-content .menu-btn:not(.fade-in) {
+    pointer-events: none;
+}
+
+.menu-btn.fade-in {
+    animation: menuFadeIn 0.6s ease-out forwards;
+}
+
+.menu-btn:hover:not(:disabled) {
+    background: rgba(40, 40, 45, 0.98);
+    border-color: #ffd700;
+    color: #ffd700;
+    transform: scale(1.06);
+    box-shadow: 0 0 35px rgba(255, 215, 0, 0.5);
+}
+
+.menu-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ===== COMPREHENSIVE RESPONSIVE MEDIA QUERIES ===== */
+
+/* Large tablets and small desktops */
+@media (max-width: 1200px) {
+}
+
+/* Tablets in portrait and large phones in landscape */
+@media (max-width: 768px) {
+    #hud::before {
+        height: 60px;
+        width: min(98%, 100vw);
+    }
+
+    #hud-buttons {
+        gap: 10px;
+        top: max(18px, calc(env(safe-area-inset-top) + 8px));
+    }
+
+    .hud-btn {
+        width: 44px;
+        height: 44px;
+        font-size: 22px;
+    }
+
+    #scene-title {
+        top: max(24px, calc(env(safe-area-inset-top) + 14px));
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: clamp(12px, 2.8vw, 16px);
+    }
+
+    .overlay-content {
+        padding: 25px 20px;
+        max-width: 95%;
+    }
+
+
+
+}
+
+/* Small phones and iPhone SE */
+@media (max-width: 480px) {
+    #hud::before {
+        height: 55px;
+    }
+
+    #hud-buttons {
+        gap: 8px;
+        top: max(16px, calc(env(safe-area-inset-top) + 6px));
+    }
+
+    .hud-btn {
+        width: 44px;
+        height: 44px;
+        font-size: 20px;
+    }
+
+    #scene-title {
+        top: max(22px, calc(env(safe-area-inset-top) + 12px));
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: clamp(11px, 2.5vw, 14px);
+    }
+
+    .overlay-content {
+        padding: 20px 15px;
+        max-width: 98%;
+        max-height: 90vh;
+    }
+
+    .overlay-content h2 {
+        font-size: clamp(20px, 5vw, 24px);
+        margin-bottom: 20px;
+    }
+
+
+
+
+    #main-menu-content {
+        width: 95%;
+    }
+}
+
+/* Landscape orientation optimization - prevent zoom issues */
+@media (max-height: 500px) and (orientation: landscape) {
+    #scene-container {
+        width: min(100vw, calc(var(--app-height, 100vh) * 16 / 9));
+        height: min(var(--app-height, 100vh), calc(100vw * 9 / 16));
+        max-width: 100vw;
+        max-height: var(--app-height, 100vh);
+    }
+
+    #scene-background {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: center;
+    }
+
+    #dialogue-box:not([data-layout-panel="speech-bubble"]) {
+        width: min(22%, 200px);
+    }
+
+    #dialogue-box.dialogue-left:not(.dialogue-anchored) {
+        left: 2%;
+    }
+
+    #dialogue-box.dialogue-right:not(.dialogue-anchored) {
+        right: 2%;
+    }
+
+    #dialogue-box.dialogue-center {
+        /* keep centered in landscape */
+    }
+
+    /* #dialogue-container/#dialogue-speaker/#dialogue-text sizing for this
+       breakpoint now lives in the "COMPACT LANDSCAPE DIALOGUE SYSTEM" section
+       near the end of this file (CSS-variable driven, shared with the
+       max-width:1024+landscape query) — this avoided a 9px text floor here
+       that was below the readability minimum. */
+
+    .character-sprite {
+        max-height: 60%;
+        max-width: 30%;
+    }
+
+    #hud::before {
+        height: 50px;
+        top: max(5px, env(safe-area-inset-top));
+    }
+
+    #hud-buttons {
+        gap: 8px;
+        top: max(13px, calc(env(safe-area-inset-top) + 8px));
+    }
+
+    .hud-btn {
+        width: 44px;
+        height: 44px;
+        font-size: 18px;
+    }
+
+    #scene-title {
+        top: max(18px, calc(env(safe-area-inset-top) + 13px));
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: clamp(10px, 2.2vw, 13px);
+        padding: 6px 10px;
+    }
+
+    /* .notebook-ui is forced to a square (matches notebook-menu-open.png's
+       1024x1024 art -- see the block's own comment), so on a short
+       landscape viewport it's bounded by the SMALLER of width/height and
+       ends up much smaller here than the width-driven font-size clamps
+       above expect, leaving too little room per page for even the
+       tag/number/date/title header before any body text. Shrinking the
+       header pieces specifically (not just the general text-overlay
+       clamp, which is still sized for the wider, non-square case) keeps
+       the fixed per-entry overhead small enough that a page has real room
+       left for body text. */
+    .journal-tag {
+        font-size: 8px;
+        padding: 1px 4px;
+    }
+
+    .journal-entry-num {
+        font-size: 9px;
+    }
+
+    .journal-entry-date {
+        font-size: 8px;
+    }
+
+    .notebook-entry-title {
+        font-size: 12px;
+        margin-bottom: 4px;
+    }
+
+    .notebook-page {
+        gap: 10px;
+    }
+
+}
+
+@media (max-width: 1024px) and (orientation: landscape) {
+    #game-root {
+        padding: 0;
+    }
+
+    #hud::before {
+        width: min(95%, calc(var(--app-height, 100vh) * 16 / 9));
+    }
+
+}
+
+/* iPhone X, 11, 12, 13, 14 with notch */
+@media only screen
+  and (min-device-width: 375px)
+  and (max-device-width: 428px)
+  and (-webkit-min-device-pixel-ratio: 3) {
+    #hud-buttons {
+        top: max(25px, env(safe-area-inset-top, 44px));
+    }
+
+    #scene-title {
+        top: max(25px, env(safe-area-inset-top, 44px));
+        left: 50%;
+        transform: translateX(-50%);
+    }
+}
+
+/* Very wide screens (ultrawide monitors) */
+@media (min-width: 1921px) {
+    #scene-container {
+        max-width: 2560px;
+        max-height: 1440px;
+    }
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes menuFadeIn {
+    0% {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ===== UTILITY CLASSES ===== */
+.hidden {
+    display: none !important;
+}
+
+.invisible {
+    opacity: 0 !important;
+}
+
+/* ===== UX TUNING: DIALOGUE + MENUS ===== */
+#dialogue-box.dialogue-left {
+    left: 18%;
+    bottom: auto;
+}
+
+#dialogue-box.dialogue-right {
+    right: 18%;
+    bottom: auto;
+}
+
+#dialogue-box.dialogue-center {
+    top: 54%;
+}
+
+#dialogue-text {
+    max-height: 280px;
+}
+
+.overlay-content {
+    width: min(94vw, 980px);
+    max-height: 88vh;
+    border-color: #5a5a5a;
+}
+
+#inventory-overlay .overlay-content {
+    width: min(96vw, 1180px);
+    max-height: 90vh;
+    padding: clamp(24px, 3vw, 44px);
+}
+
+#inventory-grid {
+    grid-template-columns: repeat(auto-fill, minmax(clamp(140px, 14vw, 180px), 1fr));
+    gap: clamp(14px, 2vw, 22px);
+    max-height: 66vh;
+}
+
+.inventory-item {
+    min-height: 170px;
+}
+
+.inventory-item img {
+    width: clamp(70px, 11vw, 106px);
+    height: clamp(70px, 11vw, 106px);
+}
+
+.notebook-ui {
+    width: min(96vw, 1220px, 94vh, 900px);
+    height: min(96vw, 1220px, 94vh, 900px);
+}
+
+#notebook-text-overlay {
+    top: 8%;
+    left: 10%;
+    right: 10%;
+    bottom: 8%;
+    font-size: clamp(14px, 1.9vw, 20px);
+}
+
+.notebook-page {
+    padding: clamp(24px, 3vw, 44px);
+    gap: 30px;
+}
+
+.pause-menu-content {
+    width: 100%;
+    height: 100%;
+}
+
+
+
+
+@media (max-width: 768px) {
+    #dialogue-box:not([data-layout-panel="speech-bubble"]) {
+        width: min(36%, 200px);
+    }
+
+    #dialogue-box.dialogue-left:not(.dialogue-anchored) {
+        left: 3%;
+    }
+
+    #dialogue-box.dialogue-right:not(.dialogue-anchored) {
+        right: 3%;
+    }
+
+    #inventory-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    }
+
+    .notebook-ui {
+        width: min(98%, 96vh);
+        height: min(98%, 96vh);
+    }
+}
+
+@media (max-width: 768px) {
+    .dev-hub-quick-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ===== MOBILE LANDSCAPE SAFETY OVERRIDES ===== */
+@media (max-width: 1024px) and (orientation: landscape) {
+    #main-menu-content {
+        bottom: 2%;
+        width: min(92vw, 620px);
+    }
+
+    /* Previously up to 500px/72vw wide with generous padding -- on a phone
+       that's most of the screen, blocking the title-card art behind a
+       stack of 4 buttons. Shrunk width and padding so the art stays
+       visible around and between the buttons. */
+    .menu-btn {
+        max-width: min(46vw, 300px);
+        margin: clamp(4px, 1vh, 7px) auto;
+        padding: clamp(6px, 1.2vh, 9px) clamp(12px, 2vw, 18px);
+        font-size: clamp(12px, 1.8vw, 15px);
+    }
+
+}
+
+/* ===== PHONE PRECISION HOTFIX: SPEECH + CHOICE + PAUSE MENU ===== */
+
+@media (max-width: 768px) {
+    /* Ensure phone buttons sit properly inside the phone frame */
+    .phone-buttons {
+        top: 33%;
+        width: 46%;
+    }
+
+    /* Compact choice buttons for mobile */
+    .dialogue-choice {
+        padding: 4px 8px;
+        font-size: clamp(14px, 1.6vw, 16px);
+        min-height: 26px;
+    }
+}
+
+@media (max-width: 480px) {
+    .phone-buttons {
+        top: 34%;
+        width: 48%;
+    }
+
+    .dialogue-choice {
+        padding: 3px 6px;
+        font-size: clamp(14px, 1.4vw, 15px);
+        min-height: 22px;
+    }
+}
+
+/* ===== SMALL SCREEN ADJUSTMENTS ===== */
+@media (max-width: 480px) {
+    /* Compact HUD buttons */
+    #hud-buttons {
+        top: max(12px, calc(env(safe-area-inset-top) + 2px));
+        right: max(10px, calc(env(safe-area-inset-right) + 5px));
+        gap: 8px;
+        z-index: 15;
+    }
+
+    .hud-btn {
+        width: 44px;
+        height: 44px;
+        font-size: 20px;
+        border-width: 1.5px;
+    }
+
+    /* Adjust scene title to avoid overlap */
+    #scene-title {
+        top: max(20px, calc(env(safe-area-inset-top) + 10px));
+        font-size: 11px;
+        max-width: 35%;
+        letter-spacing: 1px;
+        padding: 6px 10px;
+    }
+
+    /* Smaller HUD background */
+    #hud::before {
+        height: 60px;
+        width: min(98%, 1920px);
+    }
+}
+
+/* Extra small screens (iPhone SE, etc) */
+@media (max-width: 375px) {
+    #hud-buttons {
+        gap: 6px;
+    }
+
+    .hud-btn {
+        width: 44px;
+        height: 44px;
+        font-size: 18px;
+    }
+
+    #scene-title {
+        font-size: 10px;
+        max-width: 30%;
+    }
+}
+
+/* ===== MOBILE COMIC LAYOUT TUNING (2026-02) ===== */
+@media (max-width: 1024px) {
+    /* Ensure speech bubbles stay compact and don't obstruct characters */
+    #dialogue-box.dialogue-left,
+    #dialogue-box.dialogue-right {
+        max-width: 38vw;
+    }
+
+    /* Phone pause menu buttons sized to stay inside phone screen */
+    .phone-buttons button {
+        border-radius: 8px;
+    }
+}
+
+@media (max-width: 640px) {
+    /* Extra compact bubbles on small phones */
+    #dialogue-box.dialogue-left,
+    #dialogue-box.dialogue-right {
+        max-width: 34vw;
+    }
+
+    #dialogue-container {
+        min-height: clamp(30px, 5vw, 50px);
+        filter: drop-shadow(1px 1px 0px rgba(0, 0, 0, 0.4));
+    }
+}
+
+/* ===== DIALOGUE VIEWPORT PLACEMENT FIX (desktop + mobile parity) ===== */
+/* ===== FINAL MOBILE + MENU INTERACTION HOTFIXES ===== */
+.hotspot,
+#main-menu-content,
+#main-menu-content * {
+    pointer-events: auto;
+}
+
+#main-menu-content {
+    z-index: 40;
+}
+
+@media (max-width: 1024px) {
+    #action-container {
+        width: 100%;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+        margin-top: auto;
+    }
+
+    .notebook-ui {
+        width: min(96vw, 760px, 86vh, 700px) !important;
+        height: min(96vw, 760px, 86vh, 700px) !important;
+        margin-top: max(10px, env(safe-area-inset-top));
+    }
+
+    #notebook-text-overlay {
+        top: 11% !important;
+        left: 12% !important;
+        right: 12% !important;
+        bottom: 12% !important;
+        font-size: clamp(13px, 2.2vw, 17px) !important;
+    }
+
+    .notebook-page {
+        padding: clamp(12px, 2.4vw, 20px) !important;
+    }
+
+}
+
+@media (max-width: 768px) {
+    #devHubPanel,
+    .dev-trace-panel,
+    .dev-validation-output {
+        scrollbar-width: auto;
+        scrollbar-color: #ffd700 rgba(255, 255, 255, 0.12);
+    }
+
+    #devHubPanel::-webkit-scrollbar,
+    .dev-trace-panel::-webkit-scrollbar,
+    .dev-validation-output::-webkit-scrollbar {
+        width: 16px;
+        height: 16px;
+    }
+
+    #devHubPanel::-webkit-scrollbar-track,
+    .dev-trace-panel::-webkit-scrollbar-track,
+    .dev-validation-output::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+    }
+
+    #devHubPanel::-webkit-scrollbar-thumb,
+    .dev-trace-panel::-webkit-scrollbar-thumb,
+    .dev-validation-output::-webkit-scrollbar-thumb {
+        background: rgba(255, 215, 0, 0.85);
+        border-radius: 10px;
+        border: 2px solid rgba(0, 0, 0, 0.35);
+    }
+}
+
+@media (max-width: 640px) {
+    .notebook-ui {
+        width: min(96vw, 480px, 78vh, 500px) !important;
+        height: min(96vw, 480px, 78vh, 500px) !important;
+    }
+
+    #notebook-text-overlay {
+        top: 12% !important;
+        left: 14% !important;
+        right: 14% !important;
+        bottom: 14% !important;
+        font-size: clamp(10px, 2vw, 13px) !important;
+    }
+
+    .notebook-page {
+        padding: clamp(8px, 2vw, 14px) !important;
+    }
+
+    .notebook-entry-title {
+        font-size: 11px;
+        letter-spacing: 1px;
+    }
+
+    .notebook-entry-body {
+        font-size: 11px;
+    }
+
+    .journal-entry-date {
+        font-size: 9px;
+    }
+
+    .journal-tag {
+        font-size: 8px;
+        padding: 1px 5px;
+    }
+}
+
+/* ===== DIALOGUE SYSTEM — CONSOLIDATED RESPONSIVE RULES ===== */
+/* This is the single source of truth for all dialogue sizing. */
+/* DO NOT add dialogue rules elsewhere in the stylesheet.      */
+
+/* --- Base (desktop 1025px+) --- */
+#dialogue-box {
+    width: clamp(320px, 35vw, 560px);
+    min-width: 290px;
+    max-width: calc(100% - 20px);
+    z-index: 25;
+}
+
+#dialogue-box.dialogue-left,
+#dialogue-box.dialogue-right {
+    bottom: auto;
+}
+
+#dialogue-container {
+    min-height: clamp(120px, 16vh, 220px);
+}
+
+#dialogue-content {
+    padding: clamp(14px, 2.2vw, 24px) clamp(16px, 3vw, 30px);
+}
+
+#dialogue-speaker {
+    font-size: clamp(22px, 2.9vw, 34px);
+    margin-bottom: clamp(6px, 1vh, 12px);
+}
+
+#dialogue-text {
+    font-size: clamp(18px, 2.4vw, 28px);
+    line-height: 1.42;
+    overflow: hidden;
+}
+
+#dialogue-text .emphasis-angry,
+#dialogue-text .emphasis-whisper,
+#dialogue-text .emphasis-important {
+    display: inline-block;
+    will-change: transform;
+}
+
+#dialogue-text .emphasis-angry {
+    color: #ff7d7d;
+    text-shadow: 0 0 4px rgba(255, 80, 80, 0.22);
+    animation: emphasisAngryShake 0.24s steps(2, end) infinite;
+}
+
+#dialogue-text .emphasis-whisper {
+    opacity: 0.72;
+}
+
+#dialogue-text .emphasis-important {
+    text-shadow: 0 0 6px rgba(255, 235, 150, 0.34);
+    animation: emphasisImportantPulse 1.1s ease-in-out infinite;
+}
+
+@keyframes emphasisAngryShake {
+    0%,
+    100% { transform: translateX(0); }
+    25% { transform: translateX(-0.4px); }
+    75% { transform: translateX(0.4px); }
+}
+
+@keyframes emphasisImportantPulse {
+    0%,
+    100% { transform: scale(1); }
+    50% { transform: scale(1.015); }
+}
+
+#dialogue-container.narrative-mode {
+    padding: clamp(10px, 2vw, 20px);
+    overflow: hidden;
+}
+
+#dialogue-container.narrative-mode #dialogue-content {
+    overflow: hidden;
+}
+
+#dialogue-container.narrative-mode #dialogue-text,
+#dialogue-text.choice-text {
+    overflow: hidden;
+}
+
+#dialogue-choices {
+    width: min(100%, 720px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    gap: clamp(8px, 1.5vw, 12px);
+    margin-top: clamp(8px, 1.5vw, 14px);
+}
+
+.dialogue-choice {
+    font-size: clamp(14px, 1.8vw, 18px);
+    padding: clamp(10px, 1.5vh, 14px) clamp(14px, 2.5vw, 22px);
+    max-width: 680px;
+    width: min(100%, 92%);
+}
+
+#dialogue-continue {
+    padding: clamp(8px, 1.2vw, 12px) clamp(16px, 2.4vw, 26px);
+    border-radius: 12px;
+    font-size: clamp(15px, 1.8vw, 20px);
+    line-height: 1.1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    margin: clamp(8px, 1vw, 12px) auto 0;
+    min-width: clamp(140px, 14vw, 190px);
+    min-height: clamp(40px, 5vh, 52px);
+    width: auto;
+    height: auto;
+}
+
+@media (max-width: 640px) {
+    #dialogue-continue {
+        min-width: clamp(140px, 38vw, 190px);
+        min-height: clamp(42px, 7vh, 56px);
+        font-size: clamp(15px, 3.8vw, 20px);
+        padding: clamp(10px, 2.1vw, 13px) clamp(18px, 4.2vw, 26px);
+    }
+}
+
+/* --- Tablet/mobile (max 1024px) --- */
+@media (max-width: 1024px) {
+    #dialogue-box {
+        width: clamp(260px, 52vw, 460px);
+        min-width: min(240px, 86vw);
+        max-width: 90vw;
+    }
+
+    #dialogue-container {
+        min-height: clamp(100px, 16vw, 170px);
+    }
+
+    #dialogue-content {
+        padding: clamp(10px, 1.8vw, 16px);
+        min-height: 78px;
+    }
+
+    #dialogue-speaker {
+        font-size: clamp(18px, 3.4vw, 26px);
+        margin-bottom: clamp(4px, 0.9vh, 8px);
+        letter-spacing: 1px;
+    }
+
+    #dialogue-text {
+        font-size: clamp(15px, 2.8vw, 22px);
+        line-height: 1.35;
+        overflow: hidden;
+        margin-bottom: clamp(4px, 0.8vw, 8px);
+        padding: clamp(2px, 0.6vw, 5px);
+    }
+
+    #dialogue-container.narrative-mode {
+        padding: clamp(6px, 1.2vw, 10px);
+    }
+
+    #dialogue-container.narrative-mode #dialogue-text,
+    #dialogue-text.choice-text {
+        font-size: clamp(16px, 3.0vw, 24px);
+        overflow: hidden;
+    }
+
+    #dialogue-choices {
+        overflow-y: auto;
+        overflow-x: hidden;
+        gap: 4px;
+    }
+
+    .dialogue-choice {
+        font-size: clamp(14px, 2.2vw, 18px);
+        padding: clamp(8px, 1.2vh, 12px) clamp(12px, 2.2vw, 18px);
+        width: min(100%, 96%);
+    }
+}
+
+/* --- Small phone (max 640px) --- */
+@media (max-width: 640px) {
+    #dialogue-box {
+        width: clamp(240px, 84vw, 420px);
+        min-width: min(220px, 84vw);
+        max-width: 92vw;
+    }
+
+    #dialogue-container {
+        min-height: clamp(92px, 24vw, 150px);
+    }
+
+    #dialogue-speaker {
+        font-size: clamp(17px, 4.4vw, 24px);
+        letter-spacing: 0.5px;
+    }
+
+    #dialogue-text {
+        font-size: clamp(14px, 3.9vw, 21px);
+        line-height: 1.32;
+        overflow: hidden;
+        padding: clamp(2px, 0.7vw, 4px);
+        margin-bottom: clamp(3px, 0.8vw, 6px);
+    }
+
+    #dialogue-content {
+        padding: clamp(8px, 2.2vw, 14px);
+        min-height: 70px;
+    }
+
+    #dialogue-container.narrative-mode {
+        overflow: hidden;
+    }
+
+    #dialogue-container.narrative-mode #dialogue-text,
+    #dialogue-text.choice-text {
+        font-size: clamp(15px, 3.8vw, 20px);
+    }
+
+    /* Keep narration/speech dialogue compact enough for the More button */
+    #dialogue-box,
+    #dialogue-box[data-layout-panel="speech-bubble"],
+    #dialogue-box.dialogue-center {
+        width: min(94vw, 420px);
+        min-width: min(220px, 94vw);
+        max-width: 94vw;
+    }
+
+    #dialogue-container,
+    #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container {
+        min-height: clamp(78px, 18vh, 130px);
+        max-height: min(46vh, 260px);
+    }
+
+    #dialogue-content {
+        padding: clamp(7px, 1.9vw, 10px) clamp(9px, 2.2vw, 12px);
+        min-height: 0;
+    }
+
+    #dialogue-speaker {
+        font-size: clamp(14px, 4.1vw, 19px);
+        margin-bottom: 3px;
+    }
+
+    #dialogue-text,
+    #dialogue-container.narrative-mode #dialogue-text,
+    #dialogue-text.choice-text {
+        font-size: clamp(14px, 3.6vw, 16px);
+        line-height: 1.28;
+        margin-bottom: 2px;
+        padding: 0;
+    }
+
+    #dialogue-continue {
+        margin: 6px auto 0;
+        min-width: 112px;
+        min-height: 36px;
+        max-width: calc(100% - 12px);
+        font-size: clamp(14px, 3.4vw, 15px);
+        padding: 8px 14px;
+    }
+}
+
+/* --- Landscape (short viewport) --- */
+@media (max-width: 1024px) and (orientation: landscape) {
+    #dialogue-box {
+        width: min(48vw, 620px);
+        max-width: 64vw;
+        max-height: calc(100% - 30px);
+    }
+
+    #dialogue-container {
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #dialogue-content {
+        padding: clamp(8px, 2.2vw, 14px);
+        min-height: 70px;
+    }
+
+    #dialogue-speaker {
+        font-size: clamp(16px, 2.2vw, 23px);
+    }
+
+    #dialogue-text {
+        font-size: clamp(14px, 2vw, 20px);
+        line-height: 1.3;
+        overflow: hidden;
+    }
+
+    #dialogue-container.narrative-mode #dialogue-text {
+        overflow: hidden;
+    }
+
+    #dialogue-choices {
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    .dialogue-choice {
+        font-size: clamp(14px, 1.8vw, 16px);
+        padding: clamp(6px, 0.9vh, 10px) clamp(10px, 1.4vw, 16px);
+    }
+
+    #dialogue-continue {
+        margin-top: clamp(2px, 0.5vh, 5px);
+    }
+}
+
+/* ===== COMPACT LANDSCAPE DIALOGUE SYSTEM =====
+   Targets phone/tablet landscape (e.g. 1024x768, 915x412, 844x390, 740x360,
+   667x375) — a case earlier fixes under-served. Two root causes:
+   1. `#dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container`
+      (an ID+attribute compound selector, specificity 0-3-0) sets the desktop
+      min/max-height near the top of this file. Every later "mobile" fix for
+      that height used a bare `#dialogue-container{...}` (specificity 0-1-0),
+      which can never outrank it regardless of source order — so those fixes
+      were silently inert on this element for any viewport in speech-bubble
+      mode. Rules below repeat the same compound form so they actually win.
+   2. Authored/default bubble heights are scaled from 1920x1080 and applied
+      inline by JS; on a short viewport that scaled value can fall below
+      whatever CSS min-height is active. layoutDialogue()/_positionDialogueInSlot()
+      handle this on the JS side (inline max-height + auto height in compact
+      landscape, see sceneRenderer._isCompactLandscape()); the CSS side just
+      needs a small min-height floor and a sane max-height ceiling so content
+      without an authored rect (narrative/default) still fits the safe area.
+   Variables are redefined per breakpoint and consumed once by the rules
+   that follow, so each breakpoint's numbers live in exactly one place. */
+:root {
+    --hud-h: 70px;
+    --dlg-safe-pad: 12px;
+    --dlg-bottom-safe: 8px;
+    --dlg-bubble-max-w: 600px;
+    --dlg-bubble-min-h: 160px;
+    --dlg-bubble-max-h: 380px;
+    --dlg-narrative-max-h: 380px;
+    --dlg-pad-block: clamp(12px, 2.2vw, 24px);
+    --dlg-pad-inline: clamp(14px, 3vw, 30px);
+    --dlg-speaker-size: clamp(22px, 2.9vw, 34px);
+    --dlg-text-size: clamp(18px, 2.4vw, 28px);
+    --dlg-choice-size: clamp(14px, 1.8vw, 18px);
+    --dlg-continue-h: clamp(40px, 5vh, 52px);
+}
+
+@media (max-width: 1024px) and (orientation: landscape) {
+    :root {
+        --hud-h: 54px;
+        --dlg-safe-pad: 8px;
+        --dlg-bottom-safe: 6px;
+        --dlg-bubble-max-w: min(52vw, 480px);
+        --dlg-bubble-min-h: 84px;
+        --dlg-bubble-max-h: min(58vh, 320px);
+        /* Choice/narrative screens legitimately need more room than a single
+           short speech line (prompt + multiple buttons), so they get their
+           own, more generous ceiling instead of sharing --dlg-bubble-max-h. */
+        --dlg-narrative-max-h: min(70vh, 360px);
+        --dlg-pad-block: clamp(6px, 1.6vh, 12px);
+        --dlg-pad-inline: clamp(10px, 2vw, 16px);
+        --dlg-speaker-size: clamp(16px, 2.6vh, 22px);
+        --dlg-text-size: clamp(15px, 2.4vh, 19px);
+        --dlg-choice-size: clamp(14px, 1.6vw, 16px);
+        --dlg-continue-h: max(44px, min(8vh, 52px));
+    }
+
+    #dialogue-box[data-layout-panel="speech-bubble"] {
+        max-width: var(--dlg-bubble-max-w);
+    }
+
+    /* Compound selector required — see section note above. min-height is a
+       small floor (not the scaled authored value, which JS applies as an
+       inline max-height instead — see _positionDialogueInSlot()), so short
+       text still gets a presentable bubble without fighting the JS cap. */
+    #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container {
+        min-height: var(--dlg-bubble-min-h);
+        max-height: var(--dlg-bubble-max-h);
+        height: auto;
+    }
+
+    #dialogue-container.narrative-mode {
+        max-height: var(--dlg-narrative-max-h);
+        overflow-y: auto;
+    }
+
+    #dialogue-content {
+        padding: var(--dlg-pad-block) var(--dlg-pad-inline);
+        min-height: 0;
+    }
+
+    #dialogue-speaker {
+        font-size: var(--dlg-speaker-size);
+        margin-bottom: 4px;
+    }
+
+    #dialogue-text {
+        font-size: var(--dlg-text-size);
+        line-height: 1.25;
+    }
+
+    #dialogue-continue {
+        min-height: var(--dlg-continue-h);
+        margin-top: 4px;
+    }
+
+    .dialogue-choice {
+        font-size: var(--dlg-choice-size);
+        padding: clamp(6px, 1vh, 10px) clamp(10px, 1.5vw, 14px);
+        min-height: var(--dlg-continue-h);
+    }
+
+    #hud::before {
+        height: var(--hud-h);
+    }
+}
+
+/* Compact-height fallback: width alone isn't a reliable proxy for available
+   vertical room (a squat tablet or an unusually wide phone can still be very
+   short), so this tightens further by height and wins the cascade last for
+   any viewport that's both <=1024px wide, landscape, AND this short. */
+@media (max-height: 500px) {
+    :root {
+        --hud-h: 46px;
+        --dlg-bubble-min-h: 70px;
+        --dlg-bubble-max-h: 200px;
+        --dlg-narrative-max-h: 240px;
+        --dlg-speaker-size: clamp(14px, 2.2vw, 19px);
+        --dlg-text-size: clamp(14px, 1.8vw, 16px);
+        --dlg-choice-size: clamp(14px, 1.6vw, 14px);
+        --dlg-continue-h: max(44px, min(7vh, 46px));
+    }
+
+    #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container {
+        min-height: var(--dlg-bubble-min-h);
+        max-height: var(--dlg-bubble-max-h);
+    }
+
+    #dialogue-container.narrative-mode {
+        max-height: var(--dlg-narrative-max-h);
+        overflow-y: auto;
+    }
+
+    #dialogue-speaker {
+        font-size: var(--dlg-speaker-size);
+    }
+
+    #dialogue-text {
+        font-size: var(--dlg-text-size);
+    }
+
+    #dialogue-continue,
+    .dialogue-choice {
+        min-height: var(--dlg-continue-h);
+    }
+
+    .dialogue-choice {
+        font-size: var(--dlg-choice-size);
+        padding: clamp(5px, 0.8vh, 8px) clamp(8px, 1.4vw, 12px);
+    }
+
+    #hud::before {
+        height: var(--hud-h);
+    }
+}
+
+/* ===== SCENE TRANSITION OVERLAY ===== */
+/*
+ * Full-screen black curtain used during scene transitions.
+ * z-index 500: above HUD (4), dialogue (5), fade-overlay (50), .overlay (100).
+ */
+#scene-transition-overlay {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 500;
+    transition: opacity 220ms ease;
+}
+
+#scene-transition-overlay.is-on {
+    opacity: 1;
+}
+
+/* ===== SCENE TITLE FX ===== */
+/*
+ * Animated title that mirrors the HUD #scene-title visually but lives
+ * above the transition overlay (z-index 600) so it can be shown while
+ * the overlay is fading out.
+ */
+#scene-title-fx {
+    position: fixed;
+    top: 42vh;
+    left: 50%;
+    transform: translateX(-50%) translateY(6px) scale(0.98);
+
+    font-family: 'Courier New', 'Consolas', monospace;
+    font-size: clamp(24px, 6vw, 64px);
+    font-weight: bold;
+    color: #FFD700;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    text-align: center;
+    text-shadow:
+        0 0 30px rgba(255, 215, 0, 0.95),
+        0 0 60px rgba(255, 215, 0, 0.5),
+        2px 2px 8px rgba(0, 0, 0, 0.98),
+        0 2px 16px rgba(0, 0, 0, 0.75);
+
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 6px;
+    max-width: 80%;
+    padding: 16px 32px;
+
+    pointer-events: none;
+    z-index: 600;
+    opacity: 0;
+    transition: opacity 260ms ease, transform 260ms ease;
+}
+
+#scene-title-fx.is-show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+}
+
+/* ===== REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+    #scene-transition-overlay {
+        transition: none;
+    }
+
+    #scene-title-fx {
+        transition: none;
+    }
+
+    /* Instant show/hide — skip intermediate states */
+    #scene-transition-overlay.is-on {
+        opacity: 1;
+    }
+
+    #scene-title-fx.is-show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+}
+
+/* ===== DEBUG: FORCE-DISABLE ANIMATIONS =====
+   Toggled via ?noAnimations=1 or window.__HB_DEBUG__.setAnimationsEnabled(false).
+   Only applied when body has this class, so normal play is unaffected. */
+.hb-no-animations,
+.hb-no-animations * {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0ms !important;
+}
+
+
+.status-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 10vh;
+    transform: translateX(-50%);
+    z-index: 999;
+    opacity: 0;
+    pointer-events: none;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.85);
+    color: #FFD700;
+    border: 2px solid rgba(255,215,0,0.65);
+    box-shadow: 0 0 18px rgba(255,215,0,0.25);
+    font-weight: 800;
+    font-size: clamp(14px, 2.2vw, 18px);
+    transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.status-toast.is-show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-6px);
+}
+
+/* ===== MOBILE NARRATIVE/CHOICE TEXT SIZE + WIDTH FIX =====
+   Two leftover legacy rules were winning over the intended mobile-landscape
+   sizing above (the --dlg-text-size variable system, see the ":root" block
+   earlier in this file):
+   1. "#dialogue-container.narrative-mode #dialogue-text, #dialogue-text
+      .choice-text { font-size: clamp(16px, 3vw, 24px) }" under a plain
+      max-width:1024px query has HIGHER specificity (2 IDs + class) than
+      the variable-driven "#dialogue-text { font-size: var(--dlg-text-size) }"
+      rule (1 ID) in the landscape-specific queries, so it always won
+      regardless of source order -- narration/choice-prompt text never
+      actually got the smaller mobile-landscape size and read as too large.
+   2. "#dialogue-box:not([data-layout-panel=\"speech-bubble\"])" was capped
+      at a flat ~200px width on short/narrow landscape phones (a leftover
+      from what looks like an old notification-toast sizing pass), forcing
+      narration/choice text to wrap into many short, cramped lines even
+      though the viewport had far more width available.
+   Both fixes are appended at the very end of the file and match (or use
+   an equally-specific selector to) the rules they override, so they win
+   by being last in source order rather than needing !important. */
+@media (max-width: 1024px) and (orientation: landscape) {
+    #dialogue-container.narrative-mode #dialogue-text,
+    #dialogue-text.choice-text {
+        font-size: var(--dlg-text-size);
+    }
+
+    #dialogue-box[data-layout-panel="narrative-box"] {
+        width: min(66vw, 560px);
+        max-width: 78vw;
+    }
+}
+
+@media (max-height: 500px) {
+    #dialogue-container.narrative-mode #dialogue-text,
+    #dialogue-text.choice-text {
+        font-size: var(--dlg-text-size);
+    }
+
+    #dialogue-box[data-layout-panel="narrative-box"] {
+        width: min(70vw, 520px);
+        max-width: 82vw;
+    }
+}

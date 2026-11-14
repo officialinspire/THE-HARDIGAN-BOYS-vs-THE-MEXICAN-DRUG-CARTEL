@@ -1,0 +1,6 @@
+# Missing character sprites referenced by index.js scenes
+# Generated from scene sprite references and existing assets in this folder.
+
+char_carlos_detained.png
+char_hank_neutral.png
+char_mom_annoyed.png

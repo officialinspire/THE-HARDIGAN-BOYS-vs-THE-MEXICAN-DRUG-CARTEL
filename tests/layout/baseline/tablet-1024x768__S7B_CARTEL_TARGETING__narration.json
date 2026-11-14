@@ -1,0 +1,12 @@
+{
+  "entry": {
+    "index": 0,
+    "speaker": "NARRATION",
+    "textLength": 70
+  },
+  "allViolations": [],
+  "failingViolations": [],
+  "newConsoleErrors": [],
+  "bubbleTolerance": null,
+  "saveWriteCheck": null
+}

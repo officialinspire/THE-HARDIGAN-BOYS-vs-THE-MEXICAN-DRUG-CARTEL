@@ -1,0 +1,13 @@
+{
+  "entry": {
+    "index": 3,
+    "speaker": "SOFIA",
+    "textLength": 230,
+    "hasBubbleLayout": false
+  },
+  "allViolations": [],
+  "failingViolations": [],
+  "newConsoleErrors": [],
+  "bubbleTolerance": null,
+  "saveWriteCheck": null
+}

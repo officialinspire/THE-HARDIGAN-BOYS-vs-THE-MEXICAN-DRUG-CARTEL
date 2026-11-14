@@ -1,0 +1,13 @@
+{
+  "entry": {
+    "index": 2,
+    "speaker": "HANK",
+    "textLength": 47,
+    "hasBubbleLayout": false
+  },
+  "allViolations": [],
+  "failingViolations": [],
+  "newConsoleErrors": [],
+  "bubbleTolerance": null,
+  "saveWriteCheck": null
+}
