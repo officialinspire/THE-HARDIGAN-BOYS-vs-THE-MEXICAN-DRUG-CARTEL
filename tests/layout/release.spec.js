@@ -192,12 +192,12 @@ test('touch controls complete the opening room and a story branch on a phone', a
         async function readDialogueUntilIdle(sceneId) {
             for (let step = 0; step < 50; step++) {
                 const state = await page.evaluate(() => ({
-                    scene: gameState.currentSceneId, busy: sceneRenderer.isTransitioning,
+                    scene: gameState.currentSceneId, busy: sceneRenderer.isTransitioning, locked: gameState.dialogueLock,
                     hidden: document.getElementById('dialogue-box').classList.contains('hidden'),
                     typing: sceneRenderer.isTyping,
                     choices: document.querySelectorAll('#dialogue-choices .dialogue-choice').length
                 }));
-                if (state.scene !== sceneId || (!state.busy && state.hidden) || state.choices) return;
+                if (state.scene !== sceneId || (!state.busy && state.hidden && !state.locked) || state.choices) return;
                 if (!state.busy) {
                     if (state.typing) await page.locator('#dialogue-box').tap();
                     else if (await page.locator('#dialogue-continue').isVisible()) await page.locator('#dialogue-continue').tap();
@@ -219,11 +219,13 @@ test('touch controls complete the opening room and a story branch on a phone', a
         await page.waitForFunction(() => gameState.currentSceneId === 'S3B_RIVERA_BACKYARD' && !sceneRenderer.isTransitioning);
         await page.locator('#btn-pause').tap();
         await expect(page.locator('#pause-menu')).toBeVisible();
+        // Respect the app's 350ms touch debounce between menu taps.
+        await page.waitForTimeout(400);
         await page.locator('#btn-resume').tap();
         await expect(page.locator('#pause-menu')).toBeHidden();
         expect(errors).toEqual([]);
         await page.screenshot({ path: info.outputPath('phone-touch-story.png') });
-    } finally { await context.close(); }
+    } finally { await context.close().catch(() => {}); }
 });
 
 test('a rejected dialogue request cannot erase the active Continue action', async ({ page }) => {
