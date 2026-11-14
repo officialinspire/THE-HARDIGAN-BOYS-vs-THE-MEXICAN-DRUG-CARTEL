@@ -9,6 +9,7 @@ Status: browser regression checks pending on PR #195. Do not treat the historica
 - Storage denial and quota failures fall back to memory. Players can keep playing and receive a notice that closing/reloading the tab may lose progress. Manual Save also explains this limit.
 - Invalid/corrupt save slots disable Continue; New Game remains available. Valid existing saves still load.
 - Critical image preloads, scene backgrounds, and the studio intro have bounded waits, so a stalled request cannot permanently hold the loading/transition screen.
+- Scene transitions keep their lock through the final fade, drain queued scene requests, and start dialogue only after the transition finishes. This prevents an older transition from clearing a newer transition's lock.
 - Repeated New Game/Continue taps during transitions are ignored. A rejected dialogue request no longer erases the active pagination/Continue state; item use waits until the current dialogue finishes.
 
 ## Mobile support and validation scope
@@ -70,4 +71,4 @@ npx playwright install chromium
 npm run test:layout -- --workers=3
 ```
 
-GitHub Actions runs this gate for PRs and the release/main branches, and retains screenshots, JSON validation, HTML reports, and failure traces for 14 days. Local syntax and whitespace checks passed; this managed workspace cannot launch Chromium because its socket access is restricted, so GitHub Actions supplies the browser evidence.
+GitHub Actions runs this gate for PRs and the release/main branches, and retains screenshots, JSON validation, and failure context for 14 days. Local syntax and whitespace checks passed; this managed workspace cannot launch Chromium because its socket access is restricted, so GitHub Actions supplies the browser evidence.

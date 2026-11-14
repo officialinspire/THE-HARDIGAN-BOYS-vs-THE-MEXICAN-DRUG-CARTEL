@@ -5226,12 +5226,14 @@ const sceneRenderer = {
         this.isTransitioning = true;
         gameState.sceneTransitioning = true;
 
+        let completed = false;
         try {
             // _executeSceneLoad() fires onTransitionStart/onTransitionComplete
             // itself (with try/catch protection), scoped to the actual
             // transition work — do not fire them here too. Doing so
             // double-invoked every callback once per transition.
             await this._executeSceneLoad(sceneId);
+            completed = true;
 
         } catch (error) {
             // Log detailed error for debugging
@@ -5268,9 +5270,21 @@ const sceneRenderer = {
             }
 
         } finally {
-            // CRITICAL: Always unlock, even if transition failed
+            // This queue runner owns the lock until *all* transition work is
+            // finished. Releasing it inside _executeSceneLoad allowed an old
+            // runner to clear a newer transition's lock during its final fade.
             this.isTransitioning = false;
             gameState.sceneTransitioning = false;
+            this._setInteractionBlocking(false);
+            if (this.transitionQueue.length) {
+                this._processQueue(); // honor the latest request queued during a fade
+            } else if (completed && this.currentScene?.dialogue?.length) {
+                setTimeout(() => {
+                    if (!this.isTransitioning && this.currentScene?.id === sceneId) {
+                        this.showDialogue(this.currentScene.dialogue[0]);
+                    }
+                }, 500);
+            }
         }
     },
 
@@ -5450,15 +5464,6 @@ const sceneRenderer = {
             // Fade from black (fade out overlay)
             await this.fadeTransition(false);
 
-            if (scene.dialogue && scene.dialogue.length > 0) {
-                setTimeout(() => {
-                    // Guard: don't show dialogue if another transition started
-                    if (!this.isTransitioning) {
-                        this.showDialogue(scene.dialogue[0]);
-                    }
-                }, 500);
-            }
-
             if (scene.onEnter) {
                 try {
                     scene.onEnter();
@@ -5502,13 +5507,6 @@ const sceneRenderer = {
             // Keep visual continuity as the last scene elements settle.
             await new Promise(resolve => setTimeout(resolve, 100));
             hideTransitionLoader(); // Safe to call even if not shown
-
-            // Clear transitioning state
-            this.isTransitioning = false;
-            gameState.sceneTransitioning = false;
-
-            // Unblock interactions
-            this._setInteractionBlocking(false);
 
             if (!alreadyRunning) {
                 await this._fadeOverlay(false);

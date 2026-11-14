@@ -236,3 +236,15 @@ test('a rejected dialogue request cannot erase the active Continue action', asyn
     await page.locator('#dialogue-continue').click();
     await page.waitForFunction(() => dialoguePager.state !== null);
 });
+
+test('scene requests made during a fade drain to the latest scene', async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => {
+        sceneRenderer.loadScene('S1_LIVING_ROOM_INTRO');
+        sceneRenderer.loadScene('S2_ICE_RAID_WINDOW');
+    });
+    await page.waitForFunction(() => gameState.currentSceneId === 'S2_ICE_RAID_WINDOW' && !sceneRenderer.isTransitioning);
+    expect(await page.evaluate(() => sceneRenderer.transitionQueue)).toEqual([]);
+    await page.waitForFunction(() => dialoguePager.state !== null && !sceneRenderer.isTransitioning);
+    expect(await page.evaluate(() => sceneRenderer.currentScene.id)).toBe('S2_ICE_RAID_WINDOW');
+});

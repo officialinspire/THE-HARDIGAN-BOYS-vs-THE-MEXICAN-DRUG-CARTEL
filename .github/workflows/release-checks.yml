@@ -29,5 +29,9 @@ jobs:
         if: always()
         with:
           name: mobile-release-results
-          path: test-results/
+          path: |
+            test-results/results.json
+            test-results/layout/
+            test-results/artifacts/**/error-context.md
+            test-results/artifacts/**/phone-touch-story.png
           retention-days: 14
