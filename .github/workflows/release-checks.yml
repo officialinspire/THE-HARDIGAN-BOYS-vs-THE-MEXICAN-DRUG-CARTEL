@@ -1,0 +1,38 @@
+name: Mobile release checks
+on:
+  push:
+    branches: [main, codex/hardigan-mobile-release]
+    paths-ignore: ['**.md']
+  pull_request:
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+concurrency:
+  group: mobile-release-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  browser-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node --check index.js && node --check analytics.js
+      - run: npx playwright test tests/layout/release.spec.js --project=iphone-se-landscape-667x375 --grep "touch controls" --workers=1 --retries=0
+      - run: npm run test:layout -- --workers=3
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mobile-release-results
+          path: |
+            test-results/results.json
+            test-results/layout/
+            test-results/artifacts/**/error-context.md
+            test-results/artifacts/**/phone-touch-story.png
+          retention-days: 14

@@ -154,8 +154,12 @@ for (const sceneId of SCENES_TO_TEST) {
 
       await page.goto(DEBUG_URL, { waitUntil: 'load' });
       await page.waitForFunction(() => !!window.__HB_DEBUG__, null, { timeout: 10_000 });
+      // The debug API exists before boot's async preload/intro pipeline
+      // finishes. Wait for the actual menu before jumping; otherwise boot's
+      // queued menu transition can replace the scene under the layout case.
       await page.waitForFunction(
-        () => typeof sceneRenderer !== 'undefined' && !sceneRenderer.isTransitioning,
+        () => !!document.getElementById('main-menu-content') &&
+          typeof sceneRenderer !== 'undefined' && !sceneRenderer.isTransitioning,
         null,
         { timeout: 10_000 }
       );
@@ -164,8 +168,8 @@ for (const sceneId of SCENES_TO_TEST) {
       expect(jumpResult.ok, `scene="${sceneId}" metric=jumpToScene error=${jumpResult.error || 'none'}`).toBe(true);
 
       await page.waitForFunction(
-        () => typeof sceneRenderer !== 'undefined' && !sceneRenderer.isTransitioning,
-        null,
+        id => gameState.currentSceneId === id && !sceneRenderer.isTransitioning,
+        sceneId,
         { timeout: 10_000 }
       );
       // Scenes stagger addCharacter() slide-ins (200ms + 400ms per
