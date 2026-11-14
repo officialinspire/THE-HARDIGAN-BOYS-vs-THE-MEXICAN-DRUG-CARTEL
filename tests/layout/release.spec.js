@@ -129,18 +129,12 @@ for (const [label, ending, helped] of [
         await page.evaluate(() => handleItemUse('neighbors_usb'));
         await page.waitForFunction(() => dialoguePager.state?.entry?.text?.includes('holds up'));
         for (let step = 0; step < 40; step++) {
-            if (await page.getByRole('button', { name: label, exact: true }).isVisible()) break;
+            if (await page.getByRole('button', { name: label }).isVisible()) break;
             await page.evaluate(() => window.__HB_DEBUG__.finishTyping());
             if (await page.locator('#dialogue-continue').isVisible()) await page.locator('#dialogue-continue').click();
             await page.waitForTimeout(350);
         }
-        console.log('Ending fixture state:', await page.evaluate(() => ({
-            scene: gameState.currentSceneId, text: gameState.currentDialogueEntry?.text,
-            lock: gameState.dialogueLock, actionLock: gameState.actionLock,
-            pager: dialoguePager.state && { page: dialoguePager.state.pageIndex, total: dialoguePager.state.pages.length },
-            choices: document.getElementById('dialogue-choices').textContent
-        })));
-        await page.getByRole('button', { name: label, exact: true }).click();
+        await page.getByRole('button', { name: label }).click();
         await page.waitForFunction(id => gameState.currentSceneId === id && !sceneRenderer.isTransitioning, ending);
     });
 }
