@@ -106,6 +106,7 @@ for (const [label, ending, helped] of [
 ]) {
     test(`final choice reaches ${ending}`, async ({ page }, info) => {
         test.skip(!['iphone-se-landscape-667x375', 'desktop-1920x1080'].includes(info.project.name));
+        test.setTimeout(60000);
         await boot(page);
         // Explicit final-scene fixture; exercises the real item/choice handlers,
         // not a claim to cover every full story route.
@@ -114,19 +115,31 @@ for (const [label, ending, helped] of [
             gameState.flags.HELPED_NEIGHBORS = helped;
         }, helped);
         await scene(page, 'S9_FINAL_WAREHOUSE_SHOWDOWN');
-        await page.waitForTimeout(700);
-        await page.evaluate(() => {
-            // Final-choice fixture replaces the scene's opening dialogue.
-            gameState.dialogueLock = false;
-            handleItemUse('neighbors_usb');
-        });
-        for (let step = 0; step < 15; step++) {
-            if (await page.getByRole('button', { name: label, exact: true }).isVisible()) break;
+        await page.waitForFunction(() => dialoguePager.state !== null);
+        // Follow the actual dialogue to the explicit inventory-use gate. Do
+        // not replace an in-flight dialogue with a synthetic item request.
+        for (let step = 0; step < 60; step++) {
+            const gated = await page.evaluate(() => !gameState.dialogueLock && document.getElementById('dialogue-box').classList.contains('hidden'));
+            if (gated) break;
             await page.evaluate(() => window.__HB_DEBUG__.finishTyping());
-            const next = page.locator('#dialogue-continue');
-            if (await next.isVisible()) await next.click();
+            if (await page.locator('#dialogue-continue').isVisible()) await page.locator('#dialogue-continue').click();
             await page.waitForTimeout(350);
         }
+        expect(await page.evaluate(() => !gameState.dialogueLock)).toBe(true);
+        await page.evaluate(() => handleItemUse('neighbors_usb'));
+        await page.waitForFunction(() => dialoguePager.state?.entry?.text?.includes('holds up'));
+        for (let step = 0; step < 40; step++) {
+            if (await page.getByRole('button', { name: label, exact: true }).isVisible()) break;
+            await page.evaluate(() => window.__HB_DEBUG__.finishTyping());
+            if (await page.locator('#dialogue-continue').isVisible()) await page.locator('#dialogue-continue').click();
+            await page.waitForTimeout(350);
+        }
+        console.log('Ending fixture state:', await page.evaluate(() => ({
+            scene: gameState.currentSceneId, text: gameState.currentDialogueEntry?.text,
+            lock: gameState.dialogueLock, actionLock: gameState.actionLock,
+            pager: dialoguePager.state && { page: dialoguePager.state.pageIndex, total: dialoguePager.state.pages.length },
+            choices: document.getElementById('dialogue-choices').textContent
+        })));
         await page.getByRole('button', { name: label, exact: true }).click();
         await page.waitForFunction(id => gameState.currentSceneId === id && !sceneRenderer.isTransitioning, ending);
     });
