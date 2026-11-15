@@ -3696,7 +3696,7 @@ const positioningSystem = {
             // wins over the CSS class rule of the same name) doesn't strip
             // per-character scale from centered characters.
             result.left = (offsetX + renderedW * zone.anchor + charOffsetX) + 'px';
-            result.transform = 'translateX(-50%) scale(var(--char-scale, 1))';
+            result.transform = 'translateX(calc(-50% + var(--char-enter-x, 0px))) scale(var(--char-scale, 1))';
             result.right = 'auto';
         } else if (zone.side === 'right') {
             // Right-side zones: position from right edge of rendered area
@@ -3830,7 +3830,7 @@ const positioningSystem = {
                 if (pos.transform && zoneName !== 'center') {
                     // Non-center zones don't need transform
                 } else if (zoneName === 'center' && isVisible) {
-                    charEl.style.transform = 'translateX(-50%) scale(var(--char-scale, 1))';
+                    charEl.style.transform = 'translateX(calc(-50% + var(--char-enter-x, 0px))) scale(var(--char-scale, 1))';
                 }
             }
         });
@@ -5045,6 +5045,7 @@ const sceneRenderer = {
      * along the asset fetch happened to be.
      */
     async addCharacter(char, slideDelay = 100) {
+        const epoch = this._characterEpoch || 0;
         const resolvedChar = this.resolveCharacterLayout(char);
         const charLayer = document.getElementById('character-layer');
         const zoneName = resolvedChar.slot;
@@ -5089,6 +5090,12 @@ const sceneRenderer = {
             }, 2500);
         });
 
+        // Decode before attachment so the entrance cannot flash an undecoded frame.
+        if (typeof img.decode === 'function') {
+            await Promise.race([img.decode().catch(() => {}), this._waitMs(1000)]);
+        }
+        if (epoch !== (this._characterEpoch || 0)) return null;
+
         // ===== 2. Apply deterministic position + layout metadata =====
         img.className = `character-sprite char-${zoneName}`;
         img.dataset.zone = zoneName;
@@ -5119,10 +5126,28 @@ const sceneRenderer = {
 
         charLayer.appendChild(img);
 
-        // ===== 3. Start entry animation =====
-        setTimeout(() => {
-            img.classList.add('visible');
-        }, slideDelay);
+        // Scene-load entrances wait until the background has been revealed.
+        if (slideDelay !== null) this._revealCharacter(img, slideDelay);
+        return img;
+    },
+
+    _revealCharacter(img, delay = 0) {
+        if (!img) return;
+        const epoch = this._characterEpoch || 0;
+        this._characterTimers ||= new Set();
+        const timer = setTimeout(() => {
+            this._characterTimers.delete(timer);
+            if (img.isConnected && epoch === (this._characterEpoch || 0)) img.classList.add('visible');
+        }, HB_FLAG_NO_ANIMATIONS ? 0 : delay);
+        this._characterTimers.add(timer);
+    },
+
+    async _revealSceneCharacters() {
+        const characters = this._pendingCharacterEntries || [];
+        this._pendingCharacterEntries = [];
+        const reduced = HB_FLAG_NO_ANIMATIONS || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        characters.forEach((img, i) => this._revealCharacter(img, reduced ? 0 : i * 110));
+        if (characters.length) await this._waitMs(reduced ? 0 : 480 + (characters.length - 1) * 110);
     },
 
     removeCharacter(charId, slideOut = true) {
@@ -5460,6 +5485,7 @@ const sceneRenderer = {
 
             // Fade from black (fade out overlay)
             await this.fadeTransition(false);
+            await this._revealSceneCharacters();
 
             if (scene.onEnter) {
                 try {
@@ -5532,6 +5558,7 @@ const sceneRenderer = {
         document.querySelectorAll('#main-menu-content button').forEach(button => {
             button.disabled = block || (button.id === 'btn-continue-game' && !saveSystem.hasSave());
         });
+        document.getElementById('main-menu-content')?.classList.toggle('menu-ready', !block);
         const container = document.getElementById('scene-container');
         if (block) {
             container.classList.add('scene-transitioning');
@@ -5541,6 +5568,10 @@ const sceneRenderer = {
     },
     
     clearScene() {
+        this._characterEpoch = (this._characterEpoch || 0) + 1;
+        this._characterTimers?.forEach(timer => clearTimeout(timer));
+        this._characterTimers?.clear();
+        this._pendingCharacterEntries = [];
         // Clear every scene-owned timer before tearing down the old scene —
         // otherwise a reanchor/lock-safety timer from the previous scene can
         // fire mid-transition (or into the new scene) and touch a dialogue
@@ -5594,12 +5625,9 @@ const sceneRenderer = {
     async loadCharacters(characters) {
         const normalizedCharacters = this.normalizeCharacterZones(characters);
 
-        if (normalizedCharacters.length > 0) {
-            for (let i = 0; i < normalizedCharacters.length; i++) {
-                // Stagger: first character at 200ms, then 400ms between each
-                await this.addCharacter(normalizedCharacters[i], 200 + (i * 400));
-            }
-        }
+        const epoch = this._characterEpoch || 0;
+        const entries = await Promise.all(normalizedCharacters.map(char => this.addCharacter(char, null)));
+        if (epoch === (this._characterEpoch || 0)) this._pendingCharacterEntries = entries.filter(Boolean);
     },
     
     loadItems(items) {
@@ -6762,15 +6790,8 @@ const SCENES = {
                 Dev.openHub();
             });
 
-            // Fade in menu buttons with staggered animation after menu loads
-            setTimeout(() => {
-                const menuButtons = document.querySelectorAll('.menu-btn');
-                menuButtons.forEach((btn, index) => {
-                    setTimeout(() => {
-                        btn.classList.add('fade-in');
-                    }, index * 150); // 150ms delay between each button
-                });
-            }, 300); // Start after 300ms to let the scene fade in first
+            // The scene queue reveals the complete menu when its final fade ends.
+
         }
     },
     

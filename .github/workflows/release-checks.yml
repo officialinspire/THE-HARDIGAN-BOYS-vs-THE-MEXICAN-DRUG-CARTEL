@@ -1,7 +1,7 @@
 name: Mobile release checks
 on:
   push:
-    branches: [main, codex/hardigan-startup]
+    branches: [main, codex/hardigan-ui-qc]
     paths-ignore: ['**.md']
   pull_request:
     paths-ignore: ['**.md']
@@ -25,6 +25,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: node --check index.js && node --check analytics.js && node --check startup.js && node --check asset-cache.js
       - run: npx playwright test tests/layout/startup.spec.js --project=iphone-se-landscape-667x375 --workers=1 --retries=0
+      - run: npx playwright test tests/layout/ui-polish.spec.js --workers=3 --retries=0
       - run: npm run test:layout -- --workers=3
       - uses: actions/upload-artifact@v4
         if: always()
@@ -35,4 +36,5 @@ jobs:
             test-results/layout/
             test-results/artifacts/**/error-context.md
             test-results/artifacts/**/phone-touch-story.png
+            test-results/artifacts/**/ui-*.png
           retention-days: 14
