@@ -36,12 +36,18 @@
          getting an old cached JS/CSS bundle indefinitely after a fix
          ships. BUMP THIS VALUE (e.g. to the current date/time) any time
          index.js or styles.css changes. -->
-    <link rel="stylesheet" href="styles.css?v=20261114">
+    <link rel="stylesheet" href="styles.css?v=20261115">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Bangers&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <div id="start-screen" aria-label="Start Hardigan Boys">
+        <div class="start-content"><p>INSPIRE PRESENTS</p><h1>THE HARDIGAN BOYS</h1>
+        <button id="touch-start-btn" type="button">TOUCH TO START</button>
+        <p>Headphones recommended • Landscape play</p></div>
+    </div>
+    <div id="startup-curtain" aria-hidden="true"></div>
     <div id="loading-screen" aria-live="polite">
         <div class="loading-content">
             <h1>Loading Case Files...</h1>
@@ -59,7 +65,7 @@
 
     <!-- Intro video screen (shows before main menu) -->
     <div id="intro-video-screen" class="hidden" aria-label="Intro video">
-        <video id="intro-video" src="./inspiresoftwareintro.mp4" playsinline preload="auto" aria-hidden="true"></video>
+        <video id="intro-video" src="./inspiresoftwareintro.mp4" playsinline preload="metadata" aria-hidden="true"></video>
         <button id="intro-skip-btn" aria-label="Skip intro video">TAP TO SKIP</button>
     </div>
 
@@ -248,7 +254,8 @@
     <audio id="music-player" loop></audio>
     <audio id="sfx-player"></audio>
     
-    <script src="analytics.js?v=20261114" defer></script>
-    <script src="index.js?v=20261114" defer></script>
+    <script src="analytics.js?v=20261115" defer></script>
+    <script src="startup.js?v=20261115" defer></script>
+    <script src="index.js?v=20261115" defer></script>
 </body>
 </html>
