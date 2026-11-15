@@ -5528,6 +5528,10 @@ const sceneRenderer = {
     },
 
     _setInteractionBlocking(block) {
+        // Visible menu controls must not accept and discard taps during the fade.
+        document.querySelectorAll('#main-menu-content button').forEach(button => {
+            button.disabled = block || (button.id === 'btn-continue-game' && !saveSystem.hasSave());
+        });
         const container = document.getElementById('scene-container');
         if (block) {
             container.classList.add('scene-transitioning');
@@ -6684,9 +6688,7 @@ const SCENES = {
         onEnter() {
             // Clear main menu specific class and setup
             document.body.classList.add('main-menu');
-            const sceneContainer = document.getElementById('scene-container');
-            sceneContainer?.classList.remove('scene-transitioning');
-            gameState.sceneTransitioning = false;
+            // The queue runner releases the interaction lock after the final fade.
             gameState.actionLock = false;
             gameState.dialogueLock = false;
 
@@ -6704,10 +6706,10 @@ const SCENES = {
             const container = document.getElementById('hotspot-layer');
             container.innerHTML = `
                 <div id="main-menu-content" data-layout-panel="menu-prompts">
-                    <button class="menu-btn" id="btn-new-game">NEW GAME</button>
-                    <button class="menu-btn" id="btn-continue-game">CONTINUE</button>
-                    <button class="menu-btn" id="btn-options">OPTIONS</button>
-                    <button class="menu-btn" id="btn-developer-mode">DEVELOPER MODE</button>
+                    <button class="menu-btn" id="btn-new-game" disabled>NEW GAME</button>
+                    <button class="menu-btn" id="btn-continue-game" disabled>CONTINUE</button>
+                    <button class="menu-btn" id="btn-options" disabled>OPTIONS</button>
+                    <button class="menu-btn" id="btn-developer-mode" disabled>DEVELOPER MODE</button>
                 </div>
             `;
 
