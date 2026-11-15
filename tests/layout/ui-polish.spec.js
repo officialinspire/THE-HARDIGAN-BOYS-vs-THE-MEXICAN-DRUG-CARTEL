@@ -92,11 +92,12 @@ test('scene-owned entrances cancel stale sprites and settle cleanly with motion'
     await page.waitForFunction(() => [...document.querySelectorAll('.character-sprite')].every(el=>el.complete&&el.naturalWidth>0&&el.classList.contains('visible')&&getComputedStyle(el).opacity==='1'));
     const settle=await page.locator('.character-sprite').evaluateAll(elements=>elements.map(el=>({id:el.id,x:el.getBoundingClientRect().x,y:el.getBoundingClientRect().y})));
     await shot(page, info, 'characters');
+    await page.waitForFunction(() => sceneRenderer._activeDialogueEntry === SCENES.S1_LIVING_ROOM_INTRO.dialogue[0] && !document.getElementById('dialogue-box').classList.contains('dialogue-positioning'));
     await page.evaluate(async () => {
-        await sceneRenderer.showDialogue({speaker:'HANK',text:'A clean speech panel keeps its name, caption, and controls inside the visible border.',position:'left',next:'NEXT_DIALOGUE'});
+        await __HB_DEBUG__.showDialogue({speaker:'HANK',text:'A clean speech panel keeps its name, caption, and controls inside the visible border.',position:'left',next:'NEXT_DIALOGUE'});
         __HB_DEBUG__.finishTyping();
     });
-    await page.waitForFunction(() => !document.getElementById('dialogue-continue').classList.contains('hidden'));
+    await page.waitForFunction(() => document.getElementById('dialogue-speaker').textContent === 'HANK' && !document.getElementById('dialogue-box').classList.contains('dialogue-positioning') && !document.getElementById('dialogue-continue').classList.contains('hidden'));
     const panel=await page.locator('#dialogue-container').evaluate(el=>{
         const box=el.getBoundingClientRect();
         return {background:getComputedStyle(el).backgroundColor, inside:['dialogue-speaker','dialogue-text','dialogue-continue'].every(id=>{
