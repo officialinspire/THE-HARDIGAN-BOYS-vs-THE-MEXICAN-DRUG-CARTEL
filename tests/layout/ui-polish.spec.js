@@ -54,6 +54,29 @@ test('all menu controls, settings and phone pause controls fit', async ({page}, 
     await shot(page, info, 'pause');
     await page.locator('#btn-resume').click();
     await expect(page.locator('#pause-menu')).toBeHidden();
+
+    await page.evaluate(() => {
+        inventory.add('conspiracy_notebook');
+        inventory.add('tv_remote');
+        notebook.add('CLUE — Opening room', 'The notebook keeps collected clues available while exploring. Review this entry and turn the page to inspect more clues.');
+    });
+    await page.locator('#btn-inventory').click();
+    await page.locator('#inventory-overlay').waitFor();
+    await fits(page, '#inventory-overlay .overlay-content');
+    await shot(page, info, 'inventory');
+    await page.locator('#inventory-overlay .overlay-close').click();
+    await page.locator('#btn-notebook').click();
+    await page.locator('#notebook-overlay').waitFor();
+    await fits(page, '.notebook-ui, #notebook-text-overlay, #notebook-close');
+    expect(await page.locator('#notebook-text-overlay').evaluate(el => el.scrollWidth <= el.clientWidth+1)).toBe(true);
+    await shot(page, info, 'notebook');
+    await page.locator('#notebook-close').click();
+    await page.evaluate(() => showItemInfo('tv_remote'));
+    await page.locator('#modal-overlay').waitFor();
+    await fits(page, '#modal-overlay .modal-content, #modal-close, #modal-title, #modal-body, #modal-ok, #modal-use-btn');
+    await shot(page, info, 'item');
+    await page.locator('#modal-close').click();
+    await expect(page.locator('#modal-overlay')).toBeHidden();
 });
 
 test('scene-owned entrances cancel stale sprites and settle cleanly with motion', async ({page}, info) => {
