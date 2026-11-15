@@ -2098,39 +2098,11 @@ const Dev = {
 };
 
 const spriteTransparencyProcessor = {
-    whiteThreshold: 235,
+    whiteThreshold: 220,
     _cache: new Map(),
-
-    _imageHasAnyAlpha(imageEl) {
-        try {
-            const width = imageEl.naturalWidth || imageEl.width;
-            const height = imageEl.naturalHeight || imageEl.height;
-            if (!width || !height) return false;
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            if (!ctx) return false;
-
-            ctx.drawImage(imageEl, 0, 0, width, height);
-            const pixels = ctx.getImageData(0, 0, width, height).data;
-
-            for (let i = 3; i < pixels.length; i += 4) {
-                if (pixels[i] < 255) return true;
-            }
-            return false;
-        } catch (e) {
-            return false;
-        }
-    },
 
     makeWhitePixelsTransparent(imageEl) {
         if (!imageEl || imageEl.dataset.whiteRemoved === 'true') return;
-
-        if (!DEV_FORCE_WHITE_STRIP && imageEl.complete && this._imageHasAnyAlpha(imageEl)) {
-            imageEl.dataset.whiteRemoved = 'true';
-            return;
-        }
 
         const originalSrc = imageEl.dataset.spriteCandidate || imageEl.src;
 
@@ -2157,51 +2129,32 @@ const spriteTransparencyProcessor = {
             const pixels = imageData.data;
             const threshold = this.whiteThreshold;
 
-            const indexOf = (x, y) => (y * width + x) * 4;
-            const isNearWhite = (x, y) => {
-                const i = indexOf(x, y);
-                const r = pixels[i];
-                const g = pixels[i + 1];
-                const b = pixels[i + 2];
-                const minChannel = Math.min(r, g, b);
-                const maxChannel = Math.max(r, g, b);
-                return pixels[i + 3] > 0
-                    && minChannel >= threshold
-                    && (maxChannel - minChannel) <= 22;
-            };
-
+            // Walk only the outside transparent/pale matte. Dark outlines isolate
+            // enclosed whites (eyes, teeth, highlights), which must remain intact.
+            // A typed queue avoids quadratic Array.shift() over large sprites.
             const visited = new Uint8Array(width * height);
-            const queue = [];
-            const push = (x, y) => {
-                if (x < 0 || y < 0 || x >= width || y >= height) return;
-                const idx = y * width + x;
-                if (visited[idx]) return;
-                visited[idx] = 1;
-                queue.push([x, y]);
+            const queue = new Uint32Array(width * height);
+            let head = 0, tail = 0;
+            const push = index => {
+                if (visited[index]) return;
+                visited[index] = 1;
+                queue[tail++] = index;
             };
-
-            for (let x = 0; x < width; x += 1) {
-                push(x, 0);
-                push(x, height - 1);
-            }
-            for (let y = 1; y < height - 1; y += 1) {
-                push(0, y);
-                push(width - 1, y);
-            }
-
+            for (let x = 0; x < width; x++) { push(x); push((height - 1) * width + x); }
+            for (let y = 1; y < height - 1; y++) { push(y * width); push(y * width + width - 1); }
             let changed = 0;
-            while (queue.length > 0) {
-                const [x, y] = queue.shift();
-                if (!isNearWhite(x, y)) continue;
-
-                const i = indexOf(x, y);
-                pixels[i + 3] = 0;
-                changed += 1;
-
-                push(x + 1, y);
-                push(x - 1, y);
-                push(x, y + 1);
-                push(x, y - 1);
+            while (head < tail) {
+                const index = queue[head++], i = index * 4;
+                const min = Math.min(pixels[i], pixels[i + 1], pixels[i + 2]);
+                const max = Math.max(pixels[i], pixels[i + 1], pixels[i + 2]);
+                const transparent = pixels[i + 3] === 0;
+                if (!transparent && !(min >= threshold && max - min <= 40)) continue;
+                if (!transparent) { pixels[i + 3] = 0; changed++; }
+                const x = index % width;
+                if (x > 0) push(index - 1);
+                if (x < width - 1) push(index + 1);
+                if (index >= width) push(index - width);
+                if (index < width * (height - 1)) push(index + width);
             }
 
             if (changed > 0) {
@@ -2210,11 +2163,10 @@ const spriteTransparencyProcessor = {
                 this._cache.set(originalSrc, processedUrl);
                 imageEl.src = processedUrl;
 
-                if (this._cache.size > 30) {
-                    const firstKey = this._cache.keys().next().value;
-                    this._cache.delete(firstKey);
-                }
+            } else {
+                this._cache.set(originalSrc, imageEl.src);
             }
+            if (this._cache.size > 30) this._cache.delete(this._cache.keys().next().value);
             imageEl.dataset.whiteRemoved = 'true';
         } catch (error) {
             console.warn('sprite-transparency safety net failed:', error);
@@ -3696,7 +3648,7 @@ const positioningSystem = {
             // wins over the CSS class rule of the same name) doesn't strip
             // per-character scale from centered characters.
             result.left = (offsetX + renderedW * zone.anchor + charOffsetX) + 'px';
-            result.transform = 'translateX(-50%) scale(var(--char-scale, 1))';
+            result.transform = 'translateX(calc(-50% + var(--char-enter-x, 0px))) scale(var(--char-scale, 1))';
             result.right = 'auto';
         } else if (zone.side === 'right') {
             // Right-side zones: position from right edge of rendered area
@@ -3830,7 +3782,7 @@ const positioningSystem = {
                 if (pos.transform && zoneName !== 'center') {
                     // Non-center zones don't need transform
                 } else if (zoneName === 'center' && isVisible) {
-                    charEl.style.transform = 'translateX(-50%) scale(var(--char-scale, 1))';
+                    charEl.style.transform = 'translateX(calc(-50% + var(--char-enter-x, 0px))) scale(var(--char-scale, 1))';
                 }
             }
         });
@@ -5045,6 +4997,7 @@ const sceneRenderer = {
      * along the asset fetch happened to be.
      */
     async addCharacter(char, slideDelay = 100) {
+        const epoch = this._characterEpoch || 0;
         const resolvedChar = this.resolveCharacterLayout(char);
         const charLayer = document.getElementById('character-layer');
         const zoneName = resolvedChar.slot;
@@ -5089,6 +5042,12 @@ const sceneRenderer = {
             }, 2500);
         });
 
+        // Decode before attachment so the entrance cannot flash an undecoded frame.
+        if (typeof img.decode === 'function') {
+            await Promise.race([img.decode().catch(() => {}), this._waitMs(1000)]);
+        }
+        if (epoch !== (this._characterEpoch || 0)) return null;
+
         // ===== 2. Apply deterministic position + layout metadata =====
         img.className = `character-sprite char-${zoneName}`;
         img.dataset.zone = zoneName;
@@ -5119,10 +5078,28 @@ const sceneRenderer = {
 
         charLayer.appendChild(img);
 
-        // ===== 3. Start entry animation =====
-        setTimeout(() => {
-            img.classList.add('visible');
-        }, slideDelay);
+        // Scene-load entrances wait until the background has been revealed.
+        if (slideDelay !== null) this._revealCharacter(img, slideDelay);
+        return img;
+    },
+
+    _revealCharacter(img, delay = 0) {
+        if (!img) return;
+        const epoch = this._characterEpoch || 0;
+        this._characterTimers ||= new Set();
+        const timer = setTimeout(() => {
+            this._characterTimers.delete(timer);
+            if (img.isConnected && epoch === (this._characterEpoch || 0)) img.classList.add('visible');
+        }, HB_FLAG_NO_ANIMATIONS ? 0 : delay);
+        this._characterTimers.add(timer);
+    },
+
+    async _revealSceneCharacters() {
+        const characters = this._pendingCharacterEntries || [];
+        this._pendingCharacterEntries = [];
+        const reduced = HB_FLAG_NO_ANIMATIONS || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        characters.forEach((img, i) => this._revealCharacter(img, reduced ? 0 : i * 110));
+        if (characters.length) await this._waitMs(reduced ? 0 : 480 + (characters.length - 1) * 110);
     },
 
     removeCharacter(charId, slideOut = true) {
@@ -5460,6 +5437,7 @@ const sceneRenderer = {
 
             // Fade from black (fade out overlay)
             await this.fadeTransition(false);
+            await this._revealSceneCharacters();
 
             if (scene.onEnter) {
                 try {
@@ -5532,6 +5510,7 @@ const sceneRenderer = {
         document.querySelectorAll('#main-menu-content button').forEach(button => {
             button.disabled = block || (button.id === 'btn-continue-game' && !saveSystem.hasSave());
         });
+        document.getElementById('main-menu-content')?.classList.toggle('menu-ready', !block);
         const container = document.getElementById('scene-container');
         if (block) {
             container.classList.add('scene-transitioning');
@@ -5541,6 +5520,10 @@ const sceneRenderer = {
     },
     
     clearScene() {
+        this._characterEpoch = (this._characterEpoch || 0) + 1;
+        this._characterTimers?.forEach(timer => clearTimeout(timer));
+        this._characterTimers?.clear();
+        this._pendingCharacterEntries = [];
         // Clear every scene-owned timer before tearing down the old scene —
         // otherwise a reanchor/lock-safety timer from the previous scene can
         // fire mid-transition (or into the new scene) and touch a dialogue
@@ -5594,12 +5577,9 @@ const sceneRenderer = {
     async loadCharacters(characters) {
         const normalizedCharacters = this.normalizeCharacterZones(characters);
 
-        if (normalizedCharacters.length > 0) {
-            for (let i = 0; i < normalizedCharacters.length; i++) {
-                // Stagger: first character at 200ms, then 400ms between each
-                await this.addCharacter(normalizedCharacters[i], 200 + (i * 400));
-            }
-        }
+        const epoch = this._characterEpoch || 0;
+        const entries = await Promise.all(normalizedCharacters.map(char => this.addCharacter(char, null)));
+        if (epoch === (this._characterEpoch || 0)) this._pendingCharacterEntries = entries.filter(Boolean);
     },
     
     loadItems(items) {
@@ -6753,8 +6733,8 @@ const SCENES = {
             }
 
             document.getElementById('btn-options').addEventListener('click', () => {
-                SFXGenerator.playButtonClick();
-                document.getElementById('settings-overlay').classList.remove('hidden');
+                // Share the pause menu's settings sync and single click sound.
+                document.getElementById('btn-settings').click();
             });
 
             document.getElementById('btn-developer-mode').addEventListener('click', () => {
@@ -6762,15 +6742,8 @@ const SCENES = {
                 Dev.openHub();
             });
 
-            // Fade in menu buttons with staggered animation after menu loads
-            setTimeout(() => {
-                const menuButtons = document.querySelectorAll('.menu-btn');
-                menuButtons.forEach((btn, index) => {
-                    setTimeout(() => {
-                        btn.classList.add('fade-in');
-                    }, index * 150); // 150ms delay between each button
-                });
-            }, 300); // Start after 300ms to let the scene fade in first
+            // The scene queue reveals the complete menu when its final fade ends.
+
         }
     },
     

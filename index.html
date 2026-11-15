@@ -36,16 +36,20 @@
          getting an old cached JS/CSS bundle indefinitely after a fix
          ships. BUMP THIS VALUE (e.g. to the current date/time) any time
          index.js or styles.css changes. -->
-    <link rel="stylesheet" href="styles.css?v=20261115">
+    <link rel="stylesheet" href="styles.css?v=20261115qc1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Bangers&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div id="start-screen" aria-label="Start Hardigan Boys">
-        <div class="start-content"><p>INSPIRE PRESENTS</p><h1>THE HARDIGAN BOYS</h1>
-        <button id="touch-start-btn" type="button">TOUCH TO START</button>
-        <p>Headphones recommended • Landscape play</p></div>
+        <main class="start-content">
+            <p class="startup-kicker">INSPIRE PRESENTS</p>
+            <h1>THE HARDIGAN BOYS</h1>
+            <p class="startup-subtitle">vs THE MEXICAN DRUG CARTEL</p>
+            <button id="touch-start-btn" type="button">TOUCH TO START</button>
+            <p class="startup-hint">Headphones recommended <span aria-hidden="true">·</span> Landscape play</p>
+        </main>
     </div>
     <div id="startup-curtain" aria-hidden="true"></div>
     <div id="loading-screen" aria-live="polite">
@@ -142,7 +146,7 @@
                 <button id="notebook-prev" class="notebook-nav-btn notebook-nav-prev" aria-label="Previous page">&#8249;</button>
                 <button id="notebook-next" class="notebook-nav-btn notebook-nav-next" aria-label="Next page">&#8250;</button>
                 <div id="notebook-page-indicator" class="notebook-page-indicator"></div>
-                <button id="notebook-close" class="notebook-close-btn">×</button>
+                <button id="notebook-close" class="notebook-close-btn" aria-label="Close notebook">×</button>
             </div>
         </div>
         
@@ -177,7 +181,7 @@
                 </div>
                 <div class="settings-item">
                     <label>
-                        <input type="checkbox" id="show-hotspots" checked>
+                        <input type="checkbox" id="show-hotspots">
                         Show Hotspot Outlines (Debug)
                     </label>
                 </div>
@@ -188,7 +192,7 @@
         <!-- Modal overlay -->
         <div id="modal-overlay" class="overlay hidden" role="dialog" aria-modal="true">
             <div class="overlay-content modal-content">
-                <button class="overlay-close" id="modal-close">X</button>
+                <button class="overlay-close" id="modal-close" aria-label="Close dialog">×</button>
                 <h2 id="modal-title"></h2>
                 <div id="modal-body"></div>
                 <div class="modal-actions">
@@ -255,7 +259,7 @@
     <audio id="sfx-player"></audio>
     
     <script src="analytics.js?v=20261115" defer></script>
-    <script src="startup.js?v=20261115" defer></script>
-    <script src="index.js?v=20261115" defer></script>
+    <script src="startup.js?v=20261115qc1" defer></script>
+    <script src="index.js?v=20261115qc1" defer></script>
 </body>
 </html>

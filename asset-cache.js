@@ -1,5 +1,5 @@
 // Scoped, bounded visual cache. Never intercept analytics, video ranges, or game code.
-const CACHE = 'hardigan-visuals-20261115';
+const CACHE = 'hardigan-visuals-20261115qc1';
 const ROOT = new URL('./', self.location.href);
 const WARM = ['promo/title-intro-card.png', 'assets/backgrounds/bg_hardigan_livingroom_night_02.png',
     'assets/menu_dialogue/dialogue-bubble-large-left.png', 'assets/menu_dialogue/dialogue-bubble-large-right.png'];
