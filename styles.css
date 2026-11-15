@@ -3877,3 +3877,24 @@ button:focus-visible, input:focus-visible { outline: 3px solid #fff0ad; outline-
     #notebook-text-overlay { grid-template-columns: minmax(0, 1fr); }
     #notebook-page-right { display: none; }
 }
+
+/* Native speech-panel geometry keeps the visible border aligned with layout.
+   The raster bubbles include transparent margins and a tail inside the canvas. */
+#dialogue-box[data-layout-panel="speech-bubble"] #dialogue-bubble { display: none; }
+#dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container {
+    background: #f4efd9; border-radius: 22px; outline: 2px solid #393321;
+    outline-offset: -1px; filter: none; box-shadow: 0 3px 9px #0005; overflow: visible;
+}
+#dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container::before,
+#dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container::after {
+    content: ''; position: absolute; width: 22px; height: 10px; bottom: -8px; left: 28px;
+    background: #393321; clip-path: polygon(0 0, 100% 0, 0 100%); pointer-events: none;
+}
+#dialogue-box[data-layout-panel="speech-bubble"] #dialogue-container::after {
+    background: #f4efd9; width: 17px; height: 7px; left: 30px; bottom: -5px;
+}
+#dialogue-box[data-tail="right"] #dialogue-container::before,
+#dialogue-box[data-tail="right"] #dialogue-container::after {
+    left: auto; right: 28px; clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+#dialogue-box[data-tail="right"] #dialogue-container::after { right: 30px; }

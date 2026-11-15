@@ -88,6 +88,20 @@ test('scene-owned entrances cancel stale sprites and settle cleanly with motion'
     await page.waitForFunction(() => [...document.querySelectorAll('.character-sprite')].every(el=>el.complete&&el.naturalWidth>0&&el.classList.contains('visible')&&getComputedStyle(el).opacity==='1'));
     const settle=await page.locator('.character-sprite').evaluateAll(elements=>elements.map(el=>({id:el.id,x:el.getBoundingClientRect().x,y:el.getBoundingClientRect().y})));
     await shot(page, info, 'characters');
+    await page.evaluate(async () => {
+        await sceneRenderer.showDialogue({speaker:'HANK',text:'A clean speech panel keeps its name, caption, and controls inside the visible border.',position:'left',next:'NEXT_DIALOGUE'});
+        __HB_DEBUG__.finishTyping();
+    });
+    await page.waitForFunction(() => !document.getElementById('dialogue-continue').classList.contains('hidden'));
+    const panel=await page.locator('#dialogue-container').evaluate(el=>{
+        const box=el.getBoundingClientRect();
+        return {background:getComputedStyle(el).backgroundColor, inside:['dialogue-speaker','dialogue-text','dialogue-continue'].every(id=>{
+            const r=document.getElementById(id).getBoundingClientRect();return r.left>=box.left+4&&r.right<=box.right-4&&r.top>=box.top+4&&r.bottom<=box.bottom-4;
+        })};
+    });
+    expect(panel).toEqual({background:'rgb(244, 239, 217)',inside:true});
+    await shot(page, info, 'speech');
+
     await page.waitForTimeout(600);
     expect(await page.locator('.character-sprite').evaluateAll(elements=>elements.map(el=>({id:el.id,x:el.getBoundingClientRect().x,y:el.getBoundingClientRect().y})))).toEqual(settle);
     await page.evaluate(() => {
