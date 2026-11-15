@@ -2,20 +2,22 @@
 
 Status: **READY for the landscape browser demo release.**
 
-Verified game/test commit: `26496bec571d89d6deff65916d15e1edd5cc0df8`.
+Verified game/test commit: `77129a727d9bb976b32acb678253a86b1a1f98a8`.
 
-[GitHub Actions release gate](https://github.com/officialinspire/THE-HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL/actions/runs/43674012923): **226 passed, 180 not-applicable cases skipped, zero failures and zero flaky retries**. This covers seven viewport sizes, plus separate focused startup/audio checks. The skips cover dialogue types absent from a scene and checks intentionally scoped to a representative viewport.
+[GitHub Actions release gate](https://github.com/officialinspire/THE-HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL/actions/runs/43746134101): **233 passed, 180 not-applicable cases skipped, zero failures and zero flaky retries**. This covers seven viewport sizes, plus separate focused startup/audio checks. The skips cover dialogue types absent from a scene and checks intentionally scoped to a representative viewport.
 
 ## UI quality-control pass
 
 - The initialization screen uses an explicit kicker/title/subtitle/button/caption hierarchy with balanced wrapping, safe-area padding, and measured spacing.
 - Main-menu Options and pause Settings share the same control synchronization and click sound.
-- A two-column menu keeps all four controls visible below the title artwork. Controls reveal together only after the final scene transition unlocks them.
+- The main menu uses one centered stack of wide horizontal buttons, with compact spacing on short landscape screens. All four controls fit below the title artwork and reveal together after the final scene transition unlocks them.
+- The scene status bar uses a shared top/height/inset contract for its background, title, and controls. Every control has a 44px touch target and a centered vector icon with an accessible label. The title uses separate space beside the controls, and dialogue clearance follows the measured bar height.
 - Settings, inventory, and item panels have consistent viewport bounds, spacing, close controls, and action rows. Pause controls follow the source phone image's 2:3 aspect ratio and remain at least 44px tall.
 - Notebook columns now share the available width without a gap pushing the right page beyond the book; narrow layouts show one page.
 - The sprite matte cleanup now follows the outside transparent/pale background even on alpha-bearing art, removes exterior white fringes, and preserves whites enclosed by dark outlines. A linear typed queue and cached results bound repeated processing cost.
 - Speech panels use native scalable borders whose visible bounds match the measured content, with safe insets and consistent line spacing. Character shadows are restrained; background zoom and dialogue blur effects are removed.
 - Initial character images decode and position before attachment, load concurrently, and enter after the background reveal. Entrances use short eased movement and fade; scene teardown cancels pending reveals and rejects stale in-flight additions. Reduced-motion preferences shorten these transitions.
+- Dedicated landscape checks verify menu stacking and title-art clearance, status-bar containment, icon centering, and every authored scene title across all seven screen sizes.
 - Dedicated tests check startup overlap, every menu control, settings/inventory/notebook/item/pause bounds, phone-screen alignment, stable character placement with motion enabled, and cancellation of stale entrances. Screenshots are retained with the release artifacts.
 
 ## Cinematic startup and asset loading
