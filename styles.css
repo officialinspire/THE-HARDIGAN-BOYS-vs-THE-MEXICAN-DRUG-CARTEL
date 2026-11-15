@@ -3816,7 +3816,7 @@ body.main-menu #scene-container {
 #startup-curtain.active { opacity: 1; pointer-events: auto; transition: none; }
 #intro-skip-btn { opacity: 1; animation: none; bottom: max(16px, env(safe-area-inset-bottom)); right: max(16px, env(safe-area-inset-right)); }
 
-#main-menu-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: min(88%, 650px); max-width: 650px; bottom: 7%; padding: 0; }
+#main-menu-content { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; width: min(64%, 420px); max-width: 420px; bottom: 6%; padding: 0; }
 #main-menu-content .menu-btn { min-width: 0; min-height: 52px; max-width: none; margin: 0; padding: 12px 14px; font-size: clamp(13px, 1.8vw, 20px); line-height: 1.25; letter-spacing: .06em; border: 1px solid #8b784a; border-radius: 10px; background: rgba(8, 20, 20, .94); opacity: 0; transform: translateY(8px); animation: none; transition: opacity 240ms ease, transform 300ms ease, background-color 180ms ease, border-color 180ms ease; }
 #main-menu-content.menu-ready .menu-btn { opacity: 1; transform: none; }
 #main-menu-content.menu-ready .menu-btn:disabled { opacity: .5; }
@@ -3854,7 +3854,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid #fff0ad; outline-
 .phone-buttons { top: 19%; bottom: 20%; left: 20%; width: 60%; max-width: none; transform: none; justify-content: center; gap: 10px; }
 .phone-buttons button { min-height: 44px; padding: 8px 6px; font-size: clamp(11px, 1.8vh, 16px); line-height: 1.25; letter-spacing: .02em; flex-shrink: 0; }
 @media (max-height: 500px) {
-    #main-menu-content { gap: 8px; bottom: 5%; width: min(78%, 540px); }
+    #main-menu-content { gap: 6px; bottom: 4%; width: min(64%, 360px); }
     #main-menu-content .menu-btn { min-height: 44px; padding: 8px 10px; font-size: clamp(12px, 1.9vw, 15px); }
     .start-content { gap: 12px; }
     .start-content h1 { font-size: clamp(32px, 6.5vw, 54px); }
@@ -3898,3 +3898,59 @@ button:focus-visible, input:focus-visible { outline: 3px solid #fff0ad; outline-
     left: auto; right: 28px; clip-path: polygon(0 0, 100% 0, 100% 100%);
 }
 #dialogue-box[data-tail="right"] #dialogue-container::after { right: 30px; }
+
+/* One status-bar geometry contract at every landscape size. The dialogue
+   safe-area code measures this same pseudo-element, including its top inset. */
+#hud {
+    --status-top: max(8px, env(safe-area-inset-top));
+    --status-inset: max(16px, env(safe-area-inset-left), env(safe-area-inset-right));
+    --status-height: 64px;
+    --status-button: 44px;
+    --status-gap: 8px;
+    --status-controls-width: calc(3 * var(--status-button) + 2 * var(--status-gap));
+}
+#hud::before {
+    box-sizing: border-box;
+    top: var(--status-top); left: var(--status-inset); transform: none;
+    width: calc(100% - 2 * var(--status-inset)); height: var(--status-height);
+    border: 2px solid #d7b94c; border-radius: 12px;
+    box-shadow: 0 3px 12px #0008; background: rgba(8, 15, 17, .96);
+}
+#hud-buttons {
+    top: calc(var(--status-top) + (var(--status-height) - var(--status-button)) / 2);
+    right: calc(var(--status-inset) + 8px); gap: var(--status-gap);
+    height: var(--status-button); width: var(--status-controls-width);
+    align-items: center; flex-wrap: nowrap;
+}
+#hud-buttons .hud-btn {
+    flex: 0 0 var(--status-button); width: var(--status-button); height: var(--status-button);
+    min-width: 44px; min-height: 44px; margin: 0; padding: 0;
+    color: #f7df91; border: 1px solid #81744c; border-radius: 8px;
+    background: #192125; box-shadow: none; transform: none;
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+#hud-buttons .hud-btn:hover, #hud-buttons .hud-btn:active {
+    background: #303b3d; border-color: #ffe5a0; color: #fff0bf; transform: none; filter: none;
+}
+.hud-icon { display: block; width: 24px; height: 24px; flex-shrink: 0; pointer-events: none; }
+#scene-title {
+    top: var(--status-top); left: calc(var(--status-inset) + 14px);
+    right: calc(var(--status-inset) + var(--status-controls-width) + 24px);
+    width: auto; max-width: none; height: var(--status-height); max-height: var(--status-height);
+    display: flex; align-items: center; justify-content: flex-start;
+    padding: 0; margin: 0; transform: none; text-align: left;
+    font-size: clamp(12px, 1.5vw, 17px); line-height: 1.25; letter-spacing: .06em;
+    text-shadow: none; overflow: hidden; text-wrap: balance; pointer-events: none;
+    transition: opacity 250ms ease;
+}
+#scene-title.title-visible { opacity: 1; transform: none; }
+#scene-title.title-animate { animation: statusTitleFade 400ms ease both; }
+@keyframes statusTitleFade { from { opacity: 0; } to { opacity: 1; } }
+@media (max-height: 500px), (max-width: 1024px) {
+    #hud { --status-top: max(6px, env(safe-area-inset-top));
+        --status-inset: max(8px, env(safe-area-inset-left), env(safe-area-inset-right));
+        --status-height: 56px; --status-gap: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    #scene-title.title-animate { animation: none; opacity: 1; }
+}
