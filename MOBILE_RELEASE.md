@@ -1,10 +1,20 @@
-# Mobile release — November 14, 2026
+# Mobile release — November 15, 2026
 
 Status: **READY for the landscape browser demo release.**
 
-Verified game/test commit: `b7324fefcb813ff856839944a9aa8cbe61552ae6`.
+Verified game/test commit: `65c4f7db9e66820fba31cdfad5437f8fff89c8cd`.
 
-[GitHub Actions release gate](https://github.com/officialinspire/THE-HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL/actions/runs/43642907078): **207 passed, 150 not-applicable cases skipped, zero failures** across seven viewport sizes. The separate touch walkthrough also passed. The all-scene validator completed with zero error findings. The skips cover dialogue types absent from a scene and checks intentionally scoped to a representative viewport.
+[GitHub Actions release gate](https://github.com/officialinspire/THE-HARDIGAN-BOYS-vs-THE-MEXICAN-DRUG-CARTEL/actions/runs/43669508320): **210 passed, 168 not-applicable cases skipped, zero failures and zero flaky retries**. This covers seven viewport sizes, plus separate focused startup/audio checks. The skips cover dialogue types absent from a scene and checks intentionally scoped to a representative viewport.
+
+## Cinematic startup and asset loading
+
+- TOUCH TO START gates playback behind a player gesture. The studio credit supports Skip/Escape and ends in a black-to-menu reveal.
+- Skip, natural end, media failure, and the active-time watchdog share one completion path. The video is stopped and unloaded before menu music can begin.
+- Menu controls stay disabled until the scene runner releases its final fade lock, including after portrait-to-landscape rotation.
+- Music fades have a single cancellable owner. Mute and backgrounding cancel fades and pause media; returning resumes only the current track. Game SFX are blocked through the credit.
+- Critical graphics load behind the credit. Concurrent requests share one preload, and images decode before being marked ready. Predictive scene loading remains enabled.
+- A game-scoped image cache saves successful visual requests for repeat visits, keeps at most 80 images, and falls back to the network if cache access fails. It does not cache game scripts, analytics, or video ranges, and does not provide a complete offline installation.
+- First-scene coordinate labels are removed and hotspot debugging defaults off. Puzzle interactions remain active.
 
 The layout suite now waits for boot's real menu before jumping, and verifies the requested scene ID before inspecting it. This prevents a boot-time menu transition from replacing the scene being tested. Touch tests wait through delayed speech entrances and respect the existing touch debounce.
 

@@ -93,7 +93,9 @@ test('stalled preloads and intro recover without an endless loading screen', asy
         // Critical preloads never receive onload/onerror.
         window.Image = class { set src(_) {} };
     });
-    await boot(page, URL.replace('&skipIntro=1', ''));
+    await page.goto(URL.replace('&skipIntro=1', ''));
+    await page.locator('#touch-start-btn').click();
+    await expect(page.locator('#btn-new-game')).toBeVisible({ timeout: 35000 });
     await expect(page.locator('#loading-screen')).toBeHidden();
     await expect(page.locator('#intro-video-screen')).toBeHidden();
 });

@@ -46,7 +46,7 @@ const SFXGenerator = {
     },
 
     _ensureAudioContext() {
-        if (!this.audioContext || this.muted) return false;
+        if (!this.audioContext || this.muted || window.HBStartup?.blocksAudio || document.hidden) return false;
         
         if (this.audioContext.state === 'suspended') {
             this.audioContext.resume().catch(err => {
@@ -294,7 +294,7 @@ const gameState = {
     settings: {
         musicVolume: 70,
         sfxVolume: 80,
-        showHotspots: true
+        showHotspots: false
     },
     currentDialogueIndex: 0,
     currentDialogueEntry: null,
@@ -2257,16 +2257,17 @@ const mobileOptimizer = {
     },
 
     setupTouchGuards() {
-        let lastTouch = 0;
+        let lastTouch = 0, lastTouchTarget = null;
         document.addEventListener('touchend', (event) => {
             const target = event.target.closest('button, .dialogue-choice, .hud-btn, .menu-btn, .overlay-close, .hotspot, .scene-item');
             if (!target) return;
 
             const now = Date.now();
-            if (now - lastTouch < 350) {
+            if (target === lastTouchTarget && now - lastTouch < 350) {
                 event.preventDefault();
             }
             lastTouch = now;
+            lastTouchTarget = target;
         }, { passive: false });
     },
 
@@ -2361,6 +2362,7 @@ const mobileOptimizer = {
 const assetLoader = {
     errors: [],
     loadedAssets: new Set(),
+    pendingAssets: new Map(),
     maxConcurrentLoads: 6,
 
     updateProgress(progress, statusText) {
@@ -2419,14 +2421,17 @@ const assetLoader = {
         const { logErrors = true } = options;
         if (!src || this.loadedAssets.has(src)) return;
 
-        await new Promise((resolve) => {
+        if (this.pendingAssets.has(src)) return this.pendingAssets.get(src);
+        const pending = new Promise((resolve) => {
             const img = new Image();
+            img.decoding = 'async';
             const timer = setTimeout(() => {
                 img.onload = img.onerror = null;
                 gameAnalytics.capture('error_encountered', { error_category: 'asset_timeout' });
                 resolve(); // Slow/offline requests must not hold boot indefinitely.
             }, options.timeoutMs || 12000);
-            img.onload = () => {
+            img.onload = async () => {
+                if (typeof img.decode === 'function') { try { await img.decode(); } catch (_) {} }
                 clearTimeout(timer);
                 this.loadedAssets.add(src);
                 resolve();
@@ -2452,6 +2457,8 @@ const assetLoader = {
             };
             img.src = src;
         });
+        this.pendingAssets.set(src, pending);
+        try { await pending; } finally { this.pendingAssets.delete(src); }
     },
 
     async preloadAssets(assetList) {
@@ -2513,81 +2520,71 @@ const audioManager = {
     // Debug/testing hook: mute or restore music+SFX playback deterministically.
     setMuted(muted) {
         this.muted = muted;
+        this.cancelFade();
         if (muted) {
             if (this.musicPlayer) { try { this.musicPlayer.pause(); } catch (_) {} this.musicPlayer.volume = 0; }
             if (this.sfxPlayer) { try { this.sfxPlayer.pause(); } catch (_) {} this.sfxPlayer.volume = 0; }
-        } else {
-            this.updateVolumes();
+        } else if (this.currentTrack) {
+            this.playMusic(this.currentTrack);
         }
     },
 
+    fadeTimer: null,
+    generation: 0,
+    targetVolume() {
+        return this.muted || document.hidden || window.HBStartup?.blocksAudio ? 0 :
+            (gameState.settings.musicVolume / 100) * (this.musicTrackVolumeMultipliers[this.currentTrack] ?? 1);
+    },
+    cancelFade() {
+        clearInterval(this.fadeTimer);
+        this.fadeTimer = null;
+        this.generation++;
+    },
+    silence() {
+        this.cancelFade();
+        this.musicPlayer?.pause();
+        this.sfxPlayer?.pause();
+        if (this.musicPlayer) this.musicPlayer.volume = 0;
+    },
+    unlock() {
+        if (this.muted || !this.musicPlayer || gameState.settings.musicVolume === 0) return;
+        this.musicPlayer.src = './audio/main-menu-theme.mp3';
+        this.musicPlayer.volume = 0;
+        // Prime this media element directly in the start gesture for Safari.
+        this.musicPlayer.play().then(() => {
+            if (window.HBStartup?.blocksAudio) this.musicPlayer.pause();
+        }).catch(() => {});
+    },
     playMusic(filename, fadeIn = true) {
-        try {
-            if (this.muted) return;
-            if (!filename || this.currentTrack === filename) return;
-
-            const fadeOut = () => {
-                return new Promise(resolve => {
-                    if (!this.musicPlayer.paused) {
-                        let vol = this.musicPlayer.volume;
-                        const fadeInterval = setInterval(() => {
-                            vol -= 0.05;
-                            if (vol <= 0) {
-                                clearInterval(fadeInterval);
-                                this.musicPlayer.pause();
-                                this.musicPlayer.volume = 0;
-                                resolve();
-                            } else {
-                                this.musicPlayer.volume = vol;
-                            }
-                        }, 50);
-                    } else {
-                        resolve();
-                    }
-                });
-            };
-
-            fadeOut().then(() => {
-                this.musicPlayer.src = `./audio/${filename}`;
-                const volumeMultiplier = this.musicTrackVolumeMultipliers[filename] ?? 1;
-                const targetVol = (gameState.settings.musicVolume / 100) * volumeMultiplier;
-
-                // Always fade in music for smooth transitions
-                this.musicPlayer.volume = 0;
-                this.musicPlayer.play().catch(err => {
-                    // Browser autoplay/user-interruption can abort pending play() promises.
-                    if (err?.name === 'AbortError') return;
-                    errorLogger.log('audio-play-music', err, { filename });
-                });
-
-                if (fadeIn) {
-                    let vol = 0;
-                    const fadeInInterval = setInterval(() => {
-                        vol += 0.03;
-                        if (vol >= targetVol) {
-                            clearInterval(fadeInInterval);
-                            this.musicPlayer.volume = targetVol;
-                        } else {
-                            this.musicPlayer.volume = vol;
-                        }
-                    }, 50);
-                } else {
-                    // Even if fadeIn is false, do a quick fade for smoothness
-                    setTimeout(() => {
-                        this.musicPlayer.volume = targetVol;
-                    }, 100);
-                }
-
-                this.currentTrack = filename;
-            });
-        } catch (error) {
-            errorLogger.log('audio-playMusic', error, { filename });
-        }
+        if (!filename || !this.musicPlayer) return;
+        if (filename === this.currentTrack && !this.musicPlayer.paused && this.targetVolume()) return;
+        this.cancelFade();
+        const token = this.generation;
+        const changed = this.currentTrack !== filename;
+        this.currentTrack = filename;
+        this.musicPlayer.pause();
+        if (changed) this.musicPlayer.src = `./audio/${filename}`;
+        this.musicPlayer.volume = 0;
+        if (!this.targetVolume()) return;
+        const player = this.musicPlayer;
+        player.play().then(() => {
+            if (token !== this.generation || !this.targetVolume()) return;
+            const start = performance.now();
+            this.fadeTimer = setInterval(() => {
+                if (token !== this.generation) return;
+                const fraction = Math.min(1, (performance.now() - start) / (fadeIn ? 700 : 120));
+                player.volume = this.targetVolume() * fraction;
+                if (fraction === 1) { clearInterval(this.fadeTimer); this.fadeTimer = null; }
+            }, 30);
+        }).catch(error => {
+            if (token !== this.generation || ['AbortError', 'NotAllowedError'].includes(error?.name)) return;
+            errorLogger.log('audio-play-music', error, { filename });
+        });
     },
-    
+
     playSFX(filename) {
         try {
-            if (this.muted) return;
+            if (this.muted || window.HBStartup?.blocksAudio || document.hidden) return;
             if (!filename) return;
             if (this.activeSfx >= this.maxConcurrentSfx) {
                 return;
@@ -2597,7 +2594,7 @@ const audioManager = {
             this.sfxPlayer.src = `./audio/${filename}`;
             this.sfxPlayer.volume = gameState.settings.sfxVolume / 100;
             this.sfxPlayer.play()
-                .catch(err => errorLogger.log('audio-playSFX', err, { filename }))
+                .catch(err => { if (!['AbortError', 'NotAllowedError'].includes(err?.name)) errorLogger.log('audio-playSFX', err, { filename }); })
                 .finally(() => {
                     setTimeout(() => {
                         this.activeSfx = Math.max(0, this.activeSfx - 1);
@@ -2610,8 +2607,8 @@ const audioManager = {
     
     updateVolumes() {
         if (this.musicPlayer) {
-            const volumeMultiplier = this.musicTrackVolumeMultipliers[this.currentTrack] ?? 1;
-            this.musicPlayer.volume = (gameState.settings.musicVolume / 100) * volumeMultiplier;
+            this.musicPlayer.volume = this.targetVolume();
+            if (this.targetVolume() && this.musicPlayer.paused && this.currentTrack) this.playMusic(this.currentTrack);
         }
         if (this.sfxPlayer) {
             this.sfxPlayer.volume = gameState.settings.sfxVolume / 100;
@@ -5531,6 +5528,10 @@ const sceneRenderer = {
     },
 
     _setInteractionBlocking(block) {
+        // Visible menu controls must not accept and discard taps during the fade.
+        document.querySelectorAll('#main-menu-content button').forEach(button => {
+            button.disabled = block || (button.id === 'btn-continue-game' && !saveSystem.hasSave());
+        });
         const container = document.getElementById('scene-container');
         if (block) {
             container.classList.add('scene-transitioning');
@@ -5706,7 +5707,7 @@ const sceneRenderer = {
             const debugLabel = document.createElement('span');
             debugLabel.className = 'hotspot-debug-label';
             debugLabel.textContent = `${hotspot.id || ''} [${Math.round(parseFloat(pos.left))}，${Math.round(parseFloat(pos.top))} ${Math.round(parseFloat(pos.width))}×${Math.round(parseFloat(pos.height))}]`;
-            div.appendChild(debugLabel);
+            if (HB_DEBUG_ENABLED && gameState.currentSceneId !== 'S1_LIVING_ROOM_INTRO') div.appendChild(debugLabel);
 
             let touchStartTime = 0;
             let touchStartPos = null;
@@ -6687,9 +6688,7 @@ const SCENES = {
         onEnter() {
             // Clear main menu specific class and setup
             document.body.classList.add('main-menu');
-            const sceneContainer = document.getElementById('scene-container');
-            sceneContainer?.classList.remove('scene-transitioning');
-            gameState.sceneTransitioning = false;
+            // The queue runner releases the interaction lock after the final fade.
             gameState.actionLock = false;
             gameState.dialogueLock = false;
 
@@ -6707,10 +6706,10 @@ const SCENES = {
             const container = document.getElementById('hotspot-layer');
             container.innerHTML = `
                 <div id="main-menu-content" data-layout-panel="menu-prompts">
-                    <button class="menu-btn" id="btn-new-game">NEW GAME</button>
-                    <button class="menu-btn" id="btn-continue-game">CONTINUE</button>
-                    <button class="menu-btn" id="btn-options">OPTIONS</button>
-                    <button class="menu-btn" id="btn-developer-mode">DEVELOPER MODE</button>
+                    <button class="menu-btn" id="btn-new-game" disabled>NEW GAME</button>
+                    <button class="menu-btn" id="btn-continue-game" disabled>CONTINUE</button>
+                    <button class="menu-btn" id="btn-options" disabled>OPTIONS</button>
+                    <button class="menu-btn" id="btn-developer-mode" disabled>DEVELOPER MODE</button>
                 </div>
             `;
 
@@ -10756,7 +10755,9 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
         document.body.classList.add('show-hotspots');
     }
 
-    await assetLoader.preloadAssets();
+    const criticalReady = assetLoader.preloadAssets();
+    if (!HB_FLAG_SKIP_INTRO) window.HBStartup.init(criticalReady);
+    else await criticalReady;
 
     const sceneContainer = document.getElementById('scene-container');
     sceneContainer.addEventListener('click', (e) => {
@@ -10775,65 +10776,12 @@ document.addEventListener('DOMContentLoaded', safeAsync(async () => {
     // Resize/orientationchange recalculation is handled entirely by
     // setupViewportChangeHandlers() above — see its docstring.
 
-    // Hide loading screen then play intro video before main menu
-    setTimeout(() => {
+    if (HB_FLAG_SKIP_INTRO) {
+        document.getElementById('start-screen').classList.add('hidden');
+        window.HBStartup.phase = 'ready';
         assetLoader.hideLoadingScreen();
-
-        // ?skipIntro=1 — bypass the studio intro video entirely.
-        if (HB_FLAG_SKIP_INTRO) {
-            sceneRenderer.loadScene('S0_MAIN_MENU');
-            return;
-        }
-
-        const introScreen = document.getElementById('intro-video-screen');
-        const introVideo = document.getElementById('intro-video');
-        const skipBtn = document.getElementById('intro-skip-btn');
-
-        introScreen.classList.remove('hidden');
-
-        let introWatchdog;
-        // One-shot handler: fade out intro then load main menu
-        const finishIntro = (() => {
-            let done = false;
-            return () => {
-                if (done) return;
-                done = true;
-                clearTimeout(introWatchdog);
-                document.removeEventListener('keydown', finishIntro);
-                introScreen.classList.add('fading-out');
-                setTimeout(() => {
-                    introScreen.classList.add('hidden');
-                    introScreen.classList.remove('fading-out');
-                    try { introVideo.pause(); } catch (_) {}
-                    introVideo.src = '';
-                    sceneRenderer.loadScene('S0_MAIN_MENU');
-                }, 400);
-            };
-        })();
-
-        introWatchdog = setTimeout(finishIntro, 12000);
-        introVideo.addEventListener('error', finishIntro, { once: true });
-        introVideo.addEventListener('ended', finishIntro, { once: true });
-        skipBtn.addEventListener('click', finishIntro, { once: true });
-
-        // Keyboard skip (any key)
-        document.addEventListener('keydown', finishIntro, { once: true });
-
-        // Try to play with sound; fall back to muted for autoplay policy.
-        // Respect the player's mute flag/settings first -- this previously
-        // ignored both ?mute=1 and the saved music volume entirely, so a
-        // muted/quiet player still got the intro at full, unmanaged volume.
-        const introMuted = HB_FLAG_MUTE || gameState.settings.musicVolume === 0;
-        introVideo.muted = introMuted;
-        introVideo.volume = gameState.settings.musicVolume / 100;
-        introVideo.play().catch(() => {
-            introVideo.muted = true;
-            introVideo.play().catch(() => {
-                // If video cannot play at all, go straight to menu
-                finishIntro();
-            });
-        });
-    }, 250);
+        sceneRenderer.loadScene('S0_MAIN_MENU');
+    }
 
     console.log('✅ Game initialized successfully!');
 }, 'bootstrap'));
