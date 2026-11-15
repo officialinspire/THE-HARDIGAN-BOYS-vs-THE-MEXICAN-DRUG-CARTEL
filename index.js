@@ -6733,8 +6733,8 @@ const SCENES = {
             }
 
             document.getElementById('btn-options').addEventListener('click', () => {
-                SFXGenerator.playButtonClick();
-                document.getElementById('settings-overlay').classList.remove('hidden');
+                // Share the pause menu's settings sync and single click sound.
+                document.getElementById('btn-settings').click();
             });
 
             document.getElementById('btn-developer-mode').addEventListener('click', () => {

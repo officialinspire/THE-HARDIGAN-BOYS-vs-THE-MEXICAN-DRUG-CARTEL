@@ -33,8 +33,12 @@ test('all menu controls, settings and phone pause controls fit', async ({page}, 
     await fits(page, '#main-menu-content .menu-btn', 44);
     expect(await page.locator('#main-menu-content .menu-btn').count()).toBe(4);
     await shot(page, info, 'menu');
+    const settings=await page.evaluate(()=>({...gameState.settings}));
     await page.locator('#btn-options').click();
     await page.locator('#settings-overlay').waitFor();
+    await expect(page.locator('#music-volume')).toHaveValue(String(settings.musicVolume));
+    await expect(page.locator('#sfx-volume')).toHaveValue(String(settings.sfxVolume));
+    expect(await page.locator('#show-hotspots').isChecked()).toBe(settings.showHotspots);
     await fits(page, '#settings-overlay .overlay-content');
     await page.locator('#settings-overlay .overlay-close').evaluate(el => el.scrollIntoView({block:'nearest'}));
     await fits(page, '#settings-overlay .overlay-close', 44);
