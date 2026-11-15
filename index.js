@@ -2257,16 +2257,17 @@ const mobileOptimizer = {
     },
 
     setupTouchGuards() {
-        let lastTouch = 0;
+        let lastTouch = 0, lastTouchTarget = null;
         document.addEventListener('touchend', (event) => {
             const target = event.target.closest('button, .dialogue-choice, .hud-btn, .menu-btn, .overlay-close, .hotspot, .scene-item');
             if (!target) return;
 
             const now = Date.now();
-            if (now - lastTouch < 350) {
+            if (target === lastTouchTarget && now - lastTouch < 350) {
                 event.preventDefault();
             }
             lastTouch = now;
+            lastTouchTarget = target;
         }, { passive: false });
     },
 
@@ -2545,8 +2546,18 @@ const audioManager = {
         this.sfxPlayer?.pause();
         if (this.musicPlayer) this.musicPlayer.volume = 0;
     },
+    unlock() {
+        if (this.muted || !this.musicPlayer || gameState.settings.musicVolume === 0) return;
+        this.musicPlayer.src = './audio/main-menu-theme.mp3';
+        this.musicPlayer.volume = 0;
+        // Prime this media element directly in the start gesture for Safari.
+        this.musicPlayer.play().then(() => {
+            if (window.HBStartup?.blocksAudio) this.musicPlayer.pause();
+        }).catch(() => {});
+    },
     playMusic(filename, fadeIn = true) {
         if (!filename || !this.musicPlayer) return;
+        if (filename === this.currentTrack && !this.musicPlayer.paused && this.targetVolume()) return;
         this.cancelFade();
         const token = this.generation;
         const changed = this.currentTrack !== filename;
@@ -2583,7 +2594,7 @@ const audioManager = {
             this.sfxPlayer.src = `./audio/${filename}`;
             this.sfxPlayer.volume = gameState.settings.sfxVolume / 100;
             this.sfxPlayer.play()
-                .catch(err => errorLogger.log('audio-playSFX', err, { filename }))
+                .catch(err => { if (!['AbortError', 'NotAllowedError'].includes(err?.name)) errorLogger.log('audio-playSFX', err, { filename }); })
                 .finally(() => {
                     setTimeout(() => {
                         this.activeSfx = Math.max(0, this.activeSfx - 1);

@@ -54,6 +54,7 @@ window.HBStartup = {
             audioManager.silence();
             // Both resume() and play() are invoked directly in the gesture.
             SFXGenerator.audioContext?.resume().catch(() => {});
+            audioManager.unlock();
             video.muted = HB_FLAG_MUTE || gameState.settings.musicVolume === 0;
             video.volume = gameState.settings.musicVolume / 100;
             video.play().catch(() => { if (this.phase === 'intro') finish(); });
