@@ -87,6 +87,7 @@ test('scene-owned entrances cancel stale sprites and settle cleanly with motion'
     await page.waitForFunction(() => gameState.currentSceneId==='S1_LIVING_ROOM_INTRO' && !sceneRenderer.isTransitioning);
     await page.waitForFunction(() => [...document.querySelectorAll('.character-sprite')].every(el=>el.complete&&el.naturalWidth>0&&el.classList.contains('visible')&&getComputedStyle(el).opacity==='1'));
     const settle=await page.locator('.character-sprite').evaluateAll(elements=>elements.map(el=>({id:el.id,x:el.getBoundingClientRect().x,y:el.getBoundingClientRect().y})));
+    await shot(page, info, 'characters');
     await page.waitForTimeout(600);
     expect(await page.locator('.character-sprite').evaluateAll(elements=>elements.map(el=>({id:el.id,x:el.getBoundingClientRect().x,y:el.getBoundingClientRect().y})))).toEqual(settle);
     await page.evaluate(() => {
@@ -97,4 +98,23 @@ test('scene-owned entrances cancel stale sprites and settle cleanly with motion'
     await page.evaluate(() => window.staleCharacter);
     await page.waitForTimeout(800);
     expect(await page.locator('.character-sprite').count()).toBe(0);
+});
+
+// Alpha-bearing art used to bypass cleanup and keep its white sticker fringe.
+test('matte cleanup removes an outside fringe and preserves enclosed whites', async ({page}, info) => {
+    test.skip(info.project.name !== 'iphone-se-landscape-667x375');
+    await boot(page);
+    const result = await page.evaluate(async () => {
+        const canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;
+        const ctx=canvas.getContext('2d');
+        ctx.fillStyle='#fff8e8';ctx.fillRect(8,8,48,48);
+        ctx.fillStyle='#151515';ctx.fillRect(12,12,40,40);
+        ctx.fillStyle='#ffffff';ctx.fillRect(18,18,28,28);
+        const img=new Image();img.src=canvas.toDataURL();await img.decode();
+        spriteTransparencyProcessor.makeWhitePixelsTransparent(img);await img.decode();
+        ctx.clearRect(0,0,64,64);ctx.drawImage(img,0,0);
+        const alpha=(x,y)=>ctx.getImageData(x,y,1,1).data[3];
+        return {outside:alpha(1,1),fringe:alpha(9,9),outline:alpha(13,13),inside:alpha(30,30)};
+    });
+    expect(result).toEqual({outside:0,fringe:0,outline:255,inside:255});
 });

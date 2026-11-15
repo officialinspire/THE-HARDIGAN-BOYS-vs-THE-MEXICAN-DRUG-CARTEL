@@ -2098,39 +2098,11 @@ const Dev = {
 };
 
 const spriteTransparencyProcessor = {
-    whiteThreshold: 235,
+    whiteThreshold: 220,
     _cache: new Map(),
-
-    _imageHasAnyAlpha(imageEl) {
-        try {
-            const width = imageEl.naturalWidth || imageEl.width;
-            const height = imageEl.naturalHeight || imageEl.height;
-            if (!width || !height) return false;
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            if (!ctx) return false;
-
-            ctx.drawImage(imageEl, 0, 0, width, height);
-            const pixels = ctx.getImageData(0, 0, width, height).data;
-
-            for (let i = 3; i < pixels.length; i += 4) {
-                if (pixels[i] < 255) return true;
-            }
-            return false;
-        } catch (e) {
-            return false;
-        }
-    },
 
     makeWhitePixelsTransparent(imageEl) {
         if (!imageEl || imageEl.dataset.whiteRemoved === 'true') return;
-
-        if (!DEV_FORCE_WHITE_STRIP && imageEl.complete && this._imageHasAnyAlpha(imageEl)) {
-            imageEl.dataset.whiteRemoved = 'true';
-            return;
-        }
 
         const originalSrc = imageEl.dataset.spriteCandidate || imageEl.src;
 
@@ -2157,51 +2129,32 @@ const spriteTransparencyProcessor = {
             const pixels = imageData.data;
             const threshold = this.whiteThreshold;
 
-            const indexOf = (x, y) => (y * width + x) * 4;
-            const isNearWhite = (x, y) => {
-                const i = indexOf(x, y);
-                const r = pixels[i];
-                const g = pixels[i + 1];
-                const b = pixels[i + 2];
-                const minChannel = Math.min(r, g, b);
-                const maxChannel = Math.max(r, g, b);
-                return pixels[i + 3] > 0
-                    && minChannel >= threshold
-                    && (maxChannel - minChannel) <= 22;
-            };
-
+            // Walk only the outside transparent/pale matte. Dark outlines isolate
+            // enclosed whites (eyes, teeth, highlights), which must remain intact.
+            // A typed queue avoids quadratic Array.shift() over large sprites.
             const visited = new Uint8Array(width * height);
-            const queue = [];
-            const push = (x, y) => {
-                if (x < 0 || y < 0 || x >= width || y >= height) return;
-                const idx = y * width + x;
-                if (visited[idx]) return;
-                visited[idx] = 1;
-                queue.push([x, y]);
+            const queue = new Uint32Array(width * height);
+            let head = 0, tail = 0;
+            const push = index => {
+                if (visited[index]) return;
+                visited[index] = 1;
+                queue[tail++] = index;
             };
-
-            for (let x = 0; x < width; x += 1) {
-                push(x, 0);
-                push(x, height - 1);
-            }
-            for (let y = 1; y < height - 1; y += 1) {
-                push(0, y);
-                push(width - 1, y);
-            }
-
+            for (let x = 0; x < width; x++) { push(x); push((height - 1) * width + x); }
+            for (let y = 1; y < height - 1; y++) { push(y * width); push(y * width + width - 1); }
             let changed = 0;
-            while (queue.length > 0) {
-                const [x, y] = queue.shift();
-                if (!isNearWhite(x, y)) continue;
-
-                const i = indexOf(x, y);
-                pixels[i + 3] = 0;
-                changed += 1;
-
-                push(x + 1, y);
-                push(x - 1, y);
-                push(x, y + 1);
-                push(x, y - 1);
+            while (head < tail) {
+                const index = queue[head++], i = index * 4;
+                const min = Math.min(pixels[i], pixels[i + 1], pixels[i + 2]);
+                const max = Math.max(pixels[i], pixels[i + 1], pixels[i + 2]);
+                const transparent = pixels[i + 3] === 0;
+                if (!transparent && !(min >= threshold && max - min <= 40)) continue;
+                if (!transparent) { pixels[i + 3] = 0; changed++; }
+                const x = index % width;
+                if (x > 0) push(index - 1);
+                if (x < width - 1) push(index + 1);
+                if (index >= width) push(index - width);
+                if (index < width * (height - 1)) push(index + width);
             }
 
             if (changed > 0) {
@@ -2210,11 +2163,10 @@ const spriteTransparencyProcessor = {
                 this._cache.set(originalSrc, processedUrl);
                 imageEl.src = processedUrl;
 
-                if (this._cache.size > 30) {
-                    const firstKey = this._cache.keys().next().value;
-                    this._cache.delete(firstKey);
-                }
+            } else {
+                this._cache.set(originalSrc, imageEl.src);
             }
+            if (this._cache.size > 30) this._cache.delete(this._cache.keys().next().value);
             imageEl.dataset.whiteRemoved = 'true';
         } catch (error) {
             console.warn('sprite-transparency safety net failed:', error);
