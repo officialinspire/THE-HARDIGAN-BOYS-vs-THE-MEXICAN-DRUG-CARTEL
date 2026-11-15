@@ -3910,6 +3910,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid #fff0ad; outline-
     --status-controls-width: calc(3 * var(--status-button) + 2 * var(--status-gap));
 }
 #hud::before {
+    box-sizing: border-box;
     top: var(--status-top); left: var(--status-inset); transform: none;
     width: calc(100% - 2 * var(--status-inset)); height: var(--status-height);
     border: 2px solid #d7b94c; border-radius: 12px;
