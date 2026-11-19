@@ -4216,17 +4216,38 @@ const dialoguePager = {
         const choicesDiv = document.getElementById('dialogue-choices');
 
         sceneRendererRef._cleanupTypewriter(textEl);
-        textEl.textContent = '';
-        choicesDiv.innerHTML = '';
+        choicesDiv.replaceChildren();
+        choicesDiv.classList.remove('choices-pop-in');
         choicesDiv.style.maxHeight = '';
+        const actions = continueBtn.parentElement;
+        actions.style.minHeight = '';
 
-        // The continue/more button is always the visible action while a page
-        // is typing — choices (if any) only replace it once the LAST page's
-        // text has fully finished (see _finalizePageAction).
+        // Reserve the finished page before typing so word wraps never move
+        // the panel or its Continue button while the player is reading.
+        textEl.style.minHeight = '';
+        const emphasis = sceneRendererRef._parseEmphasisMarkup(pageText);
+        sceneRendererRef._renderTypeTextAtIndex(textEl, emphasis, emphasis.text.length);
+        textEl.style.minHeight = `${textEl.getBoundingClientRect().height}px`;
+
+        // Measure the final choice list without leaving buttons in the DOM
+        // before the player has finished reading the last page.
+        let choiceHeight = 0;
+        if (isLastPage && s.metrics.hasChoices) {
+            continueBtn.classList.add('hidden');
+            for (const choice of s.entry.choices) {
+                choicesDiv.append(this._buildMeasureChoiceButton(null, choice.text || ''));
+            }
+            this._clampChoicesPanel(dialogueBox);
+            choiceHeight = actions.getBoundingClientRect().height;
+            choicesDiv.replaceChildren();
+            choicesDiv.style.maxHeight = '';
+        }
+
         continueBtn.classList.remove('hidden');
         continueBtn.textContent = isLastPage ? 'continue' : 'more...';
         continueBtn.setAttribute('aria-label', isLastPage ? 'Continue dialogue' : 'Show more dialogue');
         continueBtn.onclick = () => this._onActionClick(dialogueBox, sceneRendererRef);
+        actions.style.minHeight = `${Math.max(choiceHeight, actions.getBoundingClientRect().height)}px`;
 
         sceneRendererRef.typeText(textEl, pageText, {
             onFinish: () => {
@@ -4234,6 +4255,7 @@ const dialoguePager = {
                 this._assertNoOverflow(dialogueBox);
             }
         });
+        sceneRendererRef._clampDialogueToViewport(dialogueBox);
     },
 
     /** First tap while typing completes the current page; the next tap
@@ -4302,29 +4324,15 @@ const dialoguePager = {
             } else {
                 continueBtn.classList.add('hidden');
                 setTimeout(() => {
+                    if (this.state !== s) return;
                     gameState.dialogueLock = false;
                     sceneRendererRef._closeDialogueThen(() => sceneRendererRef.nextDialogue());
                 }, 3000);
             }
         }
 
-        // Re-clamp position now that the box holds its true settled content
-        // for THIS page -- not the near-empty content showDialogue()'s
-        // double-rAF settle pass saw a couple of frames after typing
-        // *started*. A narrative/preserveCentered box has no fixed reserved
-        // height (#dialogue-container.narrative-mode is `height: auto` up
-        // to its CSS max-height), so it keeps growing as the typewriter
-        // reveals more text; nothing previously re-ran this after typing
-        // actually finished, so a `top` computed for the box's tiny early
-        // height stayed fixed while the box later grew underneath it,
-        // pushing its bottom edge past the safe area. This is the real
-        // mechanism behind the "dialogue box renders outside the visible
-        // frame" flakiness on narration entries. Runs on every page (not
-        // just the last) -- a multi-page entry's own "more..." page can be
-        // just as tall as its final page, and a player (or a test that
-        // force-finishes typing and checks layout without clicking through
-        // every page) can be resting on any of them.
-        sceneRendererRef._clampDialogueToViewport(dialogueBox, { preserveCentered: s.layoutMode === 'narrative' });
+        // The final page can replace Continue with a taller list of choices.
+        sceneRendererRef._clampDialogueToViewport(dialogueBox);
     },
 
     /** Builds the real, interactive choice buttons (single implementation —
@@ -4435,7 +4443,8 @@ const sceneRenderer = {
     // Transition queue system
     transitionQueue: [],
     isTransitioning: false,
-    dialogueExitDurationMs: 220,
+    dialogueExitDurationMs: 240,
+    _dialogueRenderToken: 0,
     dialogueEnterDurationMs: 250,
     dialogueTypeSpeedMs: 24,
 
@@ -5524,11 +5533,7 @@ const sceneRenderer = {
         this._characterTimers?.forEach(timer => clearTimeout(timer));
         this._characterTimers?.clear();
         this._pendingCharacterEntries = [];
-        // Clear every scene-owned timer before tearing down the old scene —
-        // otherwise a reanchor/lock-safety timer from the previous scene can
-        // fire mid-transition (or into the new scene) and touch a dialogue
-        // box/lock state that no longer belongs to it.
-        clearTimeout(this._dialogueReanchorTimer);
+        this._dialogueRenderToken++;
         clearTimeout(this._dialogueLockTimeout);
 
         return new Promise(resolve => {
@@ -5854,6 +5859,7 @@ const sceneRenderer = {
     },
 
     async showDialogue(dialogueEntry) {
+        let renderToken;
         try {
             // Block dialogue during scene transitions
             if (this.isTransitioning) {
@@ -5875,16 +5881,8 @@ const sceneRenderer = {
             dialoguePager.reset();
             gameState.dialogueLock = true;
 
-            // Identifies *this* call's eventual double-rAF settle pass (see
-            // below) so a stale one from a superseded call can recognize
-            // itself and bail instead of clobbering a newer call's layout.
-            // Comparing dialogueEntry objects isn't enough here — a test/debug
-            // caller can legitimately re-show the exact same entry object
-            // (same reference) while an earlier call's settle pass for that
-            // same entry is still pending under CPU load, so identity alone
-            // can't tell the two calls apart. A counter can.
-            this._dialogueRenderToken = (this._dialogueRenderToken || 0) + 1;
-            const renderToken = this._dialogueRenderToken;
+            // Every async step belongs to this entry and this scene.
+            renderToken = ++this._dialogueRenderToken;
 
             // Safety: auto-release lock after 30 seconds to prevent permanent lockout
             clearTimeout(this._dialogueLockTimeout);
@@ -5921,15 +5919,18 @@ const sceneRenderer = {
                 await new Promise(resolve => setTimeout(resolve, dialogueEntry.bubbleDelay));
             }
 
+            if (renderToken !== this._dialogueRenderToken) return;
+
             const dialogueBox = document.getElementById('dialogue-box');
             const dialogueContainer = document.getElementById('dialogue-container');
-            const dialogueBubble = document.getElementById('dialogue-bubble');
             const speaker = document.getElementById('dialogue-speaker');
             const text = document.getElementById('dialogue-text');
             const choicesDiv = document.getElementById('dialogue-choices');
             const continueBtn = document.getElementById('dialogue-continue');
 
             this._cleanupTypewriter(text);
+            text.textContent = '';
+            text.style.minHeight = '';
 
             // Set positioning mode based on dialogue type
             if (dialogueEntry.type === 'narration' || !dialogueEntry.speaker) {
@@ -5940,6 +5941,7 @@ const sceneRenderer = {
 
             choicesDiv.innerHTML = '';
             continueBtn.classList.add('hidden');
+            continueBtn.parentElement.style.minHeight = '';
             dialogueBox.classList.remove('dialogue-enter', 'dialogue-exit');
             dialogueBox.classList.add('dialogue-positioning');
             // Make the box layout-visible (but opacity-hidden) before measurements.
@@ -5961,7 +5963,6 @@ const sceneRenderer = {
 
             const isNarration = !dialogueEntry.speaker || dialogueEntry.speaker === 'NARRATION' || dialogueEntry.speaker === 'SYSTEM';
             const isChoice = dialogueEntry.speaker === 'CHOICE' || dialogueEntry.speaker === 'FINAL CHOICE';
-            let speechPos = 'left';
 
             if (isNarration) {
                 dialogueBox.dataset.layoutPanel = 'narrative-box';
@@ -5979,12 +5980,12 @@ const sceneRenderer = {
                 speaker.textContent = dialogueEntry.speaker;
             } else {
                 await this._ensureSpeakerPresent(dialogueEntry);
+                if (renderToken !== this._dialogueRenderToken) return;
 
                 dialogueBox.dataset.layoutPanel = 'speech-bubble';
                 dialogueContainer.classList.remove('narrative-mode');
 
                 const pos = this.normalizeZoneName(dialogueEntry.position || 'left');
-                speechPos = pos;
                 const isLeft = pos === 'left' || pos === 'left-2';
                 const isRight = pos === 'right' || pos === 'right-2';
 
@@ -6004,73 +6005,16 @@ const sceneRenderer = {
 
             this._activeDialogueEntry = dialogueEntry;
 
-            // The dialoguePager pipeline (see its own docstring for the full
-            // 8-step breakdown):
-            //   1. resolve layout rect      -> layoutDialogue() (pre-fit pass)
-            //   2. wait for fonts           -> document.fonts.ready + timeout
-            //   3-4. measure available height, speaker, action area, padding
-            //   5. paginate at word/sentence boundaries
-            // prepare() runs 1-5 and returns null only if a newer entry
-            // superseded this call while awaiting fonts.
             const pagerState = await dialoguePager.prepare(dialogueBox, dialogueEntry, this);
-            if (!pagerState) return;
+            if (!pagerState || renderToken !== this._dialogueRenderToken) return;
 
             this._debugAssertAuthoredLayout(dialogueBox, dialogueEntry, pagerState.layoutMode);
-            this._clampDialogueToViewport(dialogueBox, { preserveCentered: pagerState.layoutMode === 'narrative' });
-            Dev.layout.applySavedLayouts();
-
-            // The delayed re-anchor exists so a still-sliding-in character can be
-            // re-measured once its animation settles. Only meaningful for explicit
-            // character-relative mode — authored/zone-slot rects never depend on
-            // character position, so they must never be re-anchored here.
-            clearTimeout(this._dialogueReanchorTimer);
-            if (pagerState.layoutMode === 'character') {
-                this._dialogueReanchorTimer = setTimeout(() => {
-                    if (this._activeDialogueEntry !== dialogueEntry || dialogueBox.classList.contains('hidden')) return;
-                    this.layoutDialogue(dialogueBox, dialogueEntry);
-                    this._clampDialogueToViewport(dialogueBox);
-                }, 180);
-            }
-
-            // 6-8: type the first page, wire tap/advance, render the action
-            // area once typing finishes, and assert no overflow.
             dialoguePager.renderCurrentPage(dialogueBox, this);
-
-            // Reveal after positioning settles (double-rAF ensures layout is
-            // applied). Reapply the same resolved mode once more for
-            // late-settling fonts/assets — see layoutDialogue()'s docstring
-            // for why this never changes the mode — then let the pager
-            // re-clamp the choices panel/re-assert against the settled box.
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    // A newer showDialogue() call can start (and even fully
-                    // settle) while these two frames were pending — e.g. a
-                    // debug/test caller re-showing the same entry object
-                    // before this pass got to run, where object identity
-                    // alone can't tell the two calls apart. Its layoutDialogue()/
-                    // reflow()/clamp math is for a box state that's no longer
-                    // current; bail rather than clobber the newer call's
-                    // already-settled position. See renderToken assignment
-                    // above. (This is a secondary hardening — the primary
-                    // "dialogue box renders outside the visible frame" cause
-                    // is fixed in dialoguePager._finalizePageAction(), which
-                    // re-clamps once the box holds its true final content;
-                    // this rAF pass runs only ~2 frames after typing *starts*,
-                    // measuring a box that's still mostly empty.)
-                    if (renderToken !== this._dialogueRenderToken) return;
-                    const settledMode = this.layoutDialogue(dialogueBox, dialogueEntry);
-                    // reflow() must run before the viewport clamp: for a
-                    // narrative-mode box, it's what finishes growing the box
-                    // toward its CSS max-height (via _clampChoicesPanel) —
-                    // clamping first was measuring the box's pre-growth
-                    // rect, letting it render outside the visible frame.
-                    dialoguePager.reflow(dialogueBox);
-                    this._clampDialogueToViewport(dialogueBox, { preserveCentered: settledMode === 'narrative' });
-                    dialogueBox.classList.remove('dialogue-positioning');
-                    this._animateDialogueEntry();
-                });
-            });
+            Dev.layout.applySavedLayouts();
+            dialogueBox.classList.remove('dialogue-positioning');
+            this._animateDialogueEntry();
         } catch (error) {
+            if (renderToken !== this._dialogueRenderToken) return;
             errorLogger.log('dialogue-render', error, { sceneId: gameState.currentSceneId, dialogueEntry });
             const dialogueBox = document.getElementById('dialogue-box');
             if (dialogueBox) {
@@ -6078,7 +6022,9 @@ const sceneRenderer = {
                 dialogueBox.classList.add('hidden');
             }
             gameState.dialogueLock = false;
-            setTimeout(() => this.nextDialogue(), 500);
+            setTimeout(() => {
+                if (renderToken === this._dialogueRenderToken) this.nextDialogue();
+            }, 500);
         }
     },
 
@@ -6100,55 +6046,23 @@ const sceneRenderer = {
         }
     },
 
-    _clampDialogueToViewport(dialogueBox, options = {}) {
-        const preserveCentered = Boolean(options.preserveCentered);
-
+    _clampDialogueToViewport(dialogueBox) {
         const container = document.getElementById('scene-container');
-        if (!container) return;
+        const safe = positioningSystem.getDialogueSafeRect();
+        if (!container || !safe) return;
+
         const containerRect = container.getBoundingClientRect();
         const boxRect = dialogueBox.getBoundingClientRect();
-        // Pad/HUD reservation now comes from live CSS (--dlg-safe-pad,
-        // #hud::before) via getDialogueSafeRect() itself — no isMobile heuristic needed.
-        const safe = positioningSystem.getDialogueSafeRect();
-        if (!safe) return;
+        const panelRect = document.getElementById('dialogue-container').getBoundingClientRect();
+        const authored = dialogueBox.dataset.layoutMode === 'authored';
+        const left = authored ? boxRect.left - containerRect.left : (containerRect.width - panelRect.width) / 2;
+        const top = authored ? boxRect.top - containerRect.top : (containerRect.height - panelRect.height) / 2;
 
-        const minLeft = safe.left;
-        const maxRight = safe.right;
-        const minTop = safe.top;
-        const maxBottom = safe.bottom;
-
-        if (preserveCentered) {
-            const centeredLeft = (containerRect.width - boxRect.width) / 2;
-            let centeredTop = (containerRect.height - boxRect.height) / 2;
-            centeredTop = Math.max(minTop, centeredTop);
-            centeredTop = Math.min(maxBottom - boxRect.height, centeredTop);
-
-            dialogueBox.style.left = `${Math.max(minLeft, centeredLeft)}px`;
-            dialogueBox.style.right = 'auto';
-            dialogueBox.style.top = `${Math.max(minTop, centeredTop)}px`;
-            dialogueBox.style.bottom = 'auto';
-            dialogueBox.style.transform = 'none';
-            return;
-        }
-
-        let left = boxRect.left - containerRect.left;
-        let top = boxRect.top - containerRect.top;
-
-        if (left < minLeft) left = minLeft;
-        if (left + boxRect.width > maxRight) left = maxRight - boxRect.width;
-        if (top < minTop) top = minTop;
-        if (top + boxRect.height > maxBottom) top = maxBottom - boxRect.height;
-
-        const shouldAdjust = Math.abs((boxRect.left - containerRect.left) - left) > 1
-            || Math.abs((boxRect.top - containerRect.top) - top) > 1;
-
-        if (shouldAdjust) {
-            dialogueBox.style.left = `${Math.max(minLeft, left)}px`;
-            dialogueBox.style.right = 'auto';
-            dialogueBox.style.top = `${Math.max(minTop, top)}px`;
-            dialogueBox.style.bottom = 'auto';
-            dialogueBox.style.transform = 'none';
-        }
+        dialogueBox.style.left = `${Math.max(safe.left, Math.min(left, safe.right - boxRect.width))}px`;
+        dialogueBox.style.right = 'auto';
+        dialogueBox.style.top = `${Math.max(safe.top, Math.min(top, safe.bottom - Math.max(boxRect.height, panelRect.height)))}px`;
+        dialogueBox.style.bottom = 'auto';
+        dialogueBox.style.transform = 'none';
     },
 
     /**
@@ -6530,7 +6444,7 @@ const sceneRenderer = {
 
     repositionActiveDialogue() {
         const dialogueBox = document.getElementById('dialogue-box');
-        if (!dialogueBox || dialogueBox.classList.contains('hidden')) return;
+        if (!dialogueBox || dialogueBox.matches('.hidden, .dialogue-positioning, .dialogue-exit')) return;
 
         // Use the entry actually on screen, not scene.dialogue[currentDialogueIndex] —
         // that index can be stale (e.g. dialogue shown ad hoc via onClick handlers,
@@ -6545,8 +6459,8 @@ const sceneRenderer = {
         // choices panel and re-asserts overflow against the settled geometry.
         const layoutMode = this.layoutDialogue(dialogueBox, dialogueEntry);
         this._debugAssertAuthoredLayout(dialogueBox, dialogueEntry, layoutMode);
-        this._clampDialogueToViewport(dialogueBox, { preserveCentered: layoutMode === 'narrative' });
         dialoguePager.reflow(dialogueBox);
+        this._clampDialogueToViewport(dialogueBox);
     },
 
     nextDialogue() {
@@ -6575,17 +6489,13 @@ const sceneRenderer = {
 
         dialogueBox.classList.remove('dialogue-exit', 'hidden');
         dialogueBox.classList.add('dialogue-enter');
-        void dialogueBox.offsetWidth;
         SFXGenerator.playDialoguePop();
-
-        window.setTimeout(() => {
-            dialogueBox.classList.remove('dialogue-enter');
-        }, 350);
     },
 
     _closeDialogueThen(nextAction) {
         const dialogueBox = document.getElementById('dialogue-box');
         const textEl = document.getElementById('dialogue-text');
+        const renderToken = ++this._dialogueRenderToken;
         this._cleanupTypewriter(textEl);
         dialoguePager.reset();
         if (!dialogueBox || dialogueBox.classList.contains('hidden')) {
@@ -6599,6 +6509,7 @@ const sceneRenderer = {
         SFXGenerator.playDialogueWhooshClose();
 
         window.setTimeout(() => {
+            if (renderToken !== this._dialogueRenderToken) return;
             dialogueBox.classList.add('hidden');
             dialogueBox.classList.remove('dialogue-exit');
             gameState.dialogueLock = false; // Always release after close animation

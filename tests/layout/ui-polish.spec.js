@@ -18,6 +18,9 @@ async function shot(page, info, name) { await page.screenshot({path:info.outputP
 test('startup hierarchy fits without overlapping text or controls', async ({page}, info) => {
     await page.goto(URL.replace('&skipIntro=1',''));
     await page.locator('#touch-start-btn').waitFor();
+    const logo = page.getByRole('img', { name: 'Inspire', exact: true });
+    await expect(logo).toBeVisible();
+    await expect.poll(() => logo.evaluate(el => el.naturalWidth)).toBeGreaterThan(0);
     await page.evaluate(() => document.fonts.ready);
     await fits(page, '.start-content, .start-content > *');
     const boxes = await page.locator('.start-content > *').evaluateAll(elements => elements.map(el => {
@@ -81,6 +84,61 @@ test('all menu controls, settings and phone pause controls fit', async ({page}, 
     await shot(page, info, 'item');
     await page.locator('#modal-close').click();
     await expect(page.locator('#modal-overlay')).toBeHidden();
+});
+
+test('dialogue panels stay centered from their first visible frame', async ({ page }) => {
+    await page.goto(URL.replace('&noAnimations=1', ''));
+    await page.locator('#main-menu-content.menu-ready').waitFor();
+    await page.evaluate(() => __HB_DEBUG__.jumpToScene('S1_LIVING_ROOM_INTRO'));
+    await page.waitForFunction(() => gameState.currentSceneId === 'S1_LIVING_ROOM_INTRO' && !sceneRenderer.isTransitioning);
+    await page.waitForFunction(() => dialoguePager.state && !document.getElementById('dialogue-box').classList.contains('dialogue-positioning'));
+
+    const results = await page.evaluate(async () => {
+        const box = document.getElementById('dialogue-box');
+        const panel = document.getElementById('dialogue-container');
+        const scene = document.getElementById('scene-container').getBoundingClientRect();
+        const text = 'The room goes quiet. A steady panel gives you time to read each line without chasing the controls around the screen.';
+        const cases = [
+            { speaker: 'HANK', position: 'left' },
+            { speaker: 'OFFSCREEN', position: 'center', layoutMode: 'character' },
+            { speaker: 'NARRATION' },
+            { speaker: 'CHOICE', choices: [{ text: 'Keep reading', action() {} }, { text: 'Take a closer look', action() {} }] },
+        ];
+        const read = () => {
+            const { left, top, width, height } = panel.getBoundingClientRect();
+            return { x: left + width / 2, y: top + height / 2, top, left, bottom: top + height, right: left + width };
+        };
+
+        const results = [];
+        for (const entry of cases) {
+            const frames = [];
+            box.classList.add('hidden');
+            const opening = __HB_DEBUG__.showDialogue({ text, next: 'NEXT_DIALOGUE', ...entry });
+            while (frames.length < 8) {
+                await new Promise(requestAnimationFrame);
+                const style = getComputedStyle(box);
+                if (style.display !== 'none' && style.visibility === 'visible' && Number(style.opacity) > 0) frames.push(read());
+            }
+            await opening;
+            __HB_DEBUG__.finishTyping();
+            const settled = read();
+            results.push({
+                speaker: entry.speaker,
+                horizontalOffset: Math.abs(settled.x - (scene.left + scene.width / 2)),
+                inViewport: frames.every(frame => frame.left >= 0 && frame.top >= 0 && frame.right <= innerWidth && frame.bottom <= innerHeight),
+                verticalOffset: Math.abs(settled.y - (scene.top + scene.height / 2)),
+                maxDrift: Math.max(...frames.map(frame => Math.hypot(frame.left - settled.left, frame.top - settled.top))),
+            });
+        }
+        return results;
+    });
+
+    for (const result of results) {
+        expect(result.inViewport, result.speaker).toBe(true);
+        expect(result.horizontalOffset, result.speaker).toBeLessThanOrEqual(1);
+        expect(result.verticalOffset, result.speaker).toBeLessThanOrEqual(8);
+        expect(result.maxDrift, result.speaker).toBeLessThanOrEqual(1);
+    }
 });
 
 test('scene-owned entrances cancel stale sprites and settle cleanly with motion', async ({page}, info) => {
