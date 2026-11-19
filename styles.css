@@ -700,7 +700,7 @@ body.main-menu #scene-title {
     width: clamp(300px, 36vw, 540px);
     min-width: min(280px, 90vw);
     max-width: calc(100% - 24px);
-    transition: opacity 0.24s ease, transform 0.24s ease;
+    transition: opacity 0.24s ease;
     pointer-events: auto;
     z-index: 5;
 
@@ -798,18 +798,6 @@ body.main-menu #scene-title {
     }
 }
 
-#dialogue-box.dialogue-enter {
-    animation: dialogueFadeInPop 0.25s cubic-bezier(0.2, 0.9, 0.24, 1) both;
-}
-
-#dialogue-box.dialogue-enter #dialogue-container {
-    animation: dialogueContainerPop 0.35s cubic-bezier(0.2, 0.9, 0.24, 1) both;
-}
-
-#dialogue-box.dialogue-exit {
-    animation: dialogueFadeOutWhoosh 0.22s ease-in both;
-}
-
 /* Position variant: left-aligned near left character */
 #dialogue-box.dialogue-left {
     top: auto;
@@ -817,7 +805,6 @@ body.main-menu #scene-title {
     left: 15%;
     right: auto;
     transform: none;
-    animation: slideFromLeft 0.3s ease-out;
 }
 
 /* Position variant: right-aligned near right character */
@@ -827,7 +814,6 @@ body.main-menu #scene-title {
     left: auto;
     right: 15%;
     transform: none;
-    animation: slideFromRight 0.3s ease-out;
 }
 
 /* Position variant: centered for narration/system/choices */
@@ -837,7 +823,6 @@ body.main-menu #scene-title {
     right: auto;
     bottom: auto;
     transform: translate(-50%, -50%);
-    animation: fadeInCenter 0.3s ease-out;
     width: clamp(240px, 32vw, 460px);
     min-width: min(200px, 60vw);
     max-width: 65vw;
@@ -866,80 +851,6 @@ body.main-menu #scene-title {
     right: auto;
     bottom: auto;
     transform: translateX(-50%);
-    animation: fadeInCenter 0.25s ease-out;
-}
-
-/* Slide-in animations */
-@keyframes slideFromLeft {
-    from {
-        opacity: 0;
-        transform: translateX(-40px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-@keyframes slideFromRight {
-    from {
-        opacity: 0;
-        transform: translateX(40px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-@keyframes fadeInCenter {
-    from {
-        opacity: 0;
-        transform: translate(-50%, -50%) scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: translate(-50%, -50%) scale(1);
-    }
-}
-
-@keyframes dialogueFadeInPop {
-    0% {
-        opacity: 0;
-        filter: blur(2px);
-    }
-    100% {
-        opacity: 1;
-        filter: blur(0);
-    }
-}
-
-@keyframes dialogueContainerPop {
-    0% {
-        transform: scale(0.6);
-        opacity: 0;
-    }
-    50% {
-        transform: scale(1.06);
-        opacity: 1;
-    }
-    75% {
-        transform: scale(0.97);
-    }
-    100% {
-        transform: scale(1);
-    }
-}
-
-@keyframes dialogueFadeOutWhoosh {
-    0% {
-        opacity: 1;
-        filter: blur(0);
-    }
-    100% {
-        opacity: 0;
-        filter: blur(4px);
-    }
 }
 
 #dialogue-box.hidden {
@@ -949,6 +860,7 @@ body.main-menu #scene-title {
 }
 
 #dialogue-box.dialogue-positioning {
+    visibility: hidden;
     opacity: 0;
     pointer-events: none;
     transition: none;
@@ -3799,19 +3711,67 @@ body.main-menu #scene-container {
 
 /* ===== RELEASE UI: boot hierarchy, compact menus and clean compositing ===== */
 #start-screen {
-    position: fixed; inset: 0; z-index: 20000; display: grid; place-items: center;
-    padding: max(20px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
-        max(20px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
-    overflow-y: auto; background: radial-gradient(ellipse at center, #103d40, #030909 78%);
-    color: #ffd765; text-align: center;
+    position: fixed;
+    inset: 0;
+    z-index: 20000;
+    display: grid;
+    place-items: center;
+    padding: max(16px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+        max(16px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+    overflow-y: auto;
+    background: radial-gradient(ellipse at center, #06171999 15%, #02090ce8 100%),
+        #071d21 url('./assets/backgrounds/bg_hardigan_livingroom_night.png') center / cover no-repeat;
+    text-align: center;
 }
-.start-content { width: min(100%, 760px); display: grid; justify-items: center; gap: clamp(12px, 2.7vh, 24px); }
-.start-content .startup-kicker { color: #b9d1cd; font: 700 clamp(11px, 1.6vw, 14px)/1.4 'Courier New', monospace; letter-spacing: .24em; }
-.start-content h1 { margin: 0; font-family: Bangers, Impact, sans-serif; font-size: clamp(34px, 7.5vw, 76px); line-height: 1.05; letter-spacing: .035em; text-wrap: balance; }
-.start-content .startup-subtitle { margin-top: -4px; max-width: 36ch; font: 700 clamp(13px, 2.2vw, 20px)/1.4 'Courier New', monospace; letter-spacing: .04em; text-wrap: balance; }
-#touch-start-btn { margin-top: 4px; min-height: 52px; max-width: 100%; padding: 14px 32px; border: 2px solid #dfb750; border-radius: 10px; background: #101d1d; color: #fff1bd; font: 700 clamp(16px, 2.5vw, 20px)/1.3 'Courier New', monospace; letter-spacing: .07em; }
-.start-content .startup-hint { color: #adc2bf; font: 400 clamp(11px, 1.8vw, 13px)/1.6 'Courier New', monospace; text-wrap: balance; }
-.startup-hint span { padding-inline: .45em; }
+.start-content {
+    width: min(100%, 720px);
+    display: grid;
+    justify-items: center;
+    gap: clamp(8px, 2.4vh, 24px);
+    padding: clamp(12px, 4vh, 38px) clamp(10px, 4vw, 40px);
+    background: #07171bd9;
+    border: 1px solid #8b784a;
+    border-radius: 12px;
+    box-shadow: 0 12px 36px #0008;
+}
+.startup-logo {
+    display: block;
+    width: clamp(112px, 28vw, 190px);
+    height: auto;
+}
+.start-content h1,
+.start-content .startup-subtitle {
+    margin: 0;
+    font-family: Bangers, Impact, sans-serif;
+    line-height: 1.05;
+    letter-spacing: .045em;
+    text-wrap: balance;
+    text-shadow: 2px 3px #050808;
+}
+.start-content h1 { color: #ffc22b; font-size: clamp(33px, min(7vw, 14vh), 76px); }
+.start-content .startup-subtitle { color: #ff7854; font-size: clamp(20px, min(3.8vw, 8vh), 38px); }
+#touch-start-btn {
+    min-height: 48px;
+    width: min(100%, 280px);
+    margin-top: 4px;
+    padding: 10px 16px;
+    border: 1px solid #dfb750;
+    border-radius: 10px;
+    background: #0a1d1e;
+    color: #fff1bd;
+    font: 700 clamp(14px, 2.5vw, 18px)/1.3 'Courier New', monospace;
+    letter-spacing: .07em;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+#touch-start-btn:hover { background: #173437; border-color: #ffe099; }
+.start-content .startup-hint {
+    margin: 0;
+    color: #c3d0cc;
+    font: 400 clamp(11px, 1.8vw, 13px)/1.4 'Courier New', monospace;
+    text-wrap: balance;
+}
+.startup-hint span { padding-inline: .35em; }
 #startup-curtain { position: fixed; inset: 0; background: #000; z-index: 19000; opacity: 0; pointer-events: none; transition: opacity 1.1s ease; }
 #startup-curtain.active { opacity: 1; pointer-events: auto; transition: none; }
 #intro-skip-btn { opacity: 1; animation: none; bottom: max(16px, env(safe-area-inset-bottom)); right: max(16px, env(safe-area-inset-right)); }
@@ -3832,8 +3792,9 @@ button:focus-visible, input:focus-visible { outline: 3px solid #fff0ad; outline-
 .character-sprite.visible { --char-enter-x: 0px; opacity: 1; transform: translateX(0) scale(var(--char-scale)); }
 .character-sprite.is-speaking { filter: drop-shadow(1px 2px 2px #0009) drop-shadow(0 0 2px #d5b85080); }
 #dialogue-bubble { filter: none; transform: none; backface-visibility: visible; }
-#dialogue-box.dialogue-enter, #dialogue-box.dialogue-exit { animation: none; }
-#dialogue-box.dialogue-enter #dialogue-container { animation: none; }
+#dialogue-box.dialogue-enter { animation: dialogueReveal 0.24s ease-out; }
+#dialogue-box.dialogue-exit { opacity: 0; pointer-events: none; animation: none; }
+@keyframes dialogueReveal { from { opacity: 0; } to { opacity: 1; } }
 #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-content { padding: 14px 8% 20px; }
 #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-speaker { line-height: 1.2; letter-spacing: .04em; margin-bottom: 6px; text-shadow: none; }
 #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-text { padding: 0; line-height: 1.35; margin-bottom: 4px; }
@@ -3856,14 +3817,13 @@ button:focus-visible, input:focus-visible { outline: 3px solid #fff0ad; outline-
 @media (max-height: 500px) {
     #main-menu-content { gap: 6px; bottom: 4%; width: min(64%, 360px); }
     #main-menu-content .menu-btn { min-height: 44px; padding: 8px 10px; font-size: clamp(12px, 1.9vw, 15px); }
-    .start-content { gap: 12px; }
-    .start-content h1 { font-size: clamp(32px, 6.5vw, 54px); }
+    .startup-logo { width: clamp(104px, 22vw, 150px); }
     #dialogue-box[data-layout-panel="speech-bubble"] #dialogue-content { padding: 10px 8% 16px; }
     .phone-buttons { gap: 6px; }
 }
 @media (prefers-reduced-motion: reduce) {
     .character-sprite, #scene-background, #main-menu-content .menu-btn, #startup-curtain { transition-duration: .01ms; }
-    #scene-title.title-animate, #scene-title-fx { animation: none; }
+    #scene-title.title-animate, #scene-title-fx, #dialogue-box.dialogue-enter { animation: none; }
 }
 
 /* Book columns share the drawn spread exactly; a gap must not add to 100%. */
