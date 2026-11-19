@@ -114,7 +114,7 @@ test('dialogue panels stay centered from their first visible frame', async ({ pa
             const frames = [];
             box.classList.add('hidden');
             const opening = __HB_DEBUG__.showDialogue({ text, next: 'NEXT_DIALOGUE', ...entry });
-            while (frames.length < 8) {
+            for (let frame = 0; frame < 120 && frames.length < 8; frame++) {
                 await new Promise(requestAnimationFrame);
                 const style = getComputedStyle(box);
                 if (style.display !== 'none' && style.visibility === 'visible' && Number(style.opacity) > 0) frames.push(read());
@@ -122,11 +122,17 @@ test('dialogue panels stay centered from their first visible frame', async ({ pa
             await opening;
             __HB_DEBUG__.finishTyping();
             const settled = read();
+            const safe = positioningSystem.getDialogueSafeRect();
+            const panelHeight = settled.bottom - settled.top;
+            const centerTop = (scene.height - panelHeight) / 2;
+            // Taller choice lists may sit below center to clear the HUD.
+            const safeTop = Math.max(safe.top, Math.min(centerTop, safe.bottom - panelHeight));
             results.push({
                 speaker: entry.speaker,
+                frameCount: frames.length,
                 horizontalOffset: Math.abs(settled.x - (scene.left + scene.width / 2)),
                 inViewport: frames.every(frame => frame.left >= 0 && frame.top >= 0 && frame.right <= innerWidth && frame.bottom <= innerHeight),
-                verticalOffset: Math.abs(settled.y - (scene.top + scene.height / 2)),
+                verticalOffset: Math.abs(settled.top - (scene.top + safeTop)),
                 maxDrift: Math.max(...frames.map(frame => Math.hypot(frame.left - settled.left, frame.top - settled.top))),
             });
         }
@@ -134,9 +140,10 @@ test('dialogue panels stay centered from their first visible frame', async ({ pa
     });
 
     for (const result of results) {
+        expect(result.frameCount, result.speaker).toBe(8);
         expect(result.inViewport, result.speaker).toBe(true);
         expect(result.horizontalOffset, result.speaker).toBeLessThanOrEqual(1);
-        expect(result.verticalOffset, result.speaker).toBeLessThanOrEqual(8);
+        expect(result.verticalOffset, result.speaker).toBeLessThanOrEqual(1);
         expect(result.maxDrift, result.speaker).toBeLessThanOrEqual(1);
     }
 });
