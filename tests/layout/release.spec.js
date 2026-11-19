@@ -212,6 +212,12 @@ test('touch controls complete the opening room and a story branch on a phone', a
         for (const id of ['tv_remote', 'television', 'lamp', 'notebook', 'window']) {
             await page.locator(`[data-hotspot-id="${id}"]`).tap();
             await page.waitForTimeout(350);
+            if (id === 'window') {
+                await expect(page.locator('#dialogue-speaker')).toHaveText('JONAH');
+                // The player can read this line past the old hotspot timer.
+                await page.waitForTimeout(2100);
+                expect(await page.evaluate(() => gameState.currentSceneId)).toBe('S1_LIVING_ROOM_INTRO');
+            }
             await readDialogueUntilIdle('S1_LIVING_ROOM_INTRO');
         }
         await page.waitForFunction(() => gameState.currentSceneId === 'S2_ICE_RAID_WINDOW' && !sceneRenderer.isTransitioning);

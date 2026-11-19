@@ -6664,22 +6664,6 @@ const SCENES = {
         title: 'Another Normal Night',
         background: './assets/backgrounds/bg_hardigan_livingroom_night_02.png',
         music: 'Hardigan Noir Tension.mp3',
-        checkProgression(delay = 0) {
-            // Only transition after window_dialogue_shown is set, which happens
-            // inside the window onClick once all other clickables have been explored.
-            const attemptTransition = () => {
-                if (gameState.objectsClicked.has('window_dialogue_shown')) {
-                    sceneRenderer.loadScene('S2_ICE_RAID_WINDOW');
-                }
-            };
-
-            if (delay > 0) {
-                setTimeout(attemptTransition, delay);
-            } else {
-                attemptTransition();
-            }
-        },
-
         characters: [
             { id: 'hank', name: 'HANK', sprite: 'char_hank_thinking-left.png', position: 'left' },
             { id: 'jonah', name: 'JONAH', sprite: 'char_jonah_excited-right.png', position: 'right' }
@@ -6708,8 +6692,6 @@ const SCENES = {
                         position: 'right',
                         next: 'NEXT_DIALOGUE'
                     });
-
-                    SCENES.S1_LIVING_ROOM_INTRO.checkProgression(2000);
                 }
             },
             {
@@ -6728,8 +6710,6 @@ const SCENES = {
                         position: 'right',
                         next: 'NEXT_DIALOGUE'
                     });
-
-                    SCENES.S1_LIVING_ROOM_INTRO.checkProgression(2000);
                 }
             },
             {
@@ -6795,8 +6775,6 @@ const SCENES = {
                         position: 'left',
                         next: 'NEXT_DIALOGUE'
                     });
-
-                    SCENES.S1_LIVING_ROOM_INTRO.checkProgression(2000);
                 }
             },
             {
@@ -6820,8 +6798,6 @@ const SCENES = {
                         // Open notebook directly
                         notebook.show();
                     }
-
-                    SCENES.S1_LIVING_ROOM_INTRO.checkProgression(2000);
                 }
             }
         ],
